@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../models/quote.dart';
 import '../theme.dart';
 import '../utils/rupee_format.dart';
 
@@ -7,19 +9,29 @@ import '../utils/rupee_format.dart';
 class ReviewScreen extends StatelessWidget {
   const ReviewScreen({super.key});
 
-  // Hardcoded demo line items for Day 1 navigation test.
-  static const _demoItems = [
-    _LineItem('Tile Labour / टाइल मजदूरी', '850 sq ft', 45),
-    _LineItem('Skirting / स्कर्टिंग', '120 rft', 60),
-  ];
+  static final _demoQuote = Quote(
+    customer: const Customer(name: 'Demo customer'),
+    lineItems: const [
+      QuoteLineItem(
+        description: 'Tile Labour / टाइल मजदूरी',
+        quantity: 850,
+        unit: 'sq ft',
+        unitRatePaise: 4500,
+      ),
+      QuoteLineItem(
+        description: 'Skirting / स्कर्टिंग',
+        quantity: 120,
+        unit: 'rft',
+        unitRatePaise: 6000,
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
 
-    // Calculate demo total using integer arithmetic (no float risk).
-    final int subtotal = _demoItems.fold(
-        0, (s, i) => s + i.subtotal);
+    final totals = calculateTotals(_demoQuote);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Review Quote / जाँचें')),
@@ -34,7 +46,12 @@ class ReviewScreen extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   // ── Demo line item cards ───────────────────
-                  ..._demoItems.map((item) => _LineItemCard(item: item)),
+                  ..._demoQuote.lineItems.asMap().entries.map(
+                    (entry) => _LineItemCard(
+                      item: entry.value,
+                      amountPaise: totals.lineAmountsPaise[entry.key],
+                    ),
+                  ),
 
                   const SizedBox(height: 24),
                   const Divider(),
@@ -42,8 +59,9 @@ class ReviewScreen extends StatelessWidget {
 
                   // ── Totals ────────────────────────────────
                   _TotalRow(
-                      label: 'Subtotal / कुल',
-                      value: formatRupee(subtotal)),
+                    label: 'Subtotal / कुल',
+                    value: formatRupeePaise(totals.subtotalPaise),
+                  ),
 
                   const SizedBox(height: 24),
 
@@ -66,7 +84,11 @@ class ReviewScreen extends StatelessWidget {
             // ── Bottom action bar ──────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  kPagePadding, 0, kPagePadding, kPagePadding),
+                kPagePadding,
+                0,
+                kPagePadding,
+                kPagePadding,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -77,8 +99,8 @@ class ReviewScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton(
-                    onPressed: () => Navigator.popUntil(
-                        context, ModalRoute.withName('/')),
+                    onPressed: () =>
+                        Navigator.popUntil(context, ModalRoute.withName('/')),
                     child: const Text('Back to Home / होम पर जाएं'),
                   ),
                 ],
@@ -91,50 +113,34 @@ class ReviewScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// Simple immutable data holder — replaced by Quote model Day 2
-// ─────────────────────────────────────────────────────────
-class _LineItem {
-  final String name;
-  final String qty;
-  final int rate; // whole rupees
-
-  const _LineItem(this.name, this.qty, this.rate);
-
-  // qty is a display string on Day 1; subtotal calculated from
-  // rate × numeric prefix only when qty starts with a number.
-  int get subtotal {
-    final match = RegExp(r'(\d+)').firstMatch(qty);
-    if (match == null) return 0;
-    return int.parse(match.group(1)!) * rate;
-  }
-}
-
 class _LineItemCard extends StatelessWidget {
-  final _LineItem item;
-  const _LineItemCard({required this.item});
+  final QuoteLineItem item;
+  final int amountPaise;
+  const _LineItemCard({required this.item, required this.amountPaise});
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     return Card(
       child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name, style: tt.titleMedium),
+                  Text(item.description, style: tt.titleMedium),
                   const SizedBox(height: 2),
-                  Text('${item.qty} × ${formatRupee(item.rate)}',
-                      style: tt.bodyMedium),
+                  Text(
+                    '${item.quantity} ${item.unit} × '
+                    '${formatRupeePaise(item.unitRatePaise)}',
+                    style: tt.bodyMedium,
+                  ),
                 ],
               ),
             ),
-            Text(formatRupee(item.subtotal), style: tt.titleMedium),
+            Text(formatRupeePaise(amountPaise), style: tt.titleMedium),
           ],
         ),
       ),
@@ -156,9 +162,12 @@ class _TotalRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: tt.titleMedium),
-          Text(value,
-              style: tt.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary)),
+          Text(
+            value,
+            style: tt.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
         ],
       ),
     );

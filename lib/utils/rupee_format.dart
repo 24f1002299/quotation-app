@@ -10,3 +10,12 @@ String formatRupee(num amount) {
   );
   return fmt.format(amount);
 }
+
+String formatRupeePaise(int paise) {
+  final rupees = paise ~/ 100;
+  final remainder = paise % 100;
+  final formattedRupees = NumberFormat.decimalPattern('en_IN').format(rupees);
+
+  if (remainder == 0) return '₹$formattedRupees';
+  return '₹$formattedRupees.${remainder.toString().padLeft(2, '0')}';
+}
