@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -49,6 +51,22 @@ class PdfService {
       regular: pw.Font.helvetica(),
       bold: pw.Font.helveticaBold(),
     );
+  }
+
+  /// Day 9 — Saves [bytes] into app-scoped documents directory.
+  /// Returns the absolute path of the saved PDF file.
+  static Future<String> savePdfToAppStorage({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final quotesDir = Directory('${dir.path}/quotations');
+    if (!await quotesDir.exists()) {
+      await quotesDir.create(recursive: true);
+    }
+    final file = File('${quotesDir.path}/$fileName');
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
   }
 
   /// Generates the complete A4 PDF document bytes for [quote].

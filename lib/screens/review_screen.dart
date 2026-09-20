@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../catalog/catalog.dart';
 import '../models/quote.dart';
+import '../storage/quote_repository.dart';
+import '../storage/saved_quote.dart';
 import '../theme.dart';
 import '../utils/rupee_format.dart';
 import 'pdf_preview_screen.dart';
@@ -77,12 +79,32 @@ class ReviewScreen extends StatefulWidget {
   /// Warnings emitted by the deterministic parser (Day 7).
   final List<String>? parsingWarnings;
 
+  /// Identifier of an existing saved quote when reopened from History (Day 9).
+  final String? savedQuoteId;
+
+  /// Pre-filled customer name when editing a saved quote.
+  final String? customerName;
+
+  /// Pre-filled customer phone when editing a saved quote.
+  final String? customerPhone;
+
+  /// Pre-filled notes when editing a saved quote.
+  final String? notes;
+
+  /// Pre-filled validity in days when editing a saved quote.
+  final int? validityDays;
+
   const ReviewScreen({
     super.key,
     this.initialLineItems,
     this.trade,
     this.originalTranscript,
     this.parsingWarnings,
+    this.savedQuoteId,
+    this.customerName,
+    this.customerPhone,
+    this.notes,
+    this.validityDays,
   });
 
   @override
@@ -109,6 +131,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
   void initState() {
     super.initState();
     _warnings = List<String>.from(widget.parsingWarnings ?? const []);
+
+    if (widget.customerName != null) {
+      _customerNameCtrl.text = widget.customerName!;
+    }
+    if (widget.customerPhone != null) {
+      _customerPhoneCtrl.text = widget.customerPhone!;
+    }
+    if (widget.notes != null) {
+      _notesCtrl.text = widget.notes!;
+    }
+    if (widget.validityDays != null) {
+      _validityDays = widget.validityDays!;
+    }
 
     final seed = widget.initialLineItems ??
         const [
@@ -186,6 +221,46 @@ class _ReviewScreenState extends State<ReviewScreen> {
         originalTranscript: widget.originalTranscript,
       );
 
+  Future<void> _saveDraft() async {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one item before saving / कम से कम एक मद जोड़ें'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final id = widget.savedQuoteId ?? 'quote_${DateTime.now().millisecondsSinceEpoch}';
+    final saved = SavedQuote(
+      id: id,
+      quoteNumber: 'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
+      createdAt: DateTime.now(),
+      trade: widget.trade,
+      customerName: _customerNameCtrl.text.trim().isEmpty ? 'Client' : _customerNameCtrl.text.trim(),
+      customerPhone: _customerPhoneCtrl.text.trim(),
+      validityDays: _validityDays,
+      notes: _notesCtrl.text.trim(),
+      originalTranscript: widget.originalTranscript,
+      lineItems: _items.map((i) => i.toLineItem()).toList(),
+    );
+
+    await QuoteRepository.saveQuote(saved);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Draft saved to History / ड्राफ्ट सहेजा गया'),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'View History',
+          onPressed: () => Navigator.pushNamed(context, '/history'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -213,6 +288,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_outline_rounded),
+            tooltip: 'Save Draft / ड्राफ्ट सहेजें',
+            onPressed: _saveDraft,
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline_rounded),
             tooltip: 'Add item / मद जोड़ें',
@@ -326,6 +406,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       trade: widget.trade,
                       validityDays: _validityDays,
                       notes: _notesCtrl.text.trim(),
+                      savedQuoteId: widget.savedQuoteId,
                     ),
                   ),
                 );
