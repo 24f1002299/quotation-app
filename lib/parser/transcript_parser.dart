@@ -216,10 +216,13 @@ class TranscriptParser {
 
   // ── Rate extraction ─────────────────────────────────────────────────────
 
-  // "45 rupaye" / "18 rupee" / "12 rupees"
-  static final _rateAfterNumber =
-      RegExp(r'(\d+)\s+(?:rupaye|rupee|rupees|rupe)\b');
-  // "₹45"
+  // “45 rupaye” / “18 rupee” / “12 rupees”
+  // Also handles Whisper Devanagari output: “१२ रुपये” (already digit-normalized
+  // to “12” by _normalize) followed by “रुपये” / “रुपए”.
+  static final _rateAfterNumber = RegExp(
+    r'(\d+)\s+(?:rupaye|rupee|rupees|rupe|\u0930\u0941\u092a\u092f\u0947|\u0930\u0941\u092a\u090f)\b',
+  );
+  // “₹45”
   static final _ratePrefixRupee = RegExp(r'₹\s*(\d+)');
 
   int? _findRate(String text) {
@@ -260,6 +263,7 @@ class TranscriptParser {
   // ── Unit extraction ─────────────────────────────────────────────────────
 
   String? _findUnit(String text) {
+    // Latin keywords (Hinglish) —————————————————————————————
     if (text.contains('running foot') ||
         text.contains('running ft') ||
         RegExp(r'\brft\b').hasMatch(text)) {
@@ -275,6 +279,17 @@ class TranscriptParser {
         text.contains('sq meter') ||
         RegExp(r'\bsqm\b').hasMatch(text)) {
       return 'sq m';
+    }
+    // Devanagari keywords (when Whisper returns Hindi script) ——————————
+    // रनिंग फुट / रनिंग फीट
+    if (text.contains('\u0930\u0928\u093f\u0902\u0917 \u092b\u0941\u091f') ||
+        text.contains('\u0930\u0928\u093f\u0902\u0917 \u092b\u0940\u091f')) {
+      return 'rft';
+    }
+    // वर्ग फुट / वर्ग फीट
+    if (text.contains('\u0935\u0930\u094d\u0917 \u092b\u0941\u091f') ||
+        text.contains('\u0935\u0930\u094d\u0917 \u092b\u0940\u091f')) {
+      return 'sq ft';
     }
     return null;
   }

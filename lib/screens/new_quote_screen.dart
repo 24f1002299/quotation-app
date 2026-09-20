@@ -3,6 +3,7 @@ import '../catalog/catalog.dart';
 import '../parser/demo_transcripts.dart';
 import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
+import '../screens/voice_screen.dart';
 import '../theme.dart';
 
 /// Day 4 — Real trade selection.  Tapping a trade card highlights it and
@@ -30,12 +31,23 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
       );
       return;
     }
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReviewScreen(trade: _selectedTrade),
-      ),
-    );
+    if (voiceMode) {
+      // Day 6: go to the voice capture screen (Whisper transcription)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VoiceScreen(trade: _selectedTrade!),
+        ),
+      );
+    } else {
+      // Enter Manually: go straight to ReviewScreen with empty items
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReviewScreen(trade: _selectedTrade),
+        ),
+      );
+    }
   }
 
   /// Parse the demo transcript for [trade] and jump straight to the review

@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ── Permissions ──────────────────────────────────────────────────── -->
+    <!-- Microphone access for voice capture (Whisper workflow) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Network access to call the OpenAI Whisper API -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="Contractor Quote"
         android:name="${applicationName}"
