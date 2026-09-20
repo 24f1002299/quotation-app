@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../catalog/catalog.dart';
 import '../models/quote.dart';
 import '../theme.dart';
 import '../utils/rupee_format.dart';
@@ -56,7 +57,8 @@ class _EditableItem {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ReviewScreen — editable quotation review & customer details
-// Accepts an optional initial list of line items (from voice/parse on Day 7).
+// Accepts an optional initial list of line items (from voice/parse on Day 7)
+// and an optional Trade (from the New Quote screen on Day 4+).
 // When called with no arguments it starts with the Day 2 demo fixture so
 // the existing widget test keeps passing.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +66,11 @@ class ReviewScreen extends StatefulWidget {
   /// Optional pre-populated line items (passed from voice flow on Day 7).
   final List<QuoteLineItem>? initialLineItems;
 
-  const ReviewScreen({super.key, this.initialLineItems});
+  /// Trade selected on the New Quote screen.  Null when opened from routes
+  /// that don't carry a trade (e.g. the widget test fallback).
+  final Trade? trade;
+
+  const ReviewScreen({super.key, this.initialLineItems, this.trade});
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -154,9 +160,27 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
+    // Build a trade badge to show in the AppBar when a trade is known.
+    final tradeBadge = widget.trade == null
+        ? null
+        : Chip(
+            label: Text(
+              widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
+              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: cs.primary.withOpacity(0.15),
+            side: BorderSide(color: cs.primary.withOpacity(0.4)),
+            visualDensity: VisualDensity.compact,
+          );
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Review Quote / जाँचें'),
+        title: Row(
+          children: [
+            const Text('Review Quote / जाँचें'),
+            if (tradeBadge != null) ...[const SizedBox(width: 10), tradeBadge],
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline_rounded),
@@ -251,7 +275,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _AddItemSheet(),
+      // Pass trade so the sheet can show catalog suggestions.
+      builder: (_) => _AddItemSheet(trade: widget.trade),
     ).then((item) {
       if (item == null) return;
       _attachListeners(item);
@@ -389,10 +414,16 @@ class _LineItemCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _AddItemSheet — bottom sheet with fields to add a new line item
+// _AddItemSheet — bottom sheet with catalog picker + manual entry form.
+// The catalog section is shown only when [trade] is non-null.
+// Tapping a catalog chip pre-fills the description and unit; the form fields
+// remain editable so a custom name is always possible.
 // ─────────────────────────────────────────────────────────────────────────────
 class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet();
+  /// When non-null, catalog suggestions for this trade are shown at the top.
+  final Trade? trade;
+
+  const _AddItemSheet({this.trade});
 
   @override
   State<_AddItemSheet> createState() => _AddItemSheetState();
@@ -405,6 +436,9 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   final _rateCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
+  // Which catalog item (if any) has been tapped — used for highlight only.
+  String? _selectedCatalogId;
+
   @override
   void dispose() {
     _descCtrl.dispose();
@@ -414,9 +448,17 @@ class _AddItemSheetState extends State<_AddItemSheet> {
     super.dispose();
   }
 
+  /// Pre-fills description and unit from a catalog chip tap.
+  void _applyCatalogItem(CatalogItem item) {
+    setState(() => _selectedCatalogId = item.id);
+    _descCtrl.text = item.displayName;
+    _unitCtrl.text = item.defaultUnit;
+    // Move focus to qty so the user can type immediately.
+    FocusScope.of(context).nextFocus();
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    // Return a fresh _EditableItem with current values
     Navigator.pop(
       context,
       _EditableItem(
@@ -432,129 +474,225 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    // Shift sheet up when keyboard appears
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
+    // Catalog items for the selected trade (empty list = no trade known).
+    final catalogItems = widget.trade == null
+        ? <CatalogItem>[]
+        : catalogForTrade(widget.trade!);
+
     return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E2C),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E2C),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Sheet handle ──────────────────────────────────────────────
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF9E9BA8),
-                  borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Sheet handle ────────────────────────────────────────────
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9E9BA8),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            Text('Add Item / मद जोड़ें', style: tt.titleLarge),
-            const SizedBox(height: 20),
+              Text('Add Item / मद जोड़ें', style: tt.titleLarge),
 
-            // ── Description ───────────────────────────────────────────────
-            _FieldLabel(
-              label: 'Item name / मद का नाम',
-              child: TextFormField(
-                controller: _descCtrl,
-                autofocus: true,
-                style: tt.bodyLarge,
-                decoration: _inputDecoration(context, hint: 'e.g. Skirting'),
-                textCapitalization: TextCapitalization.words,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+              // ── Catalog picker (only when trade is known) ──────────────
+              if (catalogItems.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'Choose from catalog / सूची में से चुनें',
+                  style: tt.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final ci in catalogItems)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _CatalogChip(
+                            item: ci,
+                            selected: _selectedCatalogId == ci.id,
+                            onTap: () => _applyCatalogItem(ci),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+              ],
+
+              const SizedBox(height: 16),
+
+              // ── Description ─────────────────────────────────────────────
+              _FieldLabel(
+                label: 'Item name / मद का नाम',
+                child: TextFormField(
+                  controller: _descCtrl,
+                  // Skip autofocus when catalog chips are present — keyboard
+                  // would hide them before the user can tap a chip.
+                  autofocus: catalogItems.isEmpty,
+                  style: tt.bodyLarge,
+                  decoration: _inputDecoration(context, hint: 'e.g. Skirting'),
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            // ── Qty + Unit ────────────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _FieldLabel(
-                    label: 'Qty / मात्रा',
-                    child: TextFormField(
-                      controller: _qtyCtrl,
-                      style: tt.bodyLarge,
-                      decoration: _inputDecoration(context, hint: '0'),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Required';
-                        if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
-                        return null;
-                      },
+              // ── Qty + Unit ───────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: _FieldLabel(
+                      label: 'Qty / मात्रा',
+                      child: TextFormField(
+                        controller: _qtyCtrl,
+                        style: tt.bodyLarge,
+                        decoration: _inputDecoration(context, hint: '0'),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
+                          return null;
+                        },
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: _FieldLabel(
-                    label: 'Unit',
-                    child: TextFormField(
-                      controller: _unitCtrl,
-                      style: tt.bodyLarge,
-                      decoration: _inputDecoration(context, hint: 'sq ft'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: _FieldLabel(
+                      label: 'Unit',
+                      child: TextFormField(
+                        controller: _unitCtrl,
+                        style: tt.bodyLarge,
+                        decoration: _inputDecoration(context, hint: 'sq ft'),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // ── Rate ──────────────────────────────────────────────────────
-            _FieldLabel(
-              label: 'Rate (₹) / दर',
-              child: TextFormField(
-                controller: _rateCtrl,
-                style: tt.bodyLarge,
-                decoration: _inputDecoration(context, hint: '0'),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Required';
-                  if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
-                  return null;
-                },
+                ],
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 12),
 
-            // ── Actions ───────────────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
+              // ── Rate ─────────────────────────────────────────────────────
+              _FieldLabel(
+                label: 'Rate (₹) / दर',
+                child: TextFormField(
+                  controller: _rateCtrl,
+                  style: tt.bodyLarge,
+                  decoration: _inputDecoration(context, hint: '0'),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Required';
+                    if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
+                    return null;
+                  },
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _submit,
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('Add'),
+              ),
+              const SizedBox(height: 24),
+
+              // ── Actions ──────────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text('Add'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _CatalogChip — tappable chip for a catalog item; saffron-highlighted when
+// selected
+// ─────────────────────────────────────────────────────────────────────────────
+class _CatalogChip extends StatelessWidget {
+  final CatalogItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CatalogChip({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      decoration: BoxDecoration(
+        color: selected
+            ? cs.primary.withOpacity(0.18)
+            : const Color(0xFF13131F),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selected ? cs.primary : const Color(0xFF2E2E42),
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                // Show only the English part before " /" for compact chips.
+                item.displayName.split(' /').first,
+                style: tt.bodyLarge?.copyWith(
+                  color: selected ? cs.primary : null,
+                  fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.normal,
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 2),
+              Text(item.defaultUnit, style: tt.bodyMedium),
+            ],
+          ),
         ),
       ),
     );
@@ -726,10 +864,10 @@ class _BottomActions extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(
           kPagePadding, 12, kPagePadding, kPagePadding),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E2C),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E2C),
         border: Border(
-          top: BorderSide(color: const Color(0xFF2E2E42), width: 1),
+          top: BorderSide(color: Color(0xFF2E2E42), width: 1),
         ),
       ),
       child: Column(
@@ -870,7 +1008,7 @@ InputDecoration _inputDecoration(BuildContext context, {required String hint}) {
   final cs = Theme.of(context).colorScheme;
   return InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(color: const Color(0xFF9E9BA8), fontSize: 14),
+    hintStyle: const TextStyle(color: Color(0xFF9E9BA8), fontSize: 14),
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
     filled: true,
