@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../catalog/catalog.dart';
+import '../parser/demo_transcripts.dart';
+import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
 import '../theme.dart';
 
@@ -36,6 +38,26 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
     );
   }
 
+  /// Parse the demo transcript for [trade] and jump straight to the review
+  /// screen with pre-filled line items.  Also highlights that trade card.
+  void _useDemoTranscript(Trade trade) {
+    setState(() => _selectedTrade = trade);
+    final transcript = trade == Trade.tiling
+        ? kTilingDemoTranscript
+        : kPaintingDemoTranscript;
+    final result = const TranscriptParser().parse(transcript);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReviewScreen(
+          trade: trade,
+          initialLineItems:
+              result.items.map((i) => i.toQuoteLineItem()).toList(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -66,6 +88,35 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
                 subtitle: 'Wall putty, primer, painting',
                 selected: _selectedTrade == Trade.painting,
                 onTap: () => _selectTrade(Trade.painting),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ── Demo shortcut ──────────────────────────────────────────
+              Text(
+                '— or try a demo / डेमो देखें —',
+                style: tt.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _useDemoTranscript(Trade.tiling),
+                      icon: const Text('🪣', style: TextStyle(fontSize: 16)),
+                      label: const Text('Tiling Demo'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _useDemoTranscript(Trade.painting),
+                      icon: const Text('🖌️', style: TextStyle(fontSize: 16)),
+                      label: const Text('Painting Demo'),
+                    ),
+                  ),
+                ],
               ),
 
               const Spacer(),
