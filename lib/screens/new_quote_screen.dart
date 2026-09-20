@@ -44,7 +44,10 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ReviewScreen(trade: _selectedTrade),
+          builder: (_) => ReviewScreen(
+            trade: _selectedTrade,
+            initialLineItems: const [],
+          ),
         ),
       );
     }
@@ -63,6 +66,8 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
           trade: trade,
+          originalTranscript: transcript,
+          parsingWarnings: result.warnings,
           initialLineItems:
               result.items.map((i) => i.toQuoteLineItem()).toList(),
         ),

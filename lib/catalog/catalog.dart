@@ -8,6 +8,7 @@
 ///   - a list of [synonyms] in Hindi/Marathi/Hinglish — used by the Day-5
 ///     parser to recognise these items in spoken transcripts
 ///   - the [trade] it belongs to (tiling or painting)
+library;
 
 enum Trade { tiling, painting }
 

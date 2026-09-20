@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/parser/demo_transcripts.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';

@@ -57,8 +57,8 @@ class _EditableItem {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ReviewScreen — editable quotation review & customer details
-// Accepts an optional initial list of line items (from voice/parse on Day 7)
-// and an optional Trade (from the New Quote screen on Day 4+).
+// Accepts an optional initial list of line items (from voice/parse on Day 7),
+// an optional Trade, original voice transcript, and any parser warnings.
 // When called with no arguments it starts with the Day 2 demo fixture so
 // the existing widget test keeps passing.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,7 +70,19 @@ class ReviewScreen extends StatefulWidget {
   /// that don't carry a trade (e.g. the widget test fallback).
   final Trade? trade;
 
-  const ReviewScreen({super.key, this.initialLineItems, this.trade});
+  /// Raw transcript captured from voice or demo phrase (Day 7).
+  final String? originalTranscript;
+
+  /// Warnings emitted by the deterministic parser (Day 7).
+  final List<String>? parsingWarnings;
+
+  const ReviewScreen({
+    super.key,
+    this.initialLineItems,
+    this.trade,
+    this.originalTranscript,
+    this.parsingWarnings,
+  });
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -88,9 +100,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
   static const _validityOptions = [7, 15, 30, 60];
   int _validityDays = 15;
 
+  // ── Voice & Parser state (Day 7) ───────────────────────────────────────────
+  late final List<String> _warnings;
+  bool _transcriptExpanded = true;
+
   @override
   void initState() {
     super.initState();
+    _warnings = List<String>.from(widget.parsingWarnings ?? const []);
+
     final seed = widget.initialLineItems ??
         const [
           QuoteLineItem(
@@ -155,6 +173,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
     item.rate.addListener(_onFieldChanged);
   }
 
+  /// Builds an immutable [Quote] representation of the current screen state.
+  Quote buildQuote() => Quote(
+        customer: Customer(
+          name: _customerNameCtrl.text.trim().isEmpty
+              ? 'Client'
+              : _customerNameCtrl.text.trim(),
+          phone: _customerPhoneCtrl.text.trim(),
+        ),
+        lineItems: _items.map((i) => i.toLineItem()).toList(),
+        originalTranscript: widget.originalTranscript,
+      );
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -197,6 +227,27 @@ class _ReviewScreenState extends State<ReviewScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(kPagePadding),
                 children: [
+                  // ── Original Voice Note (Day 7) ───────────────────────────
+                  if (widget.originalTranscript != null &&
+                      widget.originalTranscript!.trim().isNotEmpty) ...[
+                    _VoiceNoteCard(
+                      transcript: widget.originalTranscript!.trim(),
+                      isExpanded: _transcriptExpanded,
+                      onToggle: () => setState(
+                          () => _transcriptExpanded = !_transcriptExpanded),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // ── Parsing Warnings Banner (Day 7) ───────────────────────
+                  if (_warnings.isNotEmpty) ...[
+                    _ParsingWarningsBanner(
+                      warnings: _warnings,
+                      onDismiss: () => setState(() => _warnings.clear()),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
                   // ── Section: Line items ───────────────────────────────
                   _SectionHeader(
                     label: 'Items / मद',
@@ -209,7 +260,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   const SizedBox(height: 8),
 
                   if (_items.isEmpty)
-                    _EmptyItemsHint(onAdd: _showAddItemSheet),
+                    _EmptyItemsHint(
+                      onAdd: _showAddItemSheet,
+                      hasVoiceTranscript: widget.originalTranscript != null &&
+                          widget.originalTranscript!.trim().isNotEmpty,
+                    ),
 
                   ..._items.asMap().entries.map(
                         (entry) => _LineItemCard(
@@ -473,7 +528,6 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     // Catalog items for the selected trade (empty list = no trade known).
@@ -973,29 +1027,262 @@ class _AmountChip extends StatelessWidget {
 
 class _EmptyItemsHint extends StatelessWidget {
   final VoidCallback onAdd;
-  const _EmptyItemsHint({required this.onAdd});
+  final bool hasVoiceTranscript;
+
+  const _EmptyItemsHint({
+    required this.onAdd,
+    this.hasVoiceTranscript = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
     return Card(
       child: InkWell(
         onTap: onAdd,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 28),
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
           child: Center(
             child: Column(
               children: [
-                Icon(Icons.add_box_outlined,
-                    size: 36,
-                    color: Theme.of(context).colorScheme.primary),
-                const SizedBox(height: 8),
-                Text('No items yet — tap to add one', style: tt.bodyMedium),
+                Icon(
+                  hasVoiceTranscript
+                      ? Icons.playlist_add_rounded
+                      : Icons.add_box_outlined,
+                  size: 38,
+                  color: cs.primary,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  hasVoiceTranscript
+                      ? 'No items auto-detected from voice'
+                      : 'No items yet — tap to add one',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasVoiceTranscript
+                      ? 'Tap here or "+ Add item" to add manually'
+                      : 'Add materials, labour, or custom rates',
+                  style: tt.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Day 7 — Voice note card & parsing warnings banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VoiceNoteCard extends StatelessWidget {
+  final String transcript;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+
+  const _VoiceNoteCard({
+    required this.transcript,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B1B2A),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2E2E42)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.mic_rounded, color: cs.primary, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Spoken Note / मूल आवाज़',
+                      style: tt.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Voice Transcript',
+                      style: tt.bodySmall?.copyWith(
+                        fontSize: 10,
+                        color: cs.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: const Color(0xFF9E9BA8),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded) ...[
+            const Divider(height: 1, color: Color(0xFF2E2E42)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '“$transcript”',
+                    style: tt.bodyMedium?.copyWith(
+                      color: const Color(0xFFD0CFD6),
+                      fontStyle: FontStyle.italic,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline_rounded,
+                          size: 14, color: Color(0xFF4CAF50)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Parsed into line items below',
+                        style: tt.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: const Color(0xFF9E9BA8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ParsingWarningsBanner extends StatelessWidget {
+  final List<String> warnings;
+  final VoidCallback onDismiss;
+
+  const _ParsingWarningsBanner({
+    required this.warnings,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2013),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFF59E0B),
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Please Review / ध्यान दें',
+                  style: tt.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFFCD34D),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    size: 18, color: Color(0xFFF59E0B)),
+                onPressed: onDismiss,
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Dismiss warning',
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final w in warnings)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• ',
+                      style: tt.bodySmall?.copyWith(
+                        color: const Color(0xFFFCD34D),
+                        fontWeight: FontWeight.bold,
+                      )),
+                  Expanded(
+                    child: Text(
+                      w,
+                      style: tt.bodySmall?.copyWith(
+                        color: const Color(0xFFFDE68A),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6),
+          Text(
+            'Check the items below or tap "Add item" to complete any missing details.',
+            style: tt.bodySmall?.copyWith(
+              fontSize: 11,
+              color: const Color(0xFFD1D5DB),
+            ),
+          ),
+        ],
       ),
     );
   }

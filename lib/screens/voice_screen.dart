@@ -42,7 +42,6 @@ class _VoiceScreenState extends State<VoiceScreen>
     with SingleTickerProviderStateMixin {
   _RecordState _state = _RecordState.idle;
   final _recorder = AudioRecorder();
-  String? _audioPath;
   String? _errorMessage;
 
   final _transcriptCtrl = TextEditingController();
@@ -91,7 +90,6 @@ class _VoiceScreenState extends State<VoiceScreen>
       );
       setState(() {
         _state = _RecordState.recording;
-        _audioPath = path;
         _recSeconds = 0;
         _errorMessage = null;
       });
@@ -177,6 +175,8 @@ class _VoiceScreenState extends State<VoiceScreen>
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
           trade: widget.trade,
+          originalTranscript: text,
+          parsingWarnings: result.warnings,
           initialLineItems:
               result.items.map((i) => i.toQuoteLineItem()).toList(),
         ),

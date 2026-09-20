@@ -25,11 +25,13 @@ class Quote {
   final Customer customer;
   final List<QuoteLineItem> lineItems;
   final int? gstPercent;
+  final String? originalTranscript;
 
   Quote({
     required this.customer,
     required List<QuoteLineItem> lineItems,
     this.gstPercent,
+    this.originalTranscript,
   }) : assert(gstPercent == null || (gstPercent >= 0 && gstPercent <= 100)),
        lineItems = List.unmodifiable(lineItems);
 }
