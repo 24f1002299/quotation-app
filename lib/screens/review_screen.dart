@@ -5,6 +5,7 @@ import '../catalog/catalog.dart';
 import '../models/quote.dart';
 import '../theme.dart';
 import '../utils/rupee_format.dart';
+import 'pdf_preview_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mutable line-item data class used only within this screen.
@@ -307,11 +308,25 @@ class _ReviewScreenState extends State<ReviewScreen> {
             _BottomActions(
               subtotalPaise: _subtotalPaise,
               onGeneratePdf: () {
-                // Day 8 will wire this up.
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('PDF generation coming on Day 8'),
-                    behavior: SnackBarBehavior.floating,
+                if (_items.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please add at least one item / कम से कम एक मद जोड़ें'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+                final quote = buildQuote();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PdfPreviewScreen(
+                      quote: quote,
+                      trade: widget.trade,
+                      validityDays: _validityDays,
+                      notes: _notesCtrl.text.trim(),
+                    ),
                   ),
                 );
               },
