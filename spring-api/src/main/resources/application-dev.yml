@@ -1,0 +1,29 @@
+# application-dev.yml — override for local development
+#
+# Activate with: SPRING_PROFILES_ACTIVE=dev
+# Points to local Supabase Docker (supabase start).
+#
+# Default local Supabase Docker ports:
+#   Postgres:  localhost:54322
+#   Studio:    localhost:54323
+#   API/Auth:  localhost:54321
+#
+# Run `supabase start` to get the actual anon key and service-role key printed.
+# Never commit real keys — fill in the values below only for local dev.
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:54322/postgres
+    username: app_role
+    # For local Docker, set this to the password you assigned in 003_app_role.sql
+    password: dev_app_role_password_replace_me
+
+supabase:
+  # Local Supabase Docker uses a fixed JWKS endpoint.
+  jwks-url: http://localhost:54321/auth/v1/.well-known/jwks.json
+  project-url: http://localhost:54321
+
+logging:
+  level:
+    com.quotapp: DEBUG
+    org.springframework.security: DEBUG

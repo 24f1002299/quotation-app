@@ -1,0 +1,18 @@
+# Spring Boot API — git ignore rules
+#
+# .env contains real database credentials and must NEVER be committed.
+# .env.example (the template without real values) IS committed intentionally.
+
+.env
+
+# Maven build output
+target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

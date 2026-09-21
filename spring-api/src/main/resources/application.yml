@@ -1,0 +1,73 @@
+# application.yml — quotapp-api
+#
+# All sensitive values are loaded from environment variables — never committed.
+# See .env.example for the list of required variables.
+
+spring:
+  application:
+    name: quotapp-api
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      enabled: true
+
+quotapp:
+  stt:
+    default-provider: ${DEFAULT_STT_PROVIDER:grok}
+    grok:
+      api-key: ${XAI_API_KEY:}
+      url: ${XAI_STT_URL:https://api.x.ai/v1/stt}
+      timeout-seconds: 15
+    whisper:
+      api-key: ${OPENAI_API_KEY:}
+      url: ${OPENAI_STT_URL:https://api.openai.com/v1/audio/transcriptions}
+      model: whisper-1
+      timeout-seconds: 15
+
+  datasource:
+    # Use the least-privilege app_role, not the service-role / postgres user.
+    # DATABASE_URL format: jdbc:postgresql://<host>:<port>/<db>
+    url: ${DATABASE_URL}
+    username: app_role
+    password: ${DATABASE_APP_ROLE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      # Bounded pool — do not exhaust Supabase connection limits.
+      # Adjust based on Supabase plan and number of API instances.
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 10000    # 10 s
+      idle-timeout: 300000         # 5 min
+      max-lifetime: 1800000        # 30 min
+
+supabase:
+  # Public JWKS endpoint — no secret required.
+  # Format: https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
+  jwks-url: ${SUPABASE_JWKS_URL}
+
+  # The Supabase project URL (used by the Flutter app via --dart-define only).
+  # Kept here so ops can validate consistency, but Spring does not use it.
+  project-url: ${SUPABASE_URL}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.quotapp: INFO
+    org.springframework.security: WARN
+  # Ensure request IDs are included in every log line (added in filter).
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level [%X{requestId}] %logger{36} - %msg%n"

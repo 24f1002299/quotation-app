@@ -1,0 +1,52 @@
+package com.quotapp.stt;
+
+import java.util.List;
+
+/**
+ * Domain-specific vocabulary from the Day 4 & Day 6 tiling and painting catalogues.
+ *
+ * <p>Used for:
+ * <ul>
+ *   <li>Key-term biasing in Grok STT (up to 100 domain terms).</li>
+ *   <li>Prompt hint in OpenAI Whisper-1 to bias token probabilities towards contractor terms.</li>
+ * </ul>
+ *
+ * <p>Never treat STT transcription results as trusted line-item data; all speech results
+ * remain candidates requiring contractor review before saving a quote.
+ */
+public final class ContractorCatalogTerms {
+
+    private ContractorCatalogTerms() {}
+
+    /**
+     * Common trade terms, units, and Hindi/Marathi phrases for tiling and painting.
+     */
+    public static final List<String> TERMS = List.of(
+        // Tiling catalogue items & synonyms
+        "tile labour", "टाइल मजदूरी", "टाइल लेबर", "floor tiles", "wall tiles",
+        "tiles lagana", "टाइल लगाना", "फर्श टाइल", "दीवार टाइल",
+        "skirting", "स्कर्टिंग", "border tile", "skirt",
+        "waterproofing", "वॉटरप्रूफिंग", "पाणी रोखणे", "waterproof", "leakage proofing",
+
+        // Painting catalogue items & synonyms
+        "wall putty", "वॉल पुट्टी", "putty work", "पट्टी", "patti kaam", "white cement putty",
+        "primer", "प्राइमर", "prime coat", "priming", "first coat",
+        "painting", "पेंटिंग", "रंगाई", "rangai", "wall painting", "emulsion", "distemper",
+
+        // Units and measurements in contractor speech
+        "sq ft", "square feet", "स्क्वेअर फूट", "चौरस फूट", "फूट",
+        "rft", "running feet", "रनिंग फूट", "रनिंग",
+        "brass", "ब्रास",
+        "nug", "नग", "piece", "pieces",
+
+        // Commercial and money terms
+        "rate", "दर", "भाव", "रुपये", "rupees", "advance", "कोटेशन", "quotation"
+    );
+
+    /**
+     * Formats the catalogue terms as a single comma-separated prompt string for Whisper / Grok biasing.
+     */
+    public static String asPromptString() {
+        return String.join(", ", TERMS);
+    }
+}
