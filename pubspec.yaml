@@ -41,6 +41,9 @@ dependencies:
   pdf: ^3.13.1
   printing: ^5.15.1
   shared_preferences: ^2.5.5
+  # Supabase Flutter client — uses anon key only.
+  # The service-role key must NEVER be added here.
+  supabase_flutter: ^2.8.4
 
 dev_dependencies:
   flutter_test:

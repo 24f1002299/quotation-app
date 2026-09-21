@@ -1,6 +1,9 @@
 # Miscellaneous
 # API secrets — never commit real keys
 lib/config/api_config.dart
+lib/config/supabase_config.dart   # only if you put real values here (use --dart-define instead)
+# Spring Boot env file
+../spring-api/.env
 
 *.class
 *.log
