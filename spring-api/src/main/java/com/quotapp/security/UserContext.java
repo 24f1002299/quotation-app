@@ -27,6 +27,16 @@ public final class UserContext {
         return USER_ID.get();
     }
 
+    /** Alias for get() to return current user ID. */
+    public static String getUserId() {
+        return USER_ID.get();
+    }
+
+    /** Alias for set() to set current user ID. */
+    public static void setUserId(String userId) {
+        USER_ID.set(userId);
+    }
+
     /**
      * Returns the current user ID; throws {@link IllegalStateException} if absent.
      * Use in service methods that must always run within an authenticated context.

@@ -45,7 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
     // Point to test-only JWKS stub (configured in application-test.yml)
-    "supabase.jwks-url=http://localhost:0/test-jwks",
+    "supabase.jwks-url=http://localhost:65432/test-jwks",
     "spring.datasource.url=jdbc:h2:mem:testdb",
     "spring.datasource.driver-class-name=org.h2.Driver",
     "spring.datasource.username=sa",

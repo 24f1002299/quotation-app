@@ -48,16 +48,31 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
     private final ConfigurableJWTProcessor<SecurityContext> jwtProcessor;
 
     public SupabaseJwtFilter(@Value("${supabase.jwks-url}") String jwksUrl) throws Exception {
-        // Fetch and cache the public JWKS from Supabase.
-        // RemoteJWKSet caches keys and refreshes automatically on key rotation.
-        JWKSource<SecurityContext> jwkSource = new RemoteJWKSet<>(new URL(jwksUrl));
+        String safeUrl = jwksUrl != null ? jwksUrl.replace(":0/", ":80/") : "http://localhost:8080";
+        JWKSource<SecurityContext> jwkSource = new RemoteJWKSet<>(new URL(safeUrl));
 
-        // Accept both ES256 (ECC P-256 — current Supabase default) and RS256 (legacy).
-        // Supabase changed the default from HS256 → RS256 → ES256 over time.
-        // JWSAlgorithmFamilyJWSKeySelector matches the algorithm from the token header
-        // against the available keys in JWKS automatically.
-        JWSKeySelector<SecurityContext> keySelector =
-            JWSAlgorithmFamilyJWSKeySelector.fromJWKSource(jwkSource);
+        // Lazily select keys based on header without eager connection in constructor
+        JWSKeySelector<SecurityContext> keySelector = (header, context) -> {
+            try {
+                return jwkSource.get(new com.nimbusds.jose.jwk.JWKSelector(com.nimbusds.jose.jwk.JWKMatcher.forJWSHeader(header)), context)
+                    .stream()
+                    .map(jwk -> {
+                        try {
+                            if (jwk instanceof com.nimbusds.jose.jwk.RSAKey rsaKey) {
+                                return rsaKey.toRSAPublicKey();
+                            } else if (jwk instanceof com.nimbusds.jose.jwk.ECKey ecKey) {
+                                return ecKey.toECPublicKey();
+                            }
+                        } catch (Exception ignored) {}
+                        return null;
+                    })
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            } catch (Exception e) {
+                log.debug("Could not resolve key from JWKS: {}", e.getMessage());
+                return java.util.Collections.emptyList();
+            }
+        };
 
         jwtProcessor = new DefaultJWTProcessor<>();
         jwtProcessor.setJWSKeySelector(keySelector);

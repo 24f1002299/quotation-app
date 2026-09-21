@@ -1,14 +1,17 @@
-/// Day 6 — Voice capture screen using device microphone + OpenAI Whisper.
+/// Day 9 — Voice capture and reviewable transcript UX.
 ///
-/// State machine:
-///   idle → recording → transcribing → hasTranscript
-///                  ↓ (cancel)
-///               idle
-///
-/// The user can also skip recording entirely and use the demo transcript for
-/// their selected trade.
+/// Implements:
+/// - Microphone permission handling with recovery path
+/// - Start, stop, cancel controls with pulse animation
+/// - Elapsed time display with conservative 60-second limit and auto-stop
+/// - Language choice: Hindi, Marathi, Hinglish / Auto
+/// - Uploads over HTTPS to authenticated Spring Boot endpoint (Grok STT default)
+/// - Temporary audio file deleted immediately upon transcription or cancellation
+/// - Draft persistence with uncertainty metadata
+/// - Safe error handling: never loses typed draft on failure
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,11 +19,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../catalog/catalog.dart';
+import '../config/api_config.dart';
+import '../models/transcript_draft.dart';
 import '../parser/demo_transcripts.dart';
 import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
+import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
-import '../voice/whisper_service.dart';
+import '../voice/transcription_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State machine
@@ -42,17 +48,23 @@ class _VoiceScreenState extends State<VoiceScreen>
     with SingleTickerProviderStateMixin {
   _RecordState _state = _RecordState.idle;
   final _recorder = AudioRecorder();
+
   String? _errorMessage;
+  bool _permissionDenied = false;
 
   final _transcriptCtrl = TextEditingController();
+  UncertaintyMetadata _uncertainty = const UncertaintyMetadata();
+
+  // Selected language for Grok STT
+  String _selectedLanguage = 'auto'; // 'auto', 'hi', 'mr'
 
   // Pulse animation on the mic button while recording
   late final AnimationController _pulse;
 
-  // Duration counter while recording
+  // Elapsed duration counter while recording
   int _recSeconds = 0;
-  // ignore: cancel_subscriptions
-  late final Stream<int> _ticker;
+  Timer? _timer;
+  File? _currentAudioFile;
 
   @override
   void initState() {
@@ -61,15 +73,49 @@ class _VoiceScreenState extends State<VoiceScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
-    _ticker = Stream.periodic(const Duration(seconds: 1), (n) => n + 1);
+
+    _transcriptCtrl.addListener(_onTranscriptChanged);
+    _loadExistingDraft();
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _recorder.dispose();
+    _transcriptCtrl.removeListener(_onTranscriptChanged);
     _transcriptCtrl.dispose();
     _pulse.dispose();
     super.dispose();
+  }
+
+  // ── Draft loading & auto-save ─────────────────────────────────────────────
+
+  Future<void> _loadExistingDraft() async {
+    final draft = await TranscriptDraftRepository.getDraft(widget.trade);
+    if (!mounted || draft == null || draft.transcript.trim().isEmpty) return;
+
+    setState(() {
+      _transcriptCtrl.text = draft.transcript;
+      _selectedLanguage = draft.language;
+      _uncertainty = draft.uncertainty;
+      _state = _RecordState.hasTranscript;
+    });
+  }
+
+  void _onTranscriptChanged() {
+    final text = _transcriptCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    final draft = TranscriptDraft(
+      id: 'draft_${widget.trade.name}',
+      trade: widget.trade,
+      transcript: text,
+      language: _selectedLanguage,
+      provider: kDefaultSttProvider,
+      uncertainty: _uncertainty,
+      updatedAt: DateTime.now(),
+    );
+    TranscriptDraftRepository.saveDraft(draft);
   }
 
   // ── Recording ─────────────────────────────────────────────────────────────
@@ -77,21 +123,48 @@ class _VoiceScreenState extends State<VoiceScreen>
   Future<void> _startRecording() async {
     final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
-      _showError('Microphone permission denied.\nPlease grant it in Settings.');
+      setState(() {
+        _permissionDenied = true;
+        _errorMessage =
+            'Microphone permission is needed to record. You can still type a quote.';
+      });
       return;
     }
+
+    setState(() {
+      _permissionDenied = false;
+      _errorMessage = null;
+    });
+
     final dir = await getTemporaryDirectory();
     final path =
         '${dir.path}/quote_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final targetFile = File(path);
+
     try {
       await _recorder.start(
         const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000),
         path: path,
       );
+
+      _currentAudioFile = targetFile;
+      _recSeconds = 0;
+
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) return;
+        setState(() {
+          _recSeconds++;
+        });
+
+        // Conservative maximum duration limit: automatically stop and process
+        if (_recSeconds >= kMaxRecordingDurationSeconds) {
+          _stopRecording();
+        }
+      });
+
       setState(() {
         _state = _RecordState.recording;
-        _recSeconds = 0;
-        _errorMessage = null;
       });
     } catch (e) {
       _showError('Could not start recording: $e');
@@ -99,37 +172,96 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   Future<void> _stopRecording() async {
+    _timer?.cancel();
     final path = await _recorder.stop();
+
     if (path == null || !(await File(path).exists())) {
-      _showError('Recording failed — try again or use the demo.');
+      _showError('Recording failed — try again or enter details manually.');
       setState(() => _state = _RecordState.idle);
       return;
     }
+
+    final recordedFile = File(path);
+    _currentAudioFile = recordedFile;
+
     setState(() => _state = _RecordState.transcribing);
-    await _transcribeFile(File(path));
+    await _transcribeAudio(recordedFile, _recSeconds);
   }
 
   Future<void> _cancelRecording() async {
+    _timer?.cancel();
     await _recorder.stop();
+
+    if (_currentAudioFile != null) {
+      await TranscriptionService.deleteTemporaryAudio(_currentAudioFile);
+      _currentAudioFile = null;
+    }
+
     setState(() {
       _state = _RecordState.idle;
       _recSeconds = 0;
     });
   }
 
-  // ── Whisper transcription ─────────────────────────────────────────────────
+  // ── Grok Transcription ────────────────────────────────────────────────────
 
-  Future<void> _transcribeFile(File audio) async {
+  Future<void> _transcribeAudio(File audio, int duration) async {
     try {
-      final transcript = await WhisperService.transcribe(audio);
+      final result = await TranscriptionService.transcribe(
+        audioFile: audio,
+        durationSeconds: duration,
+        languageHint: _selectedLanguage,
+        provider: kDefaultSttProvider,
+      );
+
       if (!mounted) return;
-      _transcriptCtrl.text = transcript;
-      setState(() => _state = _RecordState.hasTranscript);
+
+      setState(() {
+        _transcriptCtrl.text = result.transcript;
+        _uncertainty = result.uncertainty;
+        _state = _RecordState.hasTranscript;
+        _errorMessage = null;
+      });
+
+      // Save draft immediately
+      _onTranscriptChanged();
+
+      // Clean up temporary audio file after successful transcription
+      await TranscriptionService.deleteTemporaryAudio(audio);
+      _currentAudioFile = null;
     } catch (e) {
       if (!mounted) return;
-      _showError(e.toString().replaceFirst('Exception: ', ''));
-      setState(() => _state = _RecordState.idle);
+
+      // Clean up temporary audio file on failure
+      await TranscriptionService.deleteTemporaryAudio(audio);
+      _currentAudioFile = null;
+
+      final msg = e is SocketException
+          ? 'Transcription needs internet connection. Your draft is safe.'
+          : 'We could not turn this recording into text. Your draft is safe.';
+
+      setState(() {
+        _errorMessage = msg;
+        // Keep in transcript mode if user already typed anything, else idle
+        _state = _transcriptCtrl.text.trim().isNotEmpty
+            ? _RecordState.hasTranscript
+            : _RecordState.idle;
+      });
     }
+  }
+
+  // ── Manual Quote Fallback ─────────────────────────────────────────────────
+
+  void _createManually() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReviewScreen(
+          trade: widget.trade,
+          initialLineItems: const [],
+        ),
+      ),
+    );
   }
 
   // ── Demo shortcut ─────────────────────────────────────────────────────────
@@ -153,7 +285,6 @@ class _VoiceScreenState extends State<VoiceScreen>
 
     final result = const TranscriptParser().parse(text);
 
-    // Show any parser warnings as a SnackBar before navigation
     if (result.hasWarnings) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -185,7 +316,9 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   void _reRecord() {
+    _cancelRecording();
     _transcriptCtrl.clear();
+    TranscriptDraftRepository.clearDraft(widget.trade);
     setState(() => _state = _RecordState.idle);
   }
 
@@ -215,10 +348,18 @@ class _VoiceScreenState extends State<VoiceScreen>
         title: Row(
           children: [
             const Text('Speak Quote / बोलें'),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             tradeBadge,
           ],
         ),
+        actions: [
+          // Language selector dropdown as per design.md
+          _LanguagePicker(
+            selected: _selectedLanguage,
+            onChanged: (lang) => setState(() => _selectedLanguage = lang),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -226,25 +367,55 @@ class _VoiceScreenState extends State<VoiceScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // ── Permission Recovery Banner ──────────────────────────────
+              if (_permissionDenied)
+                _PermissionRecoveryBanner(
+                  onAllow: _startRecording,
+                  onTypeManually: _createManually,
+                ),
+
               // ── Error banner ────────────────────────────────────────────
-              if (_errorMessage != null)
+              if (_errorMessage != null && !_permissionDenied)
                 _ErrorBanner(
                   message: _errorMessage!,
                   onDismiss: () => setState(() => _errorMessage = null),
+                  onRetry: _state == _RecordState.idle ? _startRecording : null,
+                  onManual: _createManually,
                 ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // ── Central area (state-dependent) ──────────────────────────
               Expanded(
                 child: _state == _RecordState.hasTranscript
                     ? _TranscriptEditor(
                         ctrl: _transcriptCtrl,
+                        uncertainty: _uncertainty,
                         onReRecord: _reRecord,
                       )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // Guidance hint
+                          Text(
+                            'Tell us the work and quantities',
+                            style: tt.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.trade == Trade.tiling
+                                ? 'Example: “Kitchen wall tiles, 120 square feet.”'
+                                : 'Example: “Wall putty, 1200 square feet.”',
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurface.withOpacity(0.7),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 36),
+
                           // Animated mic button
                           _MicButton(
                             state: _state,
@@ -253,9 +424,9 @@ class _VoiceScreenState extends State<VoiceScreen>
                             onStop: _stopRecording,
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
 
-                          // Status text
+                          // Status text & timer
                           if (_state == _RecordState.idle)
                             ..._idleHint(tt)
                           else if (_state == _RecordState.recording)
@@ -276,7 +447,7 @@ class _VoiceScreenState extends State<VoiceScreen>
                 const SizedBox(height: 12),
               ],
 
-              // Recording cancel & demo buttons (shown in idle/recording)
+              // Recording controls (Cancel during recording)
               if (_state == _RecordState.recording) ...[
                 OutlinedButton(
                   onPressed: _cancelRecording,
@@ -286,6 +457,12 @@ class _VoiceScreenState extends State<VoiceScreen>
               ],
 
               if (_state == _RecordState.idle) ...[
+                OutlinedButton.icon(
+                  onPressed: _createManually,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Type quote instead / लिखकर बनाएं'),
+                ),
+                const SizedBox(height: 16),
                 const _DemoSection(),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
@@ -309,7 +486,7 @@ class _VoiceScreenState extends State<VoiceScreen>
 
   List<Widget> _idleHint(TextTheme tt) => [
         Text(
-          'Tap to start speaking',
+          'Tap to speak / बोलने के लिए टैप करें',
           style: tt.titleMedium,
           textAlign: TextAlign.center,
         ),
@@ -320,52 +497,128 @@ class _VoiceScreenState extends State<VoiceScreen>
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 6),
-        Text(
-          'Powered by OpenAI Whisper',
-          style: tt.bodySmall,
-          textAlign: TextAlign.center,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_rounded, size: 14, color: Colors.grey),
+            const SizedBox(width: 4),
+            Text(
+              'Transcription needs internet · Grok STT',
+              style: tt.bodySmall?.copyWith(color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ];
 
-  List<Widget> _recordingHint(TextTheme tt, ColorScheme cs) => [
-        StreamBuilder<int>(
-          stream: _ticker,
-          builder: (_, snap) {
-            final s = snap.data ?? _recSeconds;
-            final mm = (s ~/ 60).toString().padLeft(2, '0');
-            final ss = (s % 60).toString().padLeft(2, '0');
-            return Text(
-              '$mm:$ss',
-              style: tt.displaySmall?.copyWith(
-                color: cs.error,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            );
-          },
+  List<Widget> _recordingHint(TextTheme tt, ColorScheme cs) {
+    final mm = (_recSeconds ~/ 60).toString().padLeft(2, '0');
+    final ss = (_recSeconds % 60).toString().padLeft(2, '0');
+    final maxMm = (kMaxRecordingDurationSeconds ~/ 60).toString().padLeft(2, '0');
+    final maxSs = (kMaxRecordingDurationSeconds % 60).toString().padLeft(2, '0');
+
+    return [
+      Text(
+        '$mm:$ss / $maxMm:$maxSs',
+        style: tt.displaySmall?.copyWith(
+          color: cs.error,
+          fontWeight: FontWeight.bold,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Recording… tap the mic to stop',
-          style: tt.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-      ];
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Recording… tap the mic to stop',
+        style: tt.bodyMedium,
+        textAlign: TextAlign.center,
+      ),
+    ];
+  }
 
   List<Widget> _transcribingHint(TextTheme tt, ColorScheme cs) => [
         CircularProgressIndicator(color: cs.primary),
         const SizedBox(height: 20),
         Text(
-          'Transcribing with Whisper…',
+          'Transcribing with Grok STT…',
           style: tt.titleMedium,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 6),
         Text(
-          'This usually takes 2–5 seconds.',
+          'Turning audio into text. Takes ~2–4 seconds.',
           style: tt.bodyMedium,
           textAlign: TextAlign.center,
         ),
       ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _LanguagePicker — visible in app bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _LanguagePicker extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _LanguagePicker({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      initialValue: selected,
+      onSelected: onChanged,
+      tooltip: 'Language selection',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.language_rounded, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              _labelFor(selected),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const Icon(Icons.arrow_drop_down_rounded, size: 18),
+          ],
+        ),
+      ),
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'auto',
+          child: Text('Auto (Hinglish/हिंदी/मराठी)'),
+        ),
+        PopupMenuItem(
+          value: 'hi',
+          child: Text('Hindi (हिंदी)'),
+        ),
+        PopupMenuItem(
+          value: 'mr',
+          child: Text('Marathi (मराठी)'),
+        ),
+      ],
+    );
+  }
+
+  String _labelFor(String code) {
+    switch (code) {
+      case 'hi':
+        return 'हिंदी';
+      case 'mr':
+        return 'मराठी';
+      default:
+        return 'Auto';
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -398,9 +651,7 @@ class _MicButton extends StatelessWidget {
         return Transform.scale(scale: scale, child: child);
       },
       child: GestureDetector(
-        onTap: isTranscribing
-            ? null
-            : (isRecording ? onStop : onStart),
+        onTap: isTranscribing ? null : (isRecording ? onStop : onStart),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           width: 120,
@@ -421,9 +672,7 @@ class _MicButton extends StatelessWidget {
             ],
           ),
           child: Icon(
-            isRecording
-                ? Icons.stop_rounded
-                : Icons.mic_rounded,
+            isRecording ? Icons.stop_rounded : Icons.mic_rounded,
             size: 54,
             color: color,
           ),
@@ -438,9 +687,14 @@ class _MicButton extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _TranscriptEditor extends StatelessWidget {
   final TextEditingController ctrl;
+  final UncertaintyMetadata uncertainty;
   final VoidCallback onReRecord;
 
-  const _TranscriptEditor({required this.ctrl, required this.onReRecord});
+  const _TranscriptEditor({
+    required this.ctrl,
+    required this.uncertainty,
+    required this.onReRecord,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -453,6 +707,24 @@ class _TranscriptEditor extends StatelessWidget {
         Row(
           children: [
             Text('Transcript / प्रतिलेख', style: tt.titleMedium),
+            const SizedBox(width: 8),
+            if (uncertainty.isUncertain)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber),
+                    SizedBox(width: 4),
+                    Text('Review needed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             const Spacer(),
             TextButton.icon(
               onPressed: onReRecord,
@@ -470,7 +742,7 @@ class _TranscriptEditor extends StatelessWidget {
             textAlignVertical: TextAlignVertical.top,
             style: tt.bodyLarge,
             decoration: InputDecoration(
-              hintText: 'Edit the transcript if needed…',
+              hintText: 'Edit the transcript if needed… / यहाँ सुधार करें',
               hintStyle: const TextStyle(color: Color(0xFF9E9BA8)),
               filled: true,
               fillColor: const Color(0xFF13131F),
@@ -492,7 +764,7 @@ class _TranscriptEditor extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'You can correct any mistakes before creating the quote.',
+          'You can correct any mistakes before creating the quote. Draft is auto-saved.',
           style: tt.bodySmall,
           textAlign: TextAlign.center,
         ),
@@ -502,8 +774,137 @@ class _TranscriptEditor extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Small helpers
+// Permission & Error Recovery Banners
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _PermissionRecoveryBanner extends StatelessWidget {
+  final VoidCallback onAllow;
+  final VoidCallback onTypeManually;
+
+  const _PermissionRecoveryBanner({
+    required this.onAllow,
+    required this.onTypeManually,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.withOpacity(0.5)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.mic_off_rounded, color: Colors.amber, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Microphone permission is needed to record. You can still type a quote.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: onTypeManually,
+                child: const Text('Type quote'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: onAllow,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Allow microphone'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+  final VoidCallback? onRetry;
+  final VoidCallback? onManual;
+
+  const _ErrorBanner({
+    required this.message,
+    required this.onDismiss,
+    this.onRetry,
+    this.onManual,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.error.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.error.withOpacity(0.4)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline_rounded, color: cs.error, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(message, style: tt.bodyMedium),
+              ),
+              IconButton(
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          if (onRetry != null || onManual != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (onManual != null)
+                  TextButton(
+                    onPressed: onManual,
+                    child: const Text('Create manually'),
+                  ),
+                if (onRetry != null) ...[
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: onRetry,
+                    child: const Text('Try again'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _DemoSection extends StatelessWidget {
   const _DemoSection();
@@ -520,43 +921,6 @@ class _DemoSection extends StatelessWidget {
         ),
         const Expanded(child: Divider()),
       ],
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  final VoidCallback onDismiss;
-
-  const _ErrorBanner({required this.message, required this.onDismiss});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.error.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.error.withOpacity(0.4)),
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.error_outline_rounded, color: cs.error, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(message, style: tt.bodyMedium),
-          ),
-          IconButton(
-            onPressed: onDismiss,
-            icon: const Icon(Icons.close_rounded, size: 18),
-            visualDensity: VisualDensity.compact,
-          ),
-        ],
-      ),
     );
   }
 }

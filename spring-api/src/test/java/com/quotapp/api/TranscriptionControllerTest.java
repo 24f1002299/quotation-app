@@ -115,7 +115,7 @@ class TranscriptionControllerTest {
                 audioBytes.length
             ));
 
-        ResponseEntity<?> response = controller.transcribe(audioFile, "mr", "grok");
+        ResponseEntity<?> response = controller.transcribe(audioFile, "mr", "grok", 25);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = (Map<?, ?>) response.getBody();
@@ -124,5 +124,46 @@ class TranscriptionControllerTest {
         assertThat(body.get("language")).isEqualTo("mr");
         assertThat(body.get("latencyMs")).isEqualTo(620L);
         assertThat(body.get("status")).isEqualTo("CANDIDATE_FOR_REVIEW");
+        assertThat(body.get("uncertaintyMetadata")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Returns 400 when recording duration exceeds 120 seconds")
+    void testDurationExceeded() {
+        MockMultipartFile audioFile = new MockMultipartFile(
+            "file", "long_sample.m4a", "audio/m4a", "short-bytes".getBytes()
+        );
+
+        ResponseEntity<?> response = controller.transcribe(audioFile, "hi", "grok", 125);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertThat(body.get("error")).isEqualTo("DURATION_EXCEEDED");
+    }
+
+    @Test
+    @DisplayName("Returns 429 when user rate limit is exceeded")
+    void testRateLimitExceeded() {
+        com.quotapp.security.UserRateLimiter strictLimiter = new com.quotapp.security.UserRateLimiter(2);
+        TranscriptionController rateLimitedController = new TranscriptionController(sttService, strictLimiter);
+
+        MockMultipartFile audioFile = new MockMultipartFile(
+            "file", "sample.m4a", "audio/m4a", "bytes".getBytes()
+        );
+
+        when(sttService.transcribe(any(byte[].class), anyString(), any(), any()))
+            .thenReturn(new SttResult("sample text", "grok", "hi", 100L, 5));
+
+        // Request 1 & 2 succeed
+        assertThat(rateLimitedController.transcribe(audioFile, "hi", "grok", 10).getStatusCode())
+            .isEqualTo(HttpStatus.OK);
+        assertThat(rateLimitedController.transcribe(audioFile, "hi", "grok", 10).getStatusCode())
+            .isEqualTo(HttpStatus.OK);
+
+        // Request 3 exceeds limit of 2 requests per minute
+        ResponseEntity<?> response3 = rateLimitedController.transcribe(audioFile, "hi", "grok", 10);
+        assertThat(response3.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        Map<?, ?> body = (Map<?, ?>) response3.getBody();
+        assertThat(body.get("error")).isEqualTo("RATE_LIMIT_EXCEEDED");
     }
 }

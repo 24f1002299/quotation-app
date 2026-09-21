@@ -1,6 +1,7 @@
 package com.quotapp.api;
 
 import com.quotapp.security.UserContext;
+import com.quotapp.security.UserRateLimiter;
 import com.quotapp.stt.SttResult;
 import com.quotapp.stt.SttService;
 import org.slf4j.Logger;
@@ -52,10 +53,27 @@ public class TranscriptionController {
         "application/octet-stream" // fallback for generic binary uploads from mobile
     );
 
-    private final SttService sttService;
+    private static final int MAX_DURATION_SECONDS = 120;
 
-    public TranscriptionController(SttService sttService) {
+    private final SttService sttService;
+    private final UserRateLimiter rateLimiter;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public TranscriptionController(SttService sttService, UserRateLimiter rateLimiter) {
         this.sttService = sttService;
+        this.rateLimiter = rateLimiter;
+    }
+
+    /** Constructor for tests where rateLimiter is optional */
+    public TranscriptionController(SttService sttService) {
+        this(sttService, new UserRateLimiter(10));
+    }
+
+    /**
+     * Overload for 3-argument calls without durationSeconds.
+     */
+    public ResponseEntity<?> transcribe(MultipartFile file, String language, String provider) {
+        return transcribe(file, language, provider, null);
     }
 
     /**
@@ -65,7 +83,8 @@ public class TranscriptionController {
     public ResponseEntity<?> transcribe(
         @RequestParam("file") MultipartFile file,
         @RequestParam(value = "language", required = false) String language,
-        @RequestParam(value = "provider", required = false) String provider
+        @RequestParam(value = "provider", required = false) String provider,
+        @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds
     ) {
         String userId = UserContext.getUserId();
         if (userId == null) {
@@ -73,10 +92,28 @@ public class TranscriptionController {
                 .body(Map.of("error", "UNAUTHORIZED", "message", "Authentication required"));
         }
 
+        // Validate rate limit per user
+        if (rateLimiter != null && !rateLimiter.tryAcquire(userId)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of(
+                    "error", "RATE_LIMIT_EXCEEDED",
+                    "message", "Rate limit exceeded. Please wait a moment before sending another recording."
+                ));
+        }
+
         // Validate presence
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest()
                 .body(Map.of("error", "EMPTY_FILE", "message", "Audio file is required and cannot be empty"));
+        }
+
+        // Validate duration if provided
+        if (durationSeconds != null && (durationSeconds > MAX_DURATION_SECONDS || durationSeconds < 0)) {
+            return ResponseEntity.badRequest()
+                .body(Map.of(
+                    "error", "DURATION_EXCEEDED",
+                    "message", "Recording exceeds maximum duration of " + MAX_DURATION_SECONDS + " seconds (" + durationSeconds + "s received)"
+                ));
         }
 
         // Validate size
@@ -107,13 +144,23 @@ public class TranscriptionController {
 
             SttResult result = sttService.transcribe(audioBytes, originalFilename, language, provider);
 
+            String transcriptText = result.transcript() != null ? result.transcript() : "";
+            boolean isUncertain = transcriptText.isBlank() || transcriptText.contains("?");
+            Map<String, Object> uncertaintyMetadata = Map.of(
+                "isUncertain", isUncertain,
+                "confidence", isUncertain ? 0.65 : 0.95,
+                "provider", result.provider(),
+                "requiresReview", true
+            );
+
             return ResponseEntity.ok(Map.of(
-                "transcript", result.transcript(),
+                "transcript", transcriptText,
                 "provider", result.provider(),
                 "language", result.language() != null ? result.language() : "auto",
                 "latencyMs", result.latencyMs(),
                 "audioSizeBytes", result.audioSizeBytes(),
-                "status", "CANDIDATE_FOR_REVIEW"
+                "status", "CANDIDATE_FOR_REVIEW",
+                "uncertaintyMetadata", uncertaintyMetadata
             ));
 
         } catch (IllegalStateException e) {

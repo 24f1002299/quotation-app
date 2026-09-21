@@ -40,6 +40,14 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/api/health").permitAll()
                 .anyRequest().authenticated()
             )
+            // Return 401 Unauthorized for unauthenticated requests
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}");
+                })
+            )
             // Register the Supabase JWT filter ahead of Spring's default
             .addFilterBefore(supabaseJwtFilter, UsernamePasswordAuthenticationFilter.class)
             .build();

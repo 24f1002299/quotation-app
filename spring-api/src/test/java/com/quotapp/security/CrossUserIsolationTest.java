@@ -59,12 +59,7 @@ class CrossUserIsolationTest {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
     asUser(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req,
            String userId) {
-        // In a full integration test environment, inject a test JWT here.
-        // For unit/mock tests, we set the security context directly.
-        return req.with(request -> {
-            request.setAttribute("MOCK_USER_ID", userId);
-            return request;
-        });
+        return req.with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user(userId));
     }
 
     // ─── Profile isolation ────────────────────────────────────────────────────
