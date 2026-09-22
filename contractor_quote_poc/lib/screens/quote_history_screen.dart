@@ -207,9 +207,9 @@ class _SavedQuoteCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.12),
+                      color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: cs.primary.withOpacity(0.3)),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -356,7 +356,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: cs.primary.withOpacity(0.4)),
+            Icon(Icons.receipt_long_outlined, size: 64, color: cs.primary.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             Text('No quotes yet / कोई कोटेशन नहीं', style: tt.titleLarge),
             const SizedBox(height: 6),

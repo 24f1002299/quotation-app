@@ -338,8 +338,8 @@ class _VoiceScreenState extends State<VoiceScreen>
         widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
         style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
       ),
-      backgroundColor: cs.primary.withOpacity(0.15),
-      side: BorderSide(color: cs.primary.withOpacity(0.4)),
+      backgroundColor: cs.primary.withValues(alpha: 0.15),
+      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
       visualDensity: VisualDensity.compact,
     );
 
@@ -410,7 +410,7 @@ class _VoiceScreenState extends State<VoiceScreen>
                                 ? 'Example: “Kitchen wall tiles, 120 square feet.”'
                                 : 'Example: “Wall putty, 1200 square feet.”',
                             style: tt.bodySmall?.copyWith(
-                              color: cs.onSurface.withOpacity(0.7),
+                              color: cs.onSurface.withValues(alpha: 0.7),
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -573,10 +573,10 @@ class _LanguagePicker extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceVariant,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
           ),
         ),
         child: Row(
@@ -658,14 +658,14 @@ class _MicButton extends StatelessWidget {
           height: 120,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: color.withOpacity(isRecording ? 0.2 : 0.15),
+            color: color.withValues(alpha: isRecording ? 0.2 : 0.15),
             border: Border.all(
               color: color,
               width: isRecording ? 3 : 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.3),
+                color: color.withValues(alpha: 0.3),
                 blurRadius: isRecording ? 24 : 10,
                 spreadRadius: isRecording ? 4 : 0,
               ),
@@ -712,7 +712,7 @@ class _TranscriptEditor extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.2),
+                  color: Colors.amber.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.amber),
                 ),
@@ -792,9 +792,9 @@ class _PermissionRecoveryBanner extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.15),
+        color: Colors.amber.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withOpacity(0.5)),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -857,9 +857,9 @@ class _ErrorBanner extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.error.withOpacity(0.12),
+        color: cs.error.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.error.withOpacity(0.4)),
+        border: Border.all(color: cs.error.withValues(alpha: 0.4)),
       ),
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       child: Column(

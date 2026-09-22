@@ -4,8 +4,8 @@
 ///
 /// HOW TO RUN WITH REAL VALUES:
 ///   flutter run \
-///     --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co \
-///     --dart-define=SUPABASE_ANON_KEY=<your-anon-key>
+///     --dart-define=SUPABASE_URL=https://`<project-ref>`.supabase.co \
+///     --dart-define=SUPABASE_ANON_KEY=`<your-anon-key>`
 ///
 /// SECURITY RULES:
 ///   ✅ SUPABASE_ANON_KEY — safe to include in the app. It is a public key.
@@ -17,7 +17,7 @@
 /// Local dev (using local Supabase Docker):
 ///   flutter run \
 ///     --dart-define=SUPABASE_URL=http://10.0.2.2:54321 \
-///     --dart-define=SUPABASE_ANON_KEY=<local-anon-key-from-supabase-start>
+///     --dart-define=SUPABASE_ANON_KEY=`<local-anon-key-from-supabase-start>`
 ///
 /// The local anon key is printed by `supabase start` or visible at:
 ///   Supabase Studio → http://localhost:54323 → Settings → API
@@ -25,7 +25,7 @@ library;
 
 /// URL of the Supabase project.
 /// Dev: http://10.0.2.2:54321 (Android emulator → localhost)
-/// Prod: https://<project-ref>.supabase.co
+/// Prod: https://`<project-ref>`.supabase.co
 const supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'http://10.0.2.2:54321', // local Docker default

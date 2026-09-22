@@ -193,7 +193,7 @@ class _TradeCard extends StatelessWidget {
           width: selected ? 2 : 1,
         ),
         color: selected
-            ? cs.primary.withOpacity(0.08)
+            ? cs.primary.withValues(alpha: 0.08)
             : const Color(0xFF1E1E2C),
       ),
       margin: const EdgeInsets.symmetric(vertical: 6),

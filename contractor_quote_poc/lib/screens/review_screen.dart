@@ -274,8 +274,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
               widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
-            backgroundColor: cs.primary.withOpacity(0.15),
-            side: BorderSide(color: cs.primary.withOpacity(0.4)),
+            backgroundColor: cs.primary.withValues(alpha: 0.15),
+            side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
             visualDensity: VisualDensity.compact,
           );
 
@@ -814,7 +814,7 @@ class _CatalogChip extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
         color: selected
-            ? cs.primary.withOpacity(0.18)
+            ? cs.primary.withValues(alpha: 0.18)
             : const Color(0xFF13131F),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
@@ -968,9 +968,9 @@ class _TotalsSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: cs.primary.withOpacity(0.12),
+        color: cs.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.primary.withOpacity(0.3)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1067,7 +1067,7 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: Text(label, style: tt.titleLarge)),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }
@@ -1104,7 +1104,7 @@ class _AmountChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: cs.primary.withOpacity(0.15),
+        color: cs.primary.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1215,7 +1215,7 @@ class _VoiceNoteCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.15),
+                      color: cs.primary.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.mic_rounded, color: cs.primary, size: 16),
@@ -1234,7 +1234,7 @@ class _VoiceNoteCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.12),
+                      color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1315,7 +1315,7 @@ class _ParsingWarningsBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF2D2013),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       child: Column(

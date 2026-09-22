@@ -130,8 +130,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
               widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
-            backgroundColor: cs.primary.withOpacity(0.15),
-            side: BorderSide(color: cs.primary.withOpacity(0.4)),
+            backgroundColor: cs.primary.withValues(alpha: 0.15),
+            side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
             visualDensity: VisualDensity.compact,
           );
 
