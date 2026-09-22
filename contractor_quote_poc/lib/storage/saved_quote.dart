@@ -19,6 +19,7 @@ class SavedQuote {
   final List<QuoteLineItem> lineItems;
   final int? gstPercent;
   final String? pdfPath;
+  final String status;
 
   const SavedQuote({
     required this.id,
@@ -34,6 +35,7 @@ class SavedQuote {
     required this.lineItems,
     this.gstPercent,
     this.pdfPath,
+    this.status = 'needsReview',
   });
 
   /// Converts this saved record back into an immutable domain [Quote].
@@ -68,6 +70,7 @@ class SavedQuote {
     List<QuoteLineItem>? lineItems,
     int? gstPercent,
     String? pdfPath,
+    String? status,
   }) {
     return SavedQuote(
       id: id ?? this.id,
@@ -83,6 +86,7 @@ class SavedQuote {
       lineItems: lineItems ?? this.lineItems,
       gstPercent: gstPercent ?? this.gstPercent,
       pdfPath: pdfPath ?? this.pdfPath,
+      status: status ?? this.status,
     );
   }
 
@@ -97,6 +101,7 @@ class SavedQuote {
         'validityDays': validityDays,
         'notes': notes,
         'originalTranscript': originalTranscript,
+        'status': status,
         'lineItems': lineItems
             .map((item) => {
                   'description': item.description,
@@ -145,6 +150,7 @@ class SavedQuote {
       lineItems: items,
       gstPercent: json['gstPercent'] as int?,
       pdfPath: json['pdfPath'] as String?,
+      status: json['status'] as String? ?? 'needsReview',
     );
   }
 }

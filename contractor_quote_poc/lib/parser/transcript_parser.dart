@@ -230,15 +230,15 @@ class TranscriptParser {
 
   // ── Rate extraction ─────────────────────────────────────────────────────
 
-  // “45 rupaye” / “18 rupee” / “12 rupees”
-  // Also handles Whisper Devanagari output: “१२ रुपये” (already digit-normalized
-  // to “12” by _normalize) followed by “रुपये” / “रुपए”.
+  // “45 rupaye” / “18 rupee” / “12 rupees” / “50 रुपये” / “भाव 55”
   static final _rateAfterNumber = RegExp(
-    r'(\d+)\s*(?:rupaye|rupee|rupees|rupe|rate|bhav|\u0930\u0941\u092a\u092f\u0947|\u0930\u0941\u092a\u090f|\u092d\u093e\u0935)\b',
+    r'(\d+)\s*(?:rupaye|rupee|rupees|rupe|rate|bhav|\u0930\u0941\u092a\u092f\u0947|\u0930\u0941\u092a\u090f|\u092d\u093e\u0935)(?:\s|\b|$)',
   );
   // “₹45”
   static final _ratePrefixRupee = RegExp(r'₹\s*(\d+)');
-  static final _ratePrefixWord = RegExp(r'\b(?:rate|bhav|\u092d\u093e\u0935)\s*[:=]?\s*(\d+)\b');
+  static final _ratePrefixWord = RegExp(
+    r'(?:\b|(?<=[^\w]))(?:rate|bhav|\u092d\u093e\u0935)\s*[:=]?\s*(\d+)(?:\s|\b|$)',
+  );
 
   int? _findRate(String text) {
     final m1 = _rateAfterNumber.firstMatch(text);

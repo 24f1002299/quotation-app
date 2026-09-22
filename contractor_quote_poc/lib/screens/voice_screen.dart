@@ -20,6 +20,7 @@ import 'package:record/record.dart';
 
 import '../catalog/catalog.dart';
 import '../config/api_config.dart';
+import '../models/extraction_models.dart';
 import '../models/transcript_draft.dart';
 import '../parser/demo_transcripts.dart';
 import '../parser/transcript_parser.dart';
@@ -27,12 +28,13 @@ import '../screens/review_screen.dart';
 import '../storage/rate_memory_repository.dart';
 import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
+import '../voice/extraction_service.dart';
 import '../voice/transcription_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State machine
 // ─────────────────────────────────────────────────────────────────────────────
-enum _RecordState { idle, recording, transcribing, hasTranscript }
+enum _RecordState { idle, recording, transcribing, extracting, hasTranscript }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VoiceScreen
@@ -67,6 +69,10 @@ class _VoiceScreenState extends State<VoiceScreen>
   Timer? _timer;
   File? _currentAudioFile;
 
+  // Extraction incremental status
+  String _extractionStatusMessage = 'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
+  Timer? _extractionTimer;
+
   @override
   void initState() {
     super.initState();
@@ -82,6 +88,7 @@ class _VoiceScreenState extends State<VoiceScreen>
   @override
   void dispose() {
     _timer?.cancel();
+    _extractionTimer?.cancel();
     _recorder.dispose();
     _transcriptCtrl.removeListener(_onTranscriptChanged);
     _transcriptCtrl.dispose();
@@ -284,39 +291,81 @@ class _VoiceScreenState extends State<VoiceScreen>
     final text = _transcriptCtrl.text.trim();
     if (text.isEmpty) return;
 
-    final rateMap = await RateMemoryRepository.getRateMap(widget.trade);
-    final result = const TranscriptParser().parse(text, rateMemory: rateMap);
+    setState(() {
+      _state = _RecordState.extracting;
+      _extractionStatusMessage = 'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
+      _errorMessage = null;
+    });
 
-    if (!mounted) return;
+    _extractionTimer?.cancel();
+    int step = 0;
+    _extractionTimer = Timer.periodic(const Duration(milliseconds: 900), (t) {
+      if (!mounted || _state != _RecordState.extracting) {
+        t.cancel();
+        return;
+      }
+      step++;
+      setState(() {
+        if (step == 1) {
+          _extractionStatusMessage = 'Checking catalog... / कैटलॉग से मिला रहे हैं...';
+        } else if (step >= 2) {
+          _extractionStatusMessage = 'Applying saved rates... / दरें जोड़ रहे हैं...';
+        }
+      });
+    });
 
-    if (result.hasWarnings) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.warnings.first),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
-          action: result.warnings.length > 1
-              ? SnackBarAction(
-                  label: '+${result.warnings.length - 1} more',
-                  onPressed: () {},
-                )
-              : null,
+    try {
+      final result = await ExtractionService.extract(
+        transcript: text,
+        trade: widget.trade,
+        languageHint: _selectedLanguage,
+      );
+
+      _extractionTimer?.cancel();
+      if (!mounted) return;
+
+      final warnings = <String>[
+        if (result.errorMessage != null) result.errorMessage!,
+        ...result.unknowns.map((u) => 'Review needed: ${u.text} (${u.reason})'),
+      ];
+
+      if (warnings.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(warnings.first),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+            action: warnings.length > 1
+                ? SnackBarAction(
+                    label: '+${warnings.length - 1} more',
+                    onPressed: () {},
+                  )
+                : null,
+          ),
+        );
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReviewScreen(
+            trade: widget.trade,
+            originalTranscript: text,
+            parsingWarnings: warnings,
+            initialLineItems:
+                result.lineItems.map((i) => i.toQuoteLineItem()).toList(),
+          ),
         ),
       );
+    } catch (e) {
+      _extractionTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _state = _RecordState.hasTranscript;
+        _errorMessage =
+            'Could not extract quote details: $e. Your transcript is saved.';
+      });
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReviewScreen(
-          trade: widget.trade,
-          originalTranscript: text,
-          parsingWarnings: result.warnings,
-          initialLineItems:
-              result.items.map((i) => i.toQuoteLineItem()).toList(),
-        ),
-      ),
-    );
   }
 
   void _reRecord() {
@@ -383,7 +432,11 @@ class _VoiceScreenState extends State<VoiceScreen>
                 _ErrorBanner(
                   message: _errorMessage!,
                   onDismiss: () => setState(() => _errorMessage = null),
-                  onRetry: _state == _RecordState.idle ? _startRecording : null,
+                  onRetry: _state == _RecordState.idle
+                      ? _startRecording
+                      : (_state == _RecordState.hasTranscript
+                          ? _createQuote
+                          : null),
                   onManual: _createManually,
                 ),
 
@@ -400,35 +453,37 @@ class _VoiceScreenState extends State<VoiceScreen>
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Guidance hint
-                          Text(
-                            'Tell us the work and quantities',
-                            style: tt.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          if (_state != _RecordState.extracting) ...[
+                            // Guidance hint
+                            Text(
+                              'Tell us the work and quantities',
+                              style: tt.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            widget.trade == Trade.tiling
-                                ? 'Example: “Kitchen wall tiles, 120 square feet.”'
-                                : 'Example: “Wall putty, 1200 square feet.”',
-                            style: tt.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.7),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.trade == Trade.tiling
+                                  ? 'Example: “Kitchen wall tiles, 120 square feet.”'
+                                  : 'Example: “Wall putty, 1200 square feet.”',
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.7),
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 36),
+                            const SizedBox(height: 36),
 
-                          // Animated mic button
-                          _MicButton(
-                            state: _state,
-                            pulse: _pulse,
-                            onStart: _startRecording,
-                            onStop: _stopRecording,
-                          ),
+                            // Animated mic button
+                            _MicButton(
+                              state: _state,
+                              pulse: _pulse,
+                              onStart: _startRecording,
+                              onStop: _stopRecording,
+                            ),
 
-                          const SizedBox(height: 24),
+                            const SizedBox(height: 24),
+                          ],
 
                           // Status text & timer
                           if (_state == _RecordState.idle)
@@ -436,7 +491,9 @@ class _VoiceScreenState extends State<VoiceScreen>
                           else if (_state == _RecordState.recording)
                             ..._recordingHint(tt, cs)
                           else if (_state == _RecordState.transcribing)
-                            ..._transcribingHint(tt, cs),
+                            ..._transcribingHint(tt, cs)
+                          else if (_state == _RecordState.extracting)
+                            ..._extractingHint(tt, cs),
                         ],
                       ),
               ),
@@ -447,6 +504,12 @@ class _VoiceScreenState extends State<VoiceScreen>
                   onPressed: _createQuote,
                   icon: const Icon(Icons.arrow_forward_rounded),
                   label: const Text('Create Quote / कोटेशन बनाएं'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _createManually,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Type quote instead / लिखकर बनाएं'),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -551,6 +614,24 @@ class _VoiceScreenState extends State<VoiceScreen>
         Text(
           'Turning audio into text. Takes ~2–4 seconds.',
           style: tt.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      ];
+
+  List<Widget> _extractingHint(TextTheme tt, ColorScheme cs) => [
+        CircularProgressIndicator(color: cs.primary),
+        const SizedBox(height: 20),
+        Text(
+          _extractionStatusMessage,
+          style: tt.titleMedium,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Matching catalog & applying saved rates. Your transcript is safe.',
+          style: tt.bodyMedium?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
           textAlign: TextAlign.center,
         ),
       ];
