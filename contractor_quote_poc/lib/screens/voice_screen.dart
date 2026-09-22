@@ -24,6 +24,7 @@ import '../models/transcript_draft.dart';
 import '../parser/demo_transcripts.dart';
 import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
+import '../storage/rate_memory_repository.dart';
 import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
 import '../voice/transcription_service.dart';
@@ -279,11 +280,14 @@ class _VoiceScreenState extends State<VoiceScreen>
 
   // ── Navigate to review ────────────────────────────────────────────────────
 
-  void _createQuote() {
+  void _createQuote() async {
     final text = _transcriptCtrl.text.trim();
     if (text.isEmpty) return;
 
-    final result = const TranscriptParser().parse(text);
+    final rateMap = await RateMemoryRepository.getRateMap(widget.trade);
+    final result = const TranscriptParser().parse(text, rateMemory: rateMap);
+
+    if (!mounted) return;
 
     if (result.hasWarnings) {
       ScaffoldMessenger.of(context).showSnackBar(

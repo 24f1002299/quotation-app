@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/new_quote_screen.dart';
-import 'screens/review_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/quote_history_screen.dart';
+import 'screens/review_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +30,8 @@ class ContractorQuoteApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (_) => const HomeScreen(),
+        '/onboarding': (_) => const OnboardingScreen(),
+        '/profile': (_) => const ProfileScreen(),
         '/new-quote': (_) => const NewQuoteScreen(),
         '/review': (_) => const ReviewScreen(),
         '/history': (_) => const QuoteHistoryScreen(),

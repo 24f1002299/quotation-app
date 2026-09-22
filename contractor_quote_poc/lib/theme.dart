@@ -14,6 +14,13 @@ const Color _kSubtle = Color(0xFF9E9BA8); // secondary/hint text
 const Color _kError = Color(0xFFE05858); // delete / error
 const Color _kDivider = Color(0xFF2E2E42);
 
+// Design tokens from design.md:
+const Color appBackground = Color(0xFFE6E8E6);
+const Color surfaceMuted = Color(0xFFCED0CE);
+const Color sage = Color(0xFF9FB8AD);
+const Color forest = Color(0xFF475841);
+const Color ink = Color(0xFF3F403F);
+
 // ─────────────────────────────────────────────────────────
 // Typography
 // Using 'Poppins' for headings (bold, readable),

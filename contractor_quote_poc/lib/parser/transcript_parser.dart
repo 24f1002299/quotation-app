@@ -77,7 +77,9 @@ class TranscriptParser {
   const TranscriptParser();
 
   /// Parse [transcript] into line items.
-  ParseResult parse(String transcript) {
+  /// If [rateMemory] (catalogItemId -> unitRatePaise) is provided and a rate is
+  /// omitted from the transcript, the saved rate memory is automatically applied.
+  ParseResult parse(String transcript, {Map<String, int>? rateMemory}) {
     final text = _normalize(transcript);
     final matches = _findCatalogMatches(text);
 
@@ -124,11 +126,23 @@ class TranscriptParser {
       final unit =
           _findUnit('$lookback $lookahead') ?? match.item.defaultUnit;
 
-      if (qty == null || rate == null) {
+      // Rate memory provenance: if rate was omitted in speech, use saved rate memory
+      int ratePaise = (rate != null) ? rate * 100 : 0;
+      final savedRatePaise = rateMemory?[match.item.id];
+      final bool hasRateFromMemory = rate == null && savedRatePaise != null && savedRatePaise > 0;
+      if (hasRateFromMemory) {
+        ratePaise = savedRatePaise;
+      }
+
+      final hasRate = rate != null || hasRateFromMemory;
+      if (qty == null || !hasRate) {
         final english = match.item.displayName.split(' /').first;
+        final missingField = qty == null && !hasRate
+            ? 'quantity and rate'
+            : (qty == null ? 'quantity' : 'rate');
         warnings.add(
           'Could not fully extract details for "$english" — '
-          'please fill in the ${qty == null ? "quantity" : "rate"} manually.',
+          'please fill in the $missingField manually.',
         );
       }
 
@@ -136,7 +150,7 @@ class TranscriptParser {
         description: match.item.displayName,
         quantity: qty ?? 0,
         unit: unit,
-        unitRatePaise: (rate ?? 0) * 100,
+        unitRatePaise: ratePaise,
       ));
     }
 
@@ -220,16 +234,19 @@ class TranscriptParser {
   // Also handles Whisper Devanagari output: “१२ रुपये” (already digit-normalized
   // to “12” by _normalize) followed by “रुपये” / “रुपए”.
   static final _rateAfterNumber = RegExp(
-    r'(\d+)\s+(?:rupaye|rupee|rupees|rupe|\u0930\u0941\u092a\u092f\u0947|\u0930\u0941\u092a\u090f)\b',
+    r'(\d+)\s*(?:rupaye|rupee|rupees|rupe|rate|bhav|\u0930\u0941\u092a\u092f\u0947|\u0930\u0941\u092a\u090f|\u092d\u093e\u0935)\b',
   );
   // “₹45”
   static final _ratePrefixRupee = RegExp(r'₹\s*(\d+)');
+  static final _ratePrefixWord = RegExp(r'\b(?:rate|bhav|\u092d\u093e\u0935)\s*[:=]?\s*(\d+)\b');
 
   int? _findRate(String text) {
     final m1 = _rateAfterNumber.firstMatch(text);
     if (m1 != null) return int.tryParse(m1.group(1)!);
     final m2 = _ratePrefixRupee.firstMatch(text);
     if (m2 != null) return int.tryParse(m2.group(1)!);
+    final m3 = _ratePrefixWord.firstMatch(text);
+    if (m3 != null) return int.tryParse(m3.group(1)!);
     return null;
   }
 

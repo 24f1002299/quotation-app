@@ -49,6 +49,8 @@ const List<CatalogItem> kCatalog = [
       'tiling labor',
       'टाइल मजदूरी',
       'टाइल लेबर',
+      'टाईल मजदूरी',
+      'टाईल लेबर',
       'tiles lagana',
       'tile lagana',
       'टाइल लगाना',

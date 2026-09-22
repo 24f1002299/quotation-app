@@ -4,6 +4,7 @@ import '../parser/demo_transcripts.dart';
 import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
 import '../screens/voice_screen.dart';
+import '../storage/rate_memory_repository.dart';
 import '../theme.dart';
 
 /// Day 4 — Real trade selection.  Tapping a trade card highlights it and
@@ -55,12 +56,14 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
 
   /// Parse the demo transcript for [trade] and jump straight to the review
   /// screen with pre-filled line items.  Also highlights that trade card.
-  void _useDemoTranscript(Trade trade) {
+  void _useDemoTranscript(Trade trade) async {
     setState(() => _selectedTrade = trade);
     final transcript = trade == Trade.tiling
         ? kTilingDemoTranscript
         : kPaintingDemoTranscript;
-    final result = const TranscriptParser().parse(transcript);
+    final rateMap = await RateMemoryRepository.getRateMap(trade);
+    final result = const TranscriptParser().parse(transcript, rateMemory: rateMap);
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
