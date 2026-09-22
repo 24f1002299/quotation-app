@@ -3,26 +3,34 @@ package com.quotapp.api;
 import com.quotapp.api.dto.ErrorResponse;
 import com.quotapp.api.dto.ExtractRequest;
 import com.quotapp.api.dto.ExtractResponse;
+import com.quotapp.api.dto.ExtractionJob;
+import com.quotapp.api.dto.ExtractionJobStatus;
+import com.quotapp.api.exception.OwnershipViolationException;
+import com.quotapp.api.repository.ExtractionJobRepository;
 import com.quotapp.security.IdempotencyService;
 import com.quotapp.security.UserContext;
 import com.quotapp.security.UserRateLimiter;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+import java.util.Optional;
+
 /**
- * Controller exposing the structured quotation extraction endpoint.
+ * Controller exposing structured quotation extraction and asynchronous job polling.
  *
  * <p>Enforces:
  * <ul>
  *   <li>Supabase JWT verification via {@link UserContext}.</li>
  *   <li>User-scoped rate limiting.</li>
  *   <li>Idempotency key de-duplication.</li>
- *   <li>Contract validation (unit restrictions, size ceilings, required fields).</li>
- *   <li>Exclusion of model-generated arithmetic totals.</li>
+ *   <li>Cross-user job query isolation (returns 403 or 404 on foreign jobs).</li>
+ *   <li>Synchronous response under latency budget; async job polling when queued.</li>
  * </ul>
  */
 @RestController
@@ -34,21 +42,24 @@ public class ExtractionController {
     private final ExtractionService extractionService;
     private final IdempotencyService idempotencyService;
     private final UserRateLimiter rateLimiter;
+    private final ExtractionJobRepository jobRepository;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public ExtractionController(
         ExtractionService extractionService,
         IdempotencyService idempotencyService,
-        UserRateLimiter rateLimiter
+        UserRateLimiter rateLimiter,
+        ExtractionJobRepository jobRepository
     ) {
         this.extractionService = extractionService;
         this.idempotencyService = idempotencyService;
         this.rateLimiter = rateLimiter;
+        this.jobRepository = jobRepository;
     }
 
     /** Constructor for testing without rateLimiter */
-    public ExtractionController(ExtractionService extractionService, IdempotencyService idempotencyService) {
-        this(extractionService, idempotencyService, new UserRateLimiter(30));
+    public ExtractionController(ExtractionService extractionService, IdempotencyService idempotencyService, ExtractionJobRepository jobRepository) {
+        this(extractionService, idempotencyService, new UserRateLimiter(30), jobRepository);
     }
 
     @PostMapping(value = "/extract", consumes = "application/json", produces = "application/json")
@@ -85,13 +96,71 @@ public class ExtractionController {
         log.info("Processing extraction for user={}, trade={}, transcriptLength={}, catalogCount={}",
             userId, request.trade(), request.transcript().length(), request.catalogEntries().size());
 
-        ExtractResponse response = extractionService.extract(request);
+        // Create job record
+        ExtractionJob job = extractionService.createJob(userId, request);
 
-        // Save to idempotency cache
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.put(userId, idempotencyKey, response);
+        try {
+            ExtractResponse response = extractionService.extract(request);
+            extractionService.recordJobCompletion(job, response);
+
+            // Save to idempotency cache
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.put(userId, idempotencyKey, response);
+            }
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception ex) {
+            log.error("Extraction failed for job={}: {}", job.jobId(), ex.getMessage());
+            extractionService.recordJobFailure(job, ex.getMessage());
+            throw ex;
+        }
+    }
+
+    /**
+     * Polling endpoint for asynchronous extraction jobs.
+     */
+    @GetMapping("/extract/jobs/{jobId}")
+    public ResponseEntity<?> getJob(@PathVariable("jobId") String jobId) {
+        String userId = UserContext.getUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("UNAUTHORIZED", "Authentication required"));
         }
 
-        return ResponseEntity.ok(response);
+        // Check if job exists in repository
+        Optional<ExtractionJob> jobOpt = jobRepository.findById(jobId);
+        if (jobOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("NOT_FOUND", "Extraction job not found: " + jobId));
+        }
+
+        ExtractionJob job = jobOpt.get();
+
+        // Enforce user ownership
+        if (!userId.equals(job.userId())) {
+            log.warn("Cross-user job access attempt: requester={}, owner={}, jobId={}", userId, job.userId(), jobId);
+            throw new OwnershipViolationException("Access denied: extraction job belongs to another contractor");
+        }
+
+        if (job.status() == ExtractionJobStatus.PENDING) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(Map.of(
+                    "jobId", job.jobId(),
+                    "status", "PENDING",
+                    "createdAt", job.createdAt().toString()
+                ));
+        }
+
+        if (job.status() == ExtractionJobStatus.COMPLETED) {
+            return ResponseEntity.ok(job.response());
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .body(Map.of(
+                "jobId", job.jobId(),
+                "status", "FAILED",
+                "error", job.errorMessage() != null ? job.errorMessage() : "Unknown failure"
+            ));
     }
 }

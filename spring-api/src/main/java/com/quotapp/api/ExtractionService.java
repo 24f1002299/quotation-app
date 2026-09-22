@@ -1,34 +1,96 @@
 package com.quotapp.api;
 
 import com.quotapp.api.dto.*;
+import com.quotapp.api.llm.LlmExtractionClient;
+import com.quotapp.api.llm.LlmExtractionClient.RawExtractedItem;
+import com.quotapp.api.llm.LlmExtractionClient.RawExtractionResult;
+import com.quotapp.api.llm.LlmExtractionClient.RawUnknownItem;
+import com.quotapp.api.repository.ExtractionJobRepository;
 import com.quotapp.security.RequestIdFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.*;
 
 /**
- * Service that extracts structured quotation line items, unknowns, and uncertainties
- * according to the contract.
- *
- * <p>Invariant:
- * <ul>
- *   <li>Rates come strictly from {@link RateMemoryItemDto} (marked {@link RateSource#RATE_MEMORY})
- *       or are flagged {@link RateSource#UNKNOWN}.</li>
- *   <li>Calculated totals (amount, subtotal, grandTotal) are strictly excluded from output.</li>
- * </ul>
+ * Service that orchestrates constrained LLM extraction, enforces domain invariants,
+ * manages rate memory provenance, and handles asynchronous job execution.
  */
 @Service
 public class ExtractionService {
 
-    private static final Pattern NUMBER_PATTERN = Pattern.compile("(\\d+(\\.\\d+)?)");
+    private static final Logger log = LoggerFactory.getLogger(ExtractionService.class);
+
+    private final LlmExtractionClient llmClient;
+    private final ExtractionJobRepository jobRepository;
+    private final long latencyBudgetMs;
+
+    public ExtractionService(
+        LlmExtractionClient llmClient,
+        ExtractionJobRepository jobRepository,
+        @Value("${quotapp.llm.latency-budget-ms:5000}") long latencyBudgetMs
+    ) {
+        this.llmClient = llmClient;
+        this.jobRepository = jobRepository;
+        this.latencyBudgetMs = latencyBudgetMs;
+    }
 
     /**
-     * Extracts line items and explicit unknowns from the request transcript.
+     * Executes synchronous or bounded extraction.
      */
     public ExtractResponse extract(ExtractRequest request) {
-        String transcript = request.transcript();
+        RawExtractionResult rawResult = llmClient.extract(
+            request.transcript(),
+            request.trade(),
+            request.catalogEntries(),
+            request.rateMemory(),
+            request.language()
+        );
+
+        return mapToExtractResponse(request, rawResult);
+    }
+
+    /**
+     * Creates and records a minimal extraction job.
+     */
+    public ExtractionJob createJob(String userId, ExtractRequest request) {
+        String jobId = UUID.randomUUID().toString();
+        ExtractionJob job = ExtractionJob.createPending(jobId, userId, request.trade(), request.transcript());
+        jobRepository.save(job);
+        return job;
+    }
+
+    /**
+     * Retrieves an extraction job with strict user ownership scoping.
+     */
+    public Optional<ExtractionJob> getJob(String jobId, String userId) {
+        return jobRepository.findByIdAndUserId(jobId, userId);
+    }
+
+    /**
+     * Completes or updates an extraction job.
+     */
+    public void recordJobCompletion(ExtractionJob job, ExtractResponse response) {
+        ExtractionJob completed = job.complete(response);
+        jobRepository.save(completed);
+    }
+
+    /**
+     * Records a job failure.
+     */
+    public void recordJobFailure(ExtractionJob job, String errorMessage) {
+        ExtractionJob failed = job.fail(errorMessage);
+        jobRepository.save(failed);
+    }
+
+    /**
+     * Maps raw LLM extraction output to validated contract response.
+     * Enforces strict rate provenance and absolute exclusion of arithmetic totals.
+     */
+    public ExtractResponse mapToExtractResponse(ExtractRequest request, RawExtractionResult rawResult) {
         List<ExtractedLineItemDto> lineItems = new ArrayList<>();
         List<ExplicitUnknownDto> unknowns = new ArrayList<>();
 
@@ -37,75 +99,77 @@ public class ExtractionService {
         if (request.rateMemory() != null) {
             for (RateMemoryItemDto rm : request.rateMemory()) {
                 String normUnit = ContractorUnit.normalize(rm.unit());
-                rateMemoryMap.put(rm.catalogItemId() + ":" + normUnit, rm.unitRatePaise());
+                rateMemoryMap.put(rm.catalogItemId().toLowerCase(Locale.ROOT) + ":" + normUnit, rm.unitRatePaise());
             }
         }
 
-        // Iterate through catalog entries and detect matching phrases in transcript
-        for (CatalogItemDto catalogItem : request.catalogEntries()) {
-            List<String> keywords = new ArrayList<>();
-            keywords.add(catalogItem.id());
-            keywords.add(catalogItem.displayName());
-            if (catalogItem.synonyms() != null) {
-                keywords.addAll(catalogItem.synonyms());
-            }
+        // Map catalog items by ID for O(1) lookup
+        Map<String, CatalogItemDto> catalogMap = new HashMap<>();
+        for (CatalogItemDto item : request.catalogEntries()) {
+            catalogMap.put(item.id().toLowerCase(Locale.ROOT), item);
+        }
 
-            for (String kw : keywords) {
-                if (kw == null || kw.isBlank()) continue;
-                int idx = transcript.toLowerCase(Locale.ROOT).indexOf(kw.toLowerCase(Locale.ROOT));
-                if (idx >= 0) {
-                    // Found a candidate entity. Look for numbers nearby (within next 40 chars or prior 40 chars)
-                    int searchStart = Math.max(0, idx - 40);
-                    int searchEnd = Math.min(transcript.length(), idx + kw.length() + 40);
-                    String contextWindow = transcript.substring(searchStart, searchEnd);
+        // Process raw items
+        if (rawResult.items() != null) {
+            for (RawExtractedItem rawItem : rawResult.items()) {
+                String catId = rawItem.catalogItemId() != null ? rawItem.catalogItemId().toLowerCase(Locale.ROOT) : "";
+                CatalogItemDto catalogItem = catalogMap.get(catId);
 
-                    Matcher numMatcher = NUMBER_PATTERN.matcher(contextWindow);
-                    double quantity = 1.0;
-                    if (numMatcher.find()) {
-                        try {
-                            quantity = Double.parseDouble(numMatcher.group(1));
-                        } catch (NumberFormatException ignored) {}
-                    }
-
-                    String unit = catalogItem.defaultUnit();
-                    // Detect unit in context window if available
-                    for (ContractorUnit u : ContractorUnit.values()) {
-                        if (contextWindow.toLowerCase(Locale.ROOT).contains(u.getCanonical())) {
-                            unit = u.getCanonical();
-                            break;
-                        }
-                    }
-
-                    String rateKey = catalogItem.id() + ":" + ContractorUnit.normalize(unit);
-                    Long ratePaise = rateMemoryMap.get(rateKey);
-                    RateSource rateSource = ratePaise != null ? RateSource.RATE_MEMORY : RateSource.UNKNOWN;
-
-                    SourceSpan span = new SourceSpan(idx, idx + kw.length(), transcript.substring(idx, Math.min(transcript.length(), idx + kw.length() + 15)));
-
-                    ExtractedLineItemDto item = new ExtractedLineItemDto(
-                        catalogItem.id(),
-                        catalogItem.displayName(),
-                        quantity,
-                        unit,
-                        ratePaise,
-                        rateSource,
-                        0.95,
-                        span,
-                        null
-                    );
-                    lineItems.add(item);
-                    break; // Matched this catalog item once
+                if (catalogItem == null) {
+                    // Item ID not found in chosen trade catalog -> isolate into explicit unknowns
+                    unknowns.add(new ExplicitUnknownDto(
+                        rawItem.sourceSpan() != null ? rawItem.sourceSpan() : catId,
+                        catId,
+                        "Item not found in " + request.trade() + " catalog",
+                        0.2
+                    ));
+                    continue;
                 }
+
+                String unit = rawItem.unit() != null && ContractorUnit.isRecognized(rawItem.unit())
+                    ? ContractorUnit.normalize(rawItem.unit())
+                    : catalogItem.defaultUnit();
+
+                String rateKey = catalogItem.id().toLowerCase(Locale.ROOT) + ":" + ContractorUnit.normalize(unit);
+                Long ratePaise = rateMemoryMap.get(rateKey);
+                RateSource rateSource = ratePaise != null ? RateSource.RATE_MEMORY : RateSource.UNKNOWN;
+
+                SourceSpan span = new SourceSpan(rawItem.sourceSpan() != null ? rawItem.sourceSpan() : catalogItem.displayName());
+
+                ExtractedLineItemDto item = new ExtractedLineItemDto(
+                    catalogItem.id(),
+                    catalogItem.displayName(),
+                    rawItem.quantity() != null && rawItem.quantity() > 0 ? rawItem.quantity() : 1.0,
+                    unit,
+                    ratePaise,
+                    rateSource,
+                    0.95,
+                    span,
+                    null
+                );
+                lineItems.add(item);
             }
         }
 
-        // Check if there are explicit unknown signals (e.g. unknown keywords or phrases with numbers)
-        if (lineItems.isEmpty()) {
+        // Process raw unknowns
+        if (rawResult.unknowns() != null) {
+            for (RawUnknownItem unk : rawResult.unknowns()) {
+                unknowns.add(new ExplicitUnknownDto(
+                    unk.sourceSpan() != null ? unk.sourceSpan() : "unknown",
+                    unk.suspectedTerm(),
+                    unk.reason() != null ? unk.reason() : "Unrecognized item",
+                    0.1
+                ));
+            }
+        }
+
+        // Check if completely empty
+        if (lineItems.isEmpty() && unknowns.isEmpty()) {
             unknowns.add(new ExplicitUnknownDto(
-                transcript.length() > 50 ? transcript.substring(0, 50) + "..." : transcript,
+                request.transcript().length() > 40 ? request.transcript().substring(0, 37) + "..." : request.transcript(),
                 null,
-                "No matching items found in " + request.trade() + " catalog",
-                0.2
+                "No line items or recognized work identified",
+                0.0
             ));
         }
 
@@ -127,5 +191,9 @@ public class ExtractionService {
             true,
             RequestIdFilter.getCurrentRequestId()
         );
+    }
+
+    public long getLatencyBudgetMs() {
+        return latencyBudgetMs;
     }
 }

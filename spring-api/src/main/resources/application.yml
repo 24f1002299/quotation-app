@@ -25,6 +25,20 @@ quotapp:
       url: ${OPENAI_STT_URL:https://api.openai.com/v1/audio/transcriptions}
       model: whisper-1
       timeout-seconds: 15
+  llm:
+    provider: ${DEFAULT_LLM_PROVIDER:grok}
+    latency-budget-ms: ${EXTRACTION_LATENCY_BUDGET_MS:6000}
+    max-retries: 2
+    grok:
+      api-key: ${XAI_API_KEY:}
+      url: ${XAI_CHAT_URL:https://api.x.ai/v1/chat/completions}
+      model: ${XAI_CHAT_MODEL:grok-2-mini}
+      timeout-seconds: 10
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      url: ${OPENAI_CHAT_URL:https://api.openai.com/v1/chat/completions}
+      model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      timeout-seconds: 10
 
   datasource:
     # Use the least-privilege app_role, not the service-role / postgres user.
