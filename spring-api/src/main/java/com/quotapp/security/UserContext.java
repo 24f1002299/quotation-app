@@ -24,17 +24,25 @@ public final class UserContext {
 
     /** Returns the current user ID, or {@code null} if not authenticated. */
     public static String get() {
-        return USER_ID.get();
+        String id = USER_ID.get();
+        if (id != null) {
+            return id;
+        }
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            return auth.getName();
+        }
+        return null;
     }
 
     /** Alias for get() to return current user ID. */
     public static String getUserId() {
-        return USER_ID.get();
+        return get();
     }
 
     /** Alias for set() to set current user ID. */
     public static void setUserId(String userId) {
-        USER_ID.set(userId);
+        set(userId);
     }
 
     /**

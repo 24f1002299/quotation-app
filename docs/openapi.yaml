@@ -1,0 +1,503 @@
+openapi: 3.0.3
+info:
+  title: QuotApp Contractor Voice-First API
+  version: 1.0.0
+  description: |
+    Contractor voice-first quotation extraction and audio transcription API.
+    
+    ### Key Architectural Invariants:
+    1. **Strict Model Boundary**: Spoken transcripts and extraction results are **untrusted candidates** for review.
+    2. **Arithmetic Exclusion**: The extraction endpoint strictly **never computes arithmetic totals** (amount, subtotal, grandTotal, gst). All quotation math is computed deterministically on the client.
+    3. **Rate Provenance**: Rates originate strictly from contractor `rateMemory` (`RATE_MEMORY`), or flagged suggestions (`SUGGESTED`), or `UNKNOWN`.
+    4. **Privacy & Ephemerality**: Audio files are streamed in-memory only and never written to server disk or databases. Provider API secrets are never returned or logged.
+    5. **Standardized Operations**: Every request supports `X-Request-Id` for tracing and `Idempotency-Key` to safely prevent duplicate submissions.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/transcribe:
+    post:
+      summary: Transcribe contractor audio note
+      description: |
+        Transcribes an uploaded audio file using xAI Grok STT (default) with OpenAI Whisper-1 fallback.
+        Audio is held strictly in RAM and streamed directly to the provider.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional client-provided request UUID. Echoed in response header and structured logs.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Audio recording. Max 10MB. Allowed formats: M4A, AAC, WAV, MP3, OGG, WebM.
+                language:
+                  type: string
+                  enum: [hi, mr, en, auto]
+                  description: Optional language hint (Hindi, Marathi, English, or auto-detect).
+                provider:
+                  type: string
+                  enum: [grok, whisper]
+                  default: grok
+                  description: STT provider override.
+                durationSeconds:
+                  type: integer
+                  maximum: 120
+                  minimum: 0
+                  description: Audio duration in seconds (must not exceed 120s).
+      responses:
+        '200':
+          description: Successful transcription candidate
+          headers:
+            X-Request-Id:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionResponse'
+        '400':
+          description: Bad request (empty file or duration > 120s)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Supabase JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Audio file exceeds 10MB limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported audio container type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: User rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream STT provider error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/extract:
+    post:
+      summary: Extract structured quotation items from transcript
+      description: |
+        Parses spoken transcript text into candidate line items, bounded by the trade catalog and
+        contractor rate memory. Unrecognized or ambiguous work is isolated into explicit unknowns.
+        
+        **CRITICAL:** This endpoint NEVER calculates or returns arithmetic totals (`amount`, `total`, `subtotal`).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Correlation ID for logging and tracing.
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Unique client key preventing duplicate extraction executions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtractRequest'
+      responses:
+        '200':
+          description: Candidate line items and unknowns
+          headers:
+            X-Request-Id:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractResponse'
+        '400':
+          description: Request validation failed, unrecognized unit, or oversized transcript
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Supabase JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Ownership violation (cross-user data access attempt)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: User rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase user access token.
+
+  schemas:
+    TranscriptionResponse:
+      type: object
+      required:
+        - transcript
+        - provider
+        - language
+        - latencyMs
+        - audioSizeBytes
+        - status
+        - uncertaintyMetadata
+      properties:
+        transcript:
+          type: string
+          example: "हॉल मध्ये 120 स्क्वेअर फूट टाईल लेबर आणि 40 रनिंग फूट स्कर्टिंग"
+        provider:
+          type: string
+          example: "grok"
+        language:
+          type: string
+          example: "mr"
+        latencyMs:
+          type: integer
+          example: 680
+        audioSizeBytes:
+          type: integer
+          example: 45200
+        status:
+          type: string
+          example: "CANDIDATE_FOR_REVIEW"
+        uncertaintyMetadata:
+          $ref: '#/components/schemas/UncertaintyMetadata'
+
+    UncertaintyMetadata:
+      type: object
+      required:
+        - isUncertain
+        - requiresReview
+      properties:
+        isUncertain:
+          type: boolean
+          example: false
+        confidence:
+          type: number
+          format: double
+          example: 0.95
+        provider:
+          type: string
+          example: "grok"
+        requiresReview:
+          type: boolean
+          example: true
+
+    ExtractRequest:
+      type: object
+      required:
+        - transcript
+        - trade
+        - catalogEntries
+        - schemaVersion
+      properties:
+        transcript:
+          type: string
+          maxLength: 5000
+          description: Spoken transcript text (maximum 5,000 characters).
+          example: "Kitchen wall tiles 120 sq ft, and skirting 40 rft"
+        trade:
+          type: string
+          enum: [tiling, painting]
+          example: "tiling"
+        catalogEntries:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CatalogItem'
+        rateMemory:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateMemoryItem'
+        language:
+          type: string
+          enum: [hi, mr, en, auto]
+          example: "hi"
+        schemaVersion:
+          type: string
+          example: "1.0"
+        version:
+          type: integer
+          default: 1
+          description: Optimistic locking version for mutable resources.
+        idempotencyKey:
+          type: string
+          example: "c7f9e5a1-4321-4f12-9876-123456789abc"
+
+    CatalogItem:
+      type: object
+      required:
+        - id
+        - displayName
+        - defaultUnit
+      properties:
+        id:
+          type: string
+          example: "tile_labour"
+        displayName:
+          type: string
+          example: "Tile Labour / टाइल मजदूरी"
+        defaultUnit:
+          $ref: '#/components/schemas/ContractorUnit'
+        allowableUnits:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractorUnit'
+        synonyms:
+          type: array
+          items:
+            type: string
+          example: ["tile labour", "tiles lagana", "टाइल लगाना"]
+        trade:
+          type: string
+          example: "tiling"
+
+    RateMemoryItem:
+      type: object
+      required:
+        - catalogItemId
+        - unit
+        - unitRatePaise
+      properties:
+        catalogItemId:
+          type: string
+          example: "tile_labour"
+        unit:
+          $ref: '#/components/schemas/ContractorUnit'
+        unitRatePaise:
+          type: integer
+          minimum: 0
+          description: Rate in paise (e.g. 3500 paise = ₹35.00).
+          example: 3500
+        trade:
+          type: string
+          example: "tiling"
+
+    ExtractResponse:
+      type: object
+      required:
+        - schemaVersion
+        - trade
+        - lineItems
+        - unknowns
+        - uncertaintyMetadata
+        - version
+        - requiresReview
+        - requestId
+      properties:
+        schemaVersion:
+          type: string
+          example: "1.0"
+        trade:
+          type: string
+          example: "tiling"
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtractedLineItem'
+        unknowns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExplicitUnknown'
+        uncertaintyMetadata:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          example: 1
+        requiresReview:
+          type: boolean
+          example: true
+        requestId:
+          type: string
+          example: "7e5025d4-8df6-48e0-b6aa-67852fef9bc2"
+
+    ExtractedLineItem:
+      type: object
+      description: |
+        Candidate line item extracted from transcript.
+        CRITICAL: Contains NO arithmetic fields (no amount, subtotal, grandTotal).
+      required:
+        - catalogItemId
+        - description
+        - quantity
+        - unit
+        - rateSource
+        - confidence
+      properties:
+        catalogItemId:
+          type: string
+          example: "tile_labour"
+        description:
+          type: string
+          example: "Tile Labour / टाइल मजदूरी"
+        quantity:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 120.0
+        unit:
+          $ref: '#/components/schemas/ContractorUnit'
+        unitRatePaise:
+          type: integer
+          nullable: true
+          description: Unit rate in paise if found in rate memory; null if unknown.
+          example: 3500
+        rateSource:
+          $ref: '#/components/schemas/RateSource'
+        confidence:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.95
+        sourceSpan:
+          $ref: '#/components/schemas/SourceSpan'
+        uncertaintyNote:
+          type: string
+          nullable: true
+
+    ExplicitUnknown:
+      type: object
+      required:
+        - sourceSpan
+        - reason
+      properties:
+        sourceSpan:
+          type: string
+          example: "demolish bathroom partition"
+        suspectedTerm:
+          type: string
+          nullable: true
+          example: "demolition"
+        reason:
+          type: string
+          example: "Item not present in tiling catalog"
+        confidence:
+          type: number
+          format: double
+          example: 0.2
+
+    SourceSpan:
+      type: object
+      properties:
+        startIndex:
+          type: integer
+          example: 19
+        endIndex:
+          type: integer
+          example: 30
+        text:
+          type: string
+          example: "120 sq ft tile labour"
+
+    ContractorUnit:
+      type: string
+      enum:
+        - sq ft
+        - rft
+        - brass
+        - nos
+        - lumpsum
+        - bags
+        - point
+      description: Standardized canonical contractor measurement units.
+
+    RateSource:
+      type: string
+      enum:
+        - RATE_MEMORY
+        - SUGGESTED
+        - UNKNOWN
+      description: Provenance of the line item rate. Model cannot invent unflagged rates.
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - requestId
+        - timestamp
+      properties:
+        error:
+          type: string
+          example: "VALIDATION_FAILED"
+        message:
+          type: string
+          example: "Validation failed for one or more request fields"
+        requestId:
+          type: string
+          example: "b145a190-2ff6-42bb-8566-f8d8393fa533"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-22T11:45:00Z"
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldErrorDetail'
+
+    FieldErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+          example: "transcript"
+        rejectedValue:
+          type: string
+        reason:
+          type: string
+          example: "Transcript exceeds maximum allowed length of 5000 characters"

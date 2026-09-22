@@ -89,39 +89,39 @@ public class TranscriptionController {
         String userId = UserContext.getUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("error", "UNAUTHORIZED", "message", "Authentication required"));
+                .body(structuredError("UNAUTHORIZED", "Authentication required"));
         }
 
         // Validate rate limit per user
         if (rateLimiter != null && !rateLimiter.tryAcquire(userId)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(Map.of(
-                    "error", "RATE_LIMIT_EXCEEDED",
-                    "message", "Rate limit exceeded. Please wait a moment before sending another recording."
+                .body(structuredError(
+                    "RATE_LIMIT_EXCEEDED",
+                    "Rate limit exceeded. Please wait a moment before sending another recording."
                 ));
         }
 
         // Validate presence
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest()
-                .body(Map.of("error", "EMPTY_FILE", "message", "Audio file is required and cannot be empty"));
+                .body(structuredError("EMPTY_FILE", "Audio file is required and cannot be empty"));
         }
 
         // Validate duration if provided
         if (durationSeconds != null && (durationSeconds > MAX_DURATION_SECONDS || durationSeconds < 0)) {
             return ResponseEntity.badRequest()
-                .body(Map.of(
-                    "error", "DURATION_EXCEEDED",
-                    "message", "Recording exceeds maximum duration of " + MAX_DURATION_SECONDS + " seconds (" + durationSeconds + "s received)"
+                .body(structuredError(
+                    "DURATION_EXCEEDED",
+                    "Recording exceeds maximum duration of " + MAX_DURATION_SECONDS + " seconds (" + durationSeconds + "s received)"
                 ));
         }
 
         // Validate size
         if (file.getSize() > MAX_AUDIO_SIZE_BYTES) {
             return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of(
-                    "error", "FILE_TOO_LARGE",
-                    "message", "Audio exceeds maximum allowed size of 10MB (" + file.getSize() + " bytes received)"
+                .body(structuredError(
+                    "FILE_TOO_LARGE",
+                    "Audio exceeds maximum allowed size of 10MB (" + file.getSize() + " bytes received)"
                 ));
         }
 
@@ -129,9 +129,9 @@ public class TranscriptionController {
         String contentType = file.getContentType();
         if (contentType != null && !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(Map.of(
-                    "error", "UNSUPPORTED_MEDIA_TYPE",
-                    "message", "Audio format not supported: " + contentType + ". Supported: M4A, AAC, WAV, MP3, OGG, WebM"
+                .body(structuredError(
+                    "UNSUPPORTED_MEDIA_TYPE",
+                    "Audio format not supported: " + contentType + ". Supported: M4A, AAC, WAV, MP3, OGG, WebM"
                 ));
         }
 
@@ -166,15 +166,24 @@ public class TranscriptionController {
         } catch (IllegalStateException e) {
             log.error("STT configuration error for user={}: {}", userId, e.getMessage());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Map.of("error", "CONFIG_ERROR", "message", e.getMessage()));
+                .body(structuredError("CONFIG_ERROR", e.getMessage()));
         } catch (IOException e) {
             log.error("Failed to read audio bytes for user={}: {}", userId, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "READ_ERROR", "message", "Could not read audio stream"));
+                .body(structuredError("READ_ERROR", "Could not read audio stream"));
         } catch (Exception e) {
             log.error("STT transcription failed for user={}: {}", userId, e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(Map.of("error", "PROVIDER_ERROR", "message", "Transcription failed: " + e.getMessage()));
+                .body(structuredError("PROVIDER_ERROR", "Transcription failed: " + e.getMessage()));
         }
+    }
+
+    private Map<String, Object> structuredError(String code, String message) {
+        return Map.of(
+            "error", code,
+            "message", message,
+            "requestId", com.quotapp.security.RequestIdFilter.getCurrentRequestId(),
+            "timestamp", java.time.Instant.now().toString()
+        );
     }
 }

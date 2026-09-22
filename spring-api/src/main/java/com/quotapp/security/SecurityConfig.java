@@ -22,9 +22,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final SupabaseJwtFilter supabaseJwtFilter;
+    private final RequestIdFilter requestIdFilter;
 
-    public SecurityConfig(SupabaseJwtFilter supabaseJwtFilter) {
+    public SecurityConfig(SupabaseJwtFilter supabaseJwtFilter, RequestIdFilter requestIdFilter) {
         this.supabaseJwtFilter = supabaseJwtFilter;
+        this.requestIdFilter = requestIdFilter;
     }
 
     @Bean
@@ -37,18 +39,24 @@ public class SecurityConfig {
             )
             // Public endpoints
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health", "/api/health").permitAll()
+                .requestMatchers("/actuator/health", "/api/health", "/openapi.yaml", "/docs/**").permitAll()
                 .anyRequest().authenticated()
             )
-            // Return 401 Unauthorized for unauthenticated requests
+            // Return 401 Unauthorized for unauthenticated requests with structured format
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}");
+                    String reqId = RequestIdFilter.getCurrentRequestId();
+                    String json = String.format(
+                        "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required\",\"requestId\":\"%s\",\"timestamp\":\"%s\"}",
+                        reqId, java.time.Instant.now().toString()
+                    );
+                    response.getWriter().write(json);
                 })
             )
-            // Register the Supabase JWT filter ahead of Spring's default
+            // RequestId filter runs first, then Supabase JWT filter
+            .addFilterBefore(requestIdFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(supabaseJwtFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
