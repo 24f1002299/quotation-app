@@ -29,9 +29,9 @@ quotapp:
   datasource:
     # Use the least-privilege app_role, not the service-role / postgres user.
     # DATABASE_URL format: jdbc:postgresql://<host>:<port>/<db>
-    url: ${DATABASE_URL}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:54322/postgres}
     username: app_role
-    password: ${DATABASE_APP_ROLE_PASSWORD}
+    password: ${DATABASE_APP_ROLE_PASSWORD:dev_password}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -46,11 +46,11 @@ quotapp:
 supabase:
   # Public JWKS endpoint — no secret required.
   # Format: https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
-  jwks-url: ${SUPABASE_JWKS_URL}
+  jwks-url: ${SUPABASE_JWKS_URL:http://localhost:54321/auth/v1/.well-known/jwks.json}
 
   # The Supabase project URL (used by the Flutter app via --dart-define only).
   # Kept here so ops can validate consistency, but Spring does not use it.
-  project-url: ${SUPABASE_URL}
+  project-url: ${SUPABASE_URL:http://localhost:54321}
 
 server:
   port: 8080
