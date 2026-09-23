@@ -87,11 +87,12 @@ class TranscriptionService {
     request.fields['durationSeconds'] = durationSeconds.toString();
 
     // 4. Attach audio file
+    final filename = audioFile.path.split(Platform.pathSeparator).last;
     request.files.add(
       await http.MultipartFile.fromPath(
         'file',
         audioFile.path,
-        filename: 'recording.m4a',
+        filename: filename.isNotEmpty ? filename : 'recording.m4a',
       ),
     );
 

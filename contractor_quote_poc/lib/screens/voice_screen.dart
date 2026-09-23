@@ -69,6 +69,12 @@ class _VoiceScreenState extends State<VoiceScreen>
   Timer? _timer;
   File? _currentAudioFile;
 
+  // Guards against stale async results overwriting a newer sample:
+  // every new recording/transcription bumps this; completions with an old
+  // sequence number are ignored. Also prevents the saved draft loaded at
+  // startup from clobbering a fresh transcription.
+  int _transcriptionSeq = 0;
+
   // Extraction incremental status
   String _extractionStatusMessage = 'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
   Timer? _extractionTimer;
@@ -101,6 +107,9 @@ class _VoiceScreenState extends State<VoiceScreen>
   Future<void> _loadExistingDraft() async {
     final draft = await TranscriptDraftRepository.getDraft(widget.trade);
     if (!mounted || draft == null || draft.transcript.trim().isEmpty) return;
+    // Don't clobber a fresh transcription that already populated the field
+    // while the async draft load was in flight.
+    if (_transcriptCtrl.text.trim().isNotEmpty) return;
 
     setState(() {
       _transcriptCtrl.text = draft.transcript;
@@ -143,6 +152,9 @@ class _VoiceScreenState extends State<VoiceScreen>
       _permissionDenied = false;
       _errorMessage = null;
     });
+
+    // Invalidate any in-flight transcription from a previous sample.
+    _transcriptionSeq++;
 
     final dir = await getTemporaryDirectory();
     final path =
@@ -193,6 +205,13 @@ class _VoiceScreenState extends State<VoiceScreen>
     final recordedFile = File(path);
     _currentAudioFile = recordedFile;
 
+    final length = await recordedFile.length();
+    if (length == 0) {
+      _showError('No voice detected or recording was empty. Please speak clearly into the microphone and try again.');
+      setState(() => _state = _RecordState.idle);
+      return;
+    }
+
     setState(() => _state = _RecordState.transcribing);
     await _transcribeAudio(recordedFile, _recSeconds);
   }
@@ -216,6 +235,7 @@ class _VoiceScreenState extends State<VoiceScreen>
   // ── Groq Whisper Transcription ─────────────────────────────────────────────
 
   Future<void> _transcribeAudio(File audio, int duration) async {
+    final seq = ++_transcriptionSeq;
     try {
       final result = await TranscriptionService.transcribe(
         audioFile: audio,
@@ -224,23 +244,59 @@ class _VoiceScreenState extends State<VoiceScreen>
         provider: kDefaultSttProvider,
       );
 
-      if (!mounted) return;
+      if (!mounted || seq != _transcriptionSeq) {
+        // A newer recording superseded this one — discard the stale result
+        // but still clean up its temp file.
+        await TranscriptionService.deleteTemporaryAudio(audio);
+        return;
+      }
+
+      final newTranscript = result.transcript.trim();
+      if (newTranscript.isEmpty) {
+        setState(() {
+          _errorMessage =
+              'Transcription came back empty. Please try again or type the quote manually.';
+          _state = _transcriptCtrl.text.trim().isNotEmpty
+              ? _RecordState.hasTranscript
+              : _RecordState.idle;
+        });
+        await TranscriptionService.deleteTemporaryAudio(audio);
+        _currentAudioFile = null;
+        return;
+      }
 
       setState(() {
-        _transcriptCtrl.text = result.transcript;
+        // Assign via value (not just .text) so the field visibly refreshes
+        // even when the previous sample had content.
+        _transcriptCtrl.value = TextEditingValue(
+          text: result.transcript,
+          selection: TextSelection.collapsed(offset: result.transcript.length),
+        );
         _uncertainty = result.uncertainty;
         _state = _RecordState.hasTranscript;
         _errorMessage = null;
       });
 
-      // Save draft immediately
-      _onTranscriptChanged();
+      // Overwrite the saved draft with THIS sample (not via listener ordering).
+      final draft = TranscriptDraft(
+        id: 'draft_${widget.trade.name}',
+        trade: widget.trade,
+        transcript: result.transcript,
+        language: _selectedLanguage,
+        provider: result.provider,
+        uncertainty: result.uncertainty,
+        updatedAt: DateTime.now(),
+      );
+      await TranscriptDraftRepository.saveDraft(draft);
 
       // Clean up temporary audio file after successful transcription
       await TranscriptionService.deleteTemporaryAudio(audio);
       _currentAudioFile = null;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _transcriptionSeq) {
+        await TranscriptionService.deleteTemporaryAudio(audio);
+        return;
+      }
 
       // Clean up temporary audio file on failure
       await TranscriptionService.deleteTemporaryAudio(audio);
@@ -297,14 +353,20 @@ class _VoiceScreenState extends State<VoiceScreen>
   // ── Demo shortcut ─────────────────────────────────────────────────────────
 
   void _useDemo() {
+    // Cancel any in-flight transcription so it can't overwrite the demo text.
+    _transcriptionSeq++;
     final text = widget.trade == Trade.tiling
         ? kTilingDemoTranscript
         : kPaintingDemoTranscript;
-    _transcriptCtrl.text = text;
+    _transcriptCtrl.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
     setState(() {
       _state = _RecordState.hasTranscript;
       _errorMessage = null;
     });
+    _onTranscriptChanged();
   }
 
   // ── Navigate to review ────────────────────────────────────────────────────
@@ -391,6 +453,9 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   void _reRecord() {
+    // Invalidate any in-flight transcription so a late response can't
+    // repopulate the field right after the user cleared it.
+    _transcriptionSeq++;
     _cancelRecording();
     _transcriptCtrl.clear();
     TranscriptDraftRepository.clearDraft(widget.trade);
@@ -623,8 +688,8 @@ class _VoiceScreenState extends State<VoiceScreen>
       ),
       const SizedBox(height: 6),
       Text(
-        'Recording… tap the mic to stop',
-        style: tt.bodyMedium,
+        'Recording voice… Tap mic button when finished to transcribe',
+        style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
         textAlign: TextAlign.center,
       ),
     ];

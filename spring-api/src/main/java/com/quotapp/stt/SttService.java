@@ -44,6 +44,7 @@ public class SttService {
     private final String openaiApiKey;
     private final String openaiSttUrl;
     private final String openaiModel;
+    private final boolean devMockEnabled;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
@@ -56,6 +57,7 @@ public class SttService {
             @Value("${quotapp.stt.whisper.url:https://api.openai.com/v1/audio/transcriptions}") String openaiSttUrl,
             @Value("${quotapp.stt.whisper.model:whisper-1}") String openaiModel,
             @Value("${quotapp.stt.whisper.timeout-seconds:15}") int whisperTimeoutSeconds,
+            @Value("${quotapp.stt.dev-mock-enabled:false}") boolean devMockEnabled,
             ObjectMapper objectMapper) {
         this.defaultProvider = defaultProvider.trim().toLowerCase();
         this.xaiApiKey = xaiApiKey.trim();
@@ -63,6 +65,7 @@ public class SttService {
         this.openaiApiKey = openaiApiKey.trim();
         this.openaiSttUrl = openaiSttUrl.trim();
         this.openaiModel = openaiModel.trim();
+        this.devMockEnabled = devMockEnabled;
         this.objectMapper = objectMapper;
 
         // Configure client with 15s connect & read timeouts
@@ -151,12 +154,20 @@ public class SttService {
             boolean isDev = activeProfile != null && activeProfile.toLowerCase().contains("dev");
             String msg = ex.getMessage() != null ? ex.getMessage() : "";
             String lowerMsg = msg.toLowerCase();
-            if (isDev && (lowerMsg.contains("403") || lowerMsg.contains("400")
+            // NOTE: deliberately narrow — generic "400"/"invalid"/"bad request"
+            // must NOT trigger the mock, otherwise real client bugs (e.g. Groq
+            // invalid_prompt when prompt > 896 chars) get masked by the same
+            // canned transcript and every sample "looks like it doesn't update".
+            boolean isAuthLike = lowerMsg.contains("403") || lowerMsg.contains("401")
                     || lowerMsg.contains("credits") || lowerMsg.contains("licenses")
-                    || lowerMsg.contains("not configured") || lowerMsg.contains("401")
-                    || lowerMsg.contains("incorrect api key") || lowerMsg.contains("invalid")
-                    || lowerMsg.contains("bad request") || lowerMsg.contains("unauthorized")
-                    || lowerMsg.contains("forbidden"))) {
+                    || lowerMsg.contains("not configured")
+                    || lowerMsg.contains("incorrect api key") || lowerMsg.contains("invalid_api_key")
+                    || lowerMsg.contains("invalid api key")
+                    || lowerMsg.contains("unauthorized") || lowerMsg.contains("forbidden");
+            // Dev mock must be opt-in (STT_DEV_MOCK_ENABLED=true) or when keys are placeholders/unconfigured.
+            boolean noKeysConfigured = isPlaceholderKey(openaiApiKey) && isPlaceholderKey(xaiApiKey);
+            if (isDev && isAuthLike && (devMockEnabled || noKeysConfigured
+                    || lowerMsg.contains("not configured"))) {
                 log.warn(
                         "STT provider '{}' failed with credit/auth error: {}. Dev fallback: returning sample contractor transcript.",
                         provider, msg);
@@ -202,10 +213,16 @@ public class SttService {
      * <li>Supports M4A, AAC, WAV, MP3.</li>
      * </ul>
      */
+    private boolean isPlaceholderKey(String key) {
+        if (!StringUtils.hasText(key)) return true;
+        String k = key.trim().toLowerCase();
+        return k.contains("replace") || k.contains("your_key") || k.contains("xai-replace") || k.contains("gsk-replace");
+    }
+
     private String callGrokStt(byte[] audioBytes, String filename, String languageHint) {
-        if (!StringUtils.hasText(xaiApiKey)) {
+        if (isPlaceholderKey(xaiApiKey)) {
             throw new IllegalStateException(
-                    "XAI_API_KEY is not configured on the server. Please set XAI_API_KEY in .env");
+                    "XAI_API_KEY is missing or unconfigured in spring-api/.env. Set XAI_API_KEY or set DEFAULT_STT_PROVIDER=whisper.");
         }
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -254,14 +271,16 @@ public class SttService {
      * model whisper-large-v3-turbo; OpenAI-compatible shape).
      */
     private String callOpenAiWhisper(byte[] audioBytes, String filename, String languageHint) {
-        if (!StringUtils.hasText(openaiApiKey)) {
+        if (isPlaceholderKey(openaiApiKey)) {
             throw new IllegalStateException(
-                    "OPENAI_API_KEY is not configured on the server. Please set OPENAI_API_KEY in .env");
+                    "OPENAI_API_KEY is missing or unconfigured in spring-api/.env. " +
+                    "Set a valid Groq Whisper key (gsk-...) from https://console.groq.com in spring-api/.env, " +
+                    "or set STT_DEV_MOCK_ENABLED=true in .env for mock testing.");
         }
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("model", openaiModel);
-        body.add("prompt", ContractorCatalogTerms.asPromptString());
+        body.add("prompt", ContractorCatalogTerms.asPromptString(languageHint));
 
         String normalizedLang = normalizeLanguageHint(languageHint);
         if (normalizedLang != null) {
@@ -312,16 +331,16 @@ public class SttService {
 
     /**
      * Normalizes UI language hints to provider codes.
-     * Returns null when the provider should auto-detect (Flutter sends 'auto').
-     * Sending a literal "auto" causes xAI/Whisper to reject with 400 invalid argument.
+     * In Auto / Hinglish mode, returns 'en' so Whisper transcribes mixed speech
+     * in Roman script (Hinglish) rather than native Devanagari script.
      */
     private String normalizeLanguageHint(String languageHint) {
         if (!StringUtils.hasText(languageHint)) {
-            return null;
+            return "en";
         }
         String lang = languageHint.trim().toLowerCase();
-        if (lang.equals("auto") || lang.equals("und") || lang.equals("default")) {
-            return null;
+        if (lang.equals("auto") || lang.equals("und") || lang.equals("default") || lang.equals("hinglish")) {
+            return "en";
         }
         return lang;
     }

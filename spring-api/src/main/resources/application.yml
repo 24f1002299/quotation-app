@@ -25,6 +25,10 @@ quotapp:
       url: ${OPENAI_STT_URL:https://api.openai.com/v1/audio/transcriptions}
       model: ${OPENAI_STT_MODEL:whisper-1}
       timeout-seconds: 15
+    # Opt-in only: when true, dev profile returns a canned sample transcript
+    # instead of surfacing provider auth errors. Keep false (default) so each
+    # real sample returns its own transcript. Enable with STT_DEV_MOCK_ENABLED=true.
+    dev-mock-enabled: ${STT_DEV_MOCK_ENABLED:false}
   llm:
     provider: ${DEFAULT_LLM_PROVIDER:grok}
     latency-budget-ms: ${EXTRACTION_LATENCY_BUDGET_MS:6000}

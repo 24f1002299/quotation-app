@@ -47,22 +47,28 @@ Six standardized test recordings were designed representing authentic field spee
 - **Evaluation Points:** Noise rejection; preserving "waterproofing" despite high-frequency screech.
 
 ### Sample 3: Marathi — Quiet Site (New construction flat)
-- **Spoken Text:** *"हॉल मध्ये 250 स्क्वेअर फूट टाईल लेबर काम आहे. आणि 60 रनिंग फूट स्कर्टिंग बसवायची आहे. दर चाळीस रुपये चौरस फूट."*
+- **Spoken Text:** *"हॉल मध्ये 250 स्क्वेअर फूट टाईल लेबर काम आहे. 
+- आणि 60 रनिंग फूट स्कर्टिंग बसवायची आहे. दर चाळीस रुपये चौरस फूट."*
 - **Target Line Items:** Tile labour (250 sq ft @ ₹40), Skirting (60 rft)
 - **Evaluation Points:** Devanagari numerals normalization (`250`, `60`, `40`), Devanagari units (`स्क्वेअर फूट`, `रनिंग फूट`).
 
 ### Sample 4: Marathi — Site-Noisy (Hammering + street traffic, 70dB)
-- **Spoken Text:** *"किचन ओटा जवळ वॉल टाईल 80 चौरस फूट. आणि बाथरूम मध्ये वॉटरप्रूफिंग 50 स्क्वेअर फूट करा."*
+- **Spoken Text:** *"किचन ओटा जवळ वॉल टाईल 80 चौरस फूट. 
+- आणि बाथरूम मध्ये वॉटरप्रूफिंग 50 स्क्वेअर फूट करा."*
 - **Target Line Items:** Wall tiles (80 sq ft), Waterproofing (50 sq ft)
 - **Evaluation Points:** Distinguishing "वॉल टाईल" (wall tile) from background thuds; number normalization (`80`, `50`).
 
 ### Sample 5: Hinglish — Quiet (Contractor dictation)
-- **Spoken Text:** *"Complete flat painting work, total 1200 sq ft wall putty two coats, and primer one coat. Paint emulsion finish 1200 sq ft."*
+- **Spoken Text:** *"Complete flat painting work, 
+- total 1200 sq ft wall putty two coats, and primer one coat. 
+- Paint emulsion finish 1200 sq ft."*
 - **Target Line Items:** Wall putty (1200 sq ft, 2 coats), Primer (1200 sq ft), Painting emulsion (1200 sq ft)
 - **Evaluation Points:** Multiturn item sequencing; English numerical values (`1200`, `2`, `1`).
 
 ### Sample 6: Hinglish — Site-Noisy (Unfurnished echo room + compressor drill)
-- **Spoken Text:** *"Pehle wall putty aur patti kaam hoga 450 sq ft, then Asian Paints tractor emulsion do coat. Rate final hone ke baad bataunga."*
+- **Spoken Text:** *"Pehle wall putty aur patti kaam hoga 450 sq ft,
+- then Asian Paints tractor emulsion do coat. 
+- Rate final hone ke baad bataunga."*
 - **Target Line Items:** Wall putty (450 sq ft), Painting (450 sq ft)
 - **Evaluation Points:** "patti kaam" colloquial synonym mapped properly; unit preservation.
 

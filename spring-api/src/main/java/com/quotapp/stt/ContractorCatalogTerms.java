@@ -44,9 +44,22 @@ public final class ContractorCatalogTerms {
     );
 
     /**
-     * Formats the catalogue terms as a single comma-separated prompt string for Whisper / Grok biasing.
+     * Formats catalogue terms as prompt hint for Whisper based on language mode.
+     * In Auto / Hinglish mode, instructs Whisper to transcribe speech into Roman script (Hinglish).
      */
+    public static String asPromptString(String languageHint) {
+        String lang = languageHint != null ? languageHint.trim().toLowerCase() : "auto";
+        if ("hi".equals(lang)) {
+            return "ठेकेदार कोटेशन: किचन की दीवार की टाइलें 120 वर्ग फुट, वॉल पुट्टी 1200 वर्ग फुट, दर 35 रुपये प्रति फुट, वॉटरप्रूफिंग, प्राइमर, पेंटिंग";
+        } else if ("mr".equals(lang)) {
+            return "कॉन्ट्रॅक्टर कोटेशन: किचन भिंतीवरील टाइल्स 120 चौरस फूट, वॉल पुट्टी, बाथरूम फरशी 80 चौरस फूट, दर 40 रुपये, स्कर्टिंग, वॉटरप्रूफिंग";
+        } else {
+            // Auto / Hinglish mode — forces Whisper to transcribe speech in Hinglish (Roman script)
+            return "Contractor quotation in Hinglish (Roman script): kitchen wall tiles 120 sq ft, wall putty 1200 sq ft, floor tiles 80 sq ft, rate 35 rupees per sq ft, skirting 45 rft, waterproofing 60 sq ft, primer, painting emulsion.";
+        }
+    }
+
     public static String asPromptString() {
-        return String.join(", ", TERMS);
+        return asPromptString("auto");
     }
 }
