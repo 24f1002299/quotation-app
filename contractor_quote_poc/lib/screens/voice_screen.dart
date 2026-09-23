@@ -5,7 +5,7 @@
 /// - Start, stop, cancel controls with pulse animation
 /// - Elapsed time display with conservative 60-second limit and auto-stop
 /// - Language choice: Hindi, Marathi, Hinglish / Auto
-/// - Uploads over HTTPS to authenticated Spring Boot endpoint (Grok STT default)
+/// - Uploads over HTTPS to authenticated Spring Boot endpoint (Groq Whisper default)
 /// - Temporary audio file deleted immediately upon transcription or cancellation
 /// - Draft persistence with uncertainty metadata
 /// - Safe error handling: never loses typed draft on failure
@@ -58,7 +58,7 @@ class _VoiceScreenState extends State<VoiceScreen>
   final _transcriptCtrl = TextEditingController();
   UncertaintyMetadata _uncertainty = const UncertaintyMetadata();
 
-  // Selected language for Grok STT
+  // Selected language for Groq Whisper STT
   String _selectedLanguage = 'auto'; // 'auto', 'hi', 'mr'
 
   // Pulse animation on the mic button while recording
@@ -213,7 +213,7 @@ class _VoiceScreenState extends State<VoiceScreen>
     });
   }
 
-  // ── Grok Transcription ────────────────────────────────────────────────────
+  // ── Groq Whisper Transcription ─────────────────────────────────────────────
 
   Future<void> _transcribeAudio(File audio, int duration) async {
     try {
@@ -248,12 +248,22 @@ class _VoiceScreenState extends State<VoiceScreen>
 
       String msg;
       final errStr = e.toString();
+      final lowerErr = errStr.toLowerCase();
       if (e is SocketException ||
           errStr.contains('Connection refused') ||
           errStr.contains('Failed host lookup') ||
           errStr.contains('ClientException')) {
         msg = 'Cannot connect to backend server ($kApiBaseUrl).\n'
             'Start the Spring Boot API (cd spring-api; .\\run-dev.ps1) or use "Use Demo" below to test.';
+      } else if (lowerErr.contains('incorrect api key') ||
+          lowerErr.contains('invalid api key') ||
+          lowerErr.contains('xai_api_key') ||
+          lowerErr.contains('grok stt') ||
+          lowerErr.contains('whisper') ||
+          lowerErr.contains('groq')) {
+        msg = 'Voice service key is missing or invalid on the server (Groq Whisper).\n'
+            'Check GROQ key in spring-api/.env (OPENAI_API_KEY=gsk-..., OPENAI_STT_URL=https://api.groq.com/openai/v1/audio/transcriptions, OPENAI_STT_MODEL=whisper-large-v3-turbo), '
+            'restart the API (cd spring-api; .\\run-dev.ps1) and try again.';
       } else if (e is HttpException) {
         msg = e.message;
       } else {
@@ -411,8 +421,14 @@ class _VoiceScreenState extends State<VoiceScreen>
     return Scaffold(
       appBar: AppBar(
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Speak Quote / बोलें'),
+            const Flexible(
+              child: Text(
+                'Speak Quote',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(width: 8),
             tradeBadge,
           ],
@@ -582,7 +598,7 @@ class _VoiceScreenState extends State<VoiceScreen>
             const Icon(Icons.wifi_rounded, size: 14, color: Colors.grey),
             const SizedBox(width: 4),
             Text(
-              'Transcription needs internet · Grok STT',
+              'Transcription needs internet · Whisper STT',
               style: tt.bodySmall?.copyWith(color: Colors.grey),
               textAlign: TextAlign.center,
             ),
@@ -618,7 +634,7 @@ class _VoiceScreenState extends State<VoiceScreen>
         CircularProgressIndicator(color: cs.primary),
         const SizedBox(height: 20),
         Text(
-          'Transcribing with Grok STT…',
+          'Transcribing with Whisper STT…',
           style: tt.titleMedium,
           textAlign: TextAlign.center,
         ),

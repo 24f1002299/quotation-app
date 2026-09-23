@@ -15,7 +15,7 @@ spring:
 
 quotapp:
   stt:
-    default-provider: ${DEFAULT_STT_PROVIDER:grok}
+    default-provider: ${DEFAULT_STT_PROVIDER:whisper}
     grok:
       api-key: ${XAI_API_KEY:}
       url: ${XAI_STT_URL:https://api.x.ai/v1/stt}
@@ -23,7 +23,7 @@ quotapp:
     whisper:
       api-key: ${OPENAI_API_KEY:}
       url: ${OPENAI_STT_URL:https://api.openai.com/v1/audio/transcriptions}
-      model: whisper-1
+      model: ${OPENAI_STT_MODEL:whisper-1}
       timeout-seconds: 15
   llm:
     provider: ${DEFAULT_LLM_PROVIDER:grok}

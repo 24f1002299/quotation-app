@@ -40,7 +40,9 @@ Six standardized test recordings were designed representing authentic field spee
 - **Evaluation Points:** Correct number parsing (`180`, `45`, `35`), trade terms (`floor tile`, `skirting`).
 
 ### Sample 2: Hindi — Site-Noisy (Angle grinder tile cutter in background, 75dB)
-- **Spoken Text:** *"Balcony me waterproofing karna hai 60 sq ft. Uske baad 60 sq ft floor tile. Labour rate 40 rupaye."*
+- **Spoken Text:** *"Balcony me waterproofing karna hai 60 sq ft. 
+- Uske baad 60 sq ft floor tile. 
+- Labour rate 40 rupaye."*
 - **Target Line Items:** Waterproofing (60 sq ft), Floor tiles (60 sq ft @ ₹40)
 - **Evaluation Points:** Noise rejection; preserving "waterproofing" despite high-frequency screech.
 
