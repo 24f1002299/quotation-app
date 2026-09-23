@@ -163,7 +163,12 @@ class _VoiceScreenState extends State<VoiceScreen>
 
     try {
       await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000),
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 16000,
+          numChannels: 1,
+          bitRate: 64000,
+        ),
         path: path,
       );
 
@@ -211,31 +216,73 @@ class _VoiceScreenState extends State<VoiceScreen>
       setState(() => _state = _RecordState.idle);
       return;
     }
+    // Crumb guard: a fraction of a second of audio (accidental tap, or the
+    // auto-started re-record stopped instantly) makes Whisper hallucinate
+    // fluent text instead of failing. Don't send crumbs to STT at all.
+    if (length < 4 * 1024 || _recSeconds < 2) {
+      debugPrint(
+          '[Voice] recording too short/quiet: ${length}B, ${_recSeconds}s — '
+          'asking user to re-record instead of sending to STT');
+      await TranscriptionService.deleteTemporaryAudio(recordedFile);
+      _currentAudioFile = null;
+      setState(() {
+        _errorMessage =
+            'Recording was too short — we probably didn\'t catch anything. '
+            'Tap Re-record (it starts listening immediately), speak for a few seconds, then tap stop.';
+        _state = _RecordState.idle;
+        _recSeconds = 0;
+      });
+      return;
+    }
+    // Emulator / silent-mic guard: a few seconds of real speech at 16 kHz mono
+    // AAC is tens of KB. Anything under ~8 KB is almost certainly silence
+    // (emulator mic muted, host mic permission missing), and Whisper will
+    // hallucinate instead of transcribing — which looks like "wrong transcript".
+    if (length < 8 * 1024 || _recSeconds < 2) {
+      debugPrint(
+          '[Voice] suspiciously small/quiet recording: ${length}B, ${_recSeconds}s — '
+          'likely silent mic, still sending to STT for diagnosis');
+    } else {
+      debugPrint('[Voice] recording ready: ${length}B, ${_recSeconds}s -> sending to STT');
+    }
 
     setState(() => _state = _RecordState.transcribing);
     await _transcribeAudio(recordedFile, _recSeconds);
   }
 
   Future<void> _cancelRecording() async {
-    if (_state != _RecordState.recording) return;
     _timer?.cancel();
-    await _recorder.stop();
+    try {
+      if (await _recorder.isRecording()) {
+        await _recorder.stop();
+      }
+    } catch (_) {
+      try {
+        await _recorder.stop();
+      } catch (_) {}
+    }
 
     if (_currentAudioFile != null) {
       await TranscriptionService.deleteTemporaryAudio(_currentAudioFile);
       _currentAudioFile = null;
     }
 
-    setState(() {
-      _state = _RecordState.idle;
+    if (_state == _RecordState.recording && mounted) {
+      setState(() {
+        _state = _RecordState.idle;
+        _recSeconds = 0;
+      });
+    } else {
       _recSeconds = 0;
-    });
+    }
   }
 
   // ── Groq Whisper Transcription ─────────────────────────────────────────────
 
   Future<void> _transcribeAudio(File audio, int duration) async {
     final seq = ++_transcriptionSeq;
+    debugPrint(
+        '[Voice] transcribe start seq=$seq lang=$_selectedLanguage duration=${duration}s');
     try {
       final result = await TranscriptionService.transcribe(
         audioFile: audio,
@@ -243,6 +290,9 @@ class _VoiceScreenState extends State<VoiceScreen>
         languageHint: _selectedLanguage,
         provider: kDefaultSttProvider,
       );
+      debugPrint(
+          '[Voice] transcribe done seq=$seq provider=${result.provider} '
+          'chars=${result.transcript.length} text="${result.transcript.length > 120 ? '${result.transcript.substring(0, 120)}…' : result.transcript}"');
 
       if (!mounted || seq != _transcriptionSeq) {
         // A newer recording superseded this one — discard the stale result
@@ -274,7 +324,9 @@ class _VoiceScreenState extends State<VoiceScreen>
         );
         _uncertainty = result.uncertainty;
         _state = _RecordState.hasTranscript;
-        _errorMessage = null;
+        // Server-side clarity warning (e.g. mic noise transcribed as a foreign
+        // language): show it prominently instead of silently accepting garbage.
+        _errorMessage = result.uncertainty.reason;
       });
 
       // Overwrite the saved draft with THIS sample (not via listener ordering).
@@ -452,14 +504,22 @@ class _VoiceScreenState extends State<VoiceScreen>
     }
   }
 
-  void _reRecord() {
+  void _reRecord() async {
     // Invalidate any in-flight transcription so a late response can't
     // repopulate the field right after the user cleared it.
     _transcriptionSeq++;
-    _cancelRecording();
+    await _cancelRecording();
     _transcriptCtrl.clear();
-    TranscriptDraftRepository.clearDraft(widget.trade);
-    setState(() => _state = _RecordState.idle);
+    await TranscriptDraftRepository.clearDraft(widget.trade);
+    if (!mounted) return;
+    setState(() {
+      _state = _RecordState.idle;
+      _errorMessage = null;
+    });
+    // Start recording immediately: previously Re-record only cleared the field
+    // and went idle, so speaking right after did nothing — the mic was never
+    // open. That is the "re-record doesn't pick up my voice" bug.
+    await _startRecording();
   }
 
   void _showError(String msg) {
@@ -484,6 +544,7 @@ class _VoiceScreenState extends State<VoiceScreen>
     );
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -507,6 +568,36 @@ class _VoiceScreenState extends State<VoiceScreen>
           const SizedBox(width: 8),
         ],
       ),
+      // Keep the Create-Quote CTA above the keyboard instead of inside the
+      // body Column: previously the editor (Expanded) + buttons + keyboard
+      // exceeded the viewport by ~31px (RenderFlex bottom overflow).
+      bottomNavigationBar: _state == _RecordState.hasTranscript
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    kPagePadding, 8, kPagePadding, kPagePadding),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _createQuote,
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                      label:
+                          const Text('Create Quote / कोटेशन बनाएं'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _createManually,
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: const Text(
+                          'Type quote instead / लिखकर बनाएं'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(kPagePadding),
@@ -528,7 +619,11 @@ class _VoiceScreenState extends State<VoiceScreen>
                   onRetry: _state == _RecordState.idle
                       ? _startRecording
                       : (_state == _RecordState.hasTranscript
-                          ? _createQuote
+                          // Low-clarity transcript (mic warning): retry means
+                          // re-record, not extraction of garbage text.
+                          ? (_uncertainty.reason != null
+                              ? _reRecord
+                              : _createQuote)
                           : null),
                   onManual: _createManually,
                 ),
@@ -536,14 +631,17 @@ class _VoiceScreenState extends State<VoiceScreen>
               const SizedBox(height: 12),
 
               // ── Central area (state-dependent) ──────────────────────────
-              Expanded(
+              // Flexible (not Expanded) + scrollable idle content so the
+              // keyboard can shrink this area without overflowing.
+              Flexible(
                 child: _state == _RecordState.hasTranscript
                     ? _TranscriptEditor(
                         ctrl: _transcriptCtrl,
                         uncertainty: _uncertainty,
                         onReRecord: _reRecord,
                       )
-                    : Column(
+                    : SingleChildScrollView(
+                        child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (_state != _RecordState.extracting) ...[
@@ -589,23 +687,13 @@ class _VoiceScreenState extends State<VoiceScreen>
                             ..._extractingHint(tt, cs),
                         ],
                       ),
+                      ),
+
               ),
 
               // ── Bottom actions ──────────────────────────────────────────
-              if (_state == _RecordState.hasTranscript) ...[
-                ElevatedButton.icon(
-                  onPressed: _createQuote,
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('Create Quote / कोटेशन बनाएं'),
-                ),
+              if (_state == _RecordState.hasTranscript)
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _createManually,
-                  icon: const Icon(Icons.edit_note_rounded),
-                  label: const Text('Type quote instead / लिखकर बनाएं'),
-                ),
-                const SizedBox(height: 12),
-              ],
 
               // Recording controls (Cancel during recording)
               if (_state == _RecordState.recording) ...[
@@ -878,13 +966,22 @@ class _TranscriptEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    // Hide the helper hint while the keyboard is open to save ~30px and
+    // avoid the RenderFlex bottom overflow seen with ime visible.
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Text('Transcript / प्रतिलेख', style: tt.titleMedium),
+            Flexible(
+              child: Text(
+                'Transcript / प्रतिलेख',
+                style: tt.titleMedium,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(width: 8),
             if (uncertainty.isUncertain)
               Container(
@@ -940,12 +1037,14 @@ class _TranscriptEditor extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Text(
-          'You can correct any mistakes before creating the quote. Draft is auto-saved.',
-          style: tt.bodySmall,
-          textAlign: TextAlign.center,
-        ),
+        if (!keyboardOpen) ...[
+          const SizedBox(height: 10),
+          Text(
+            'You can correct any mistakes before creating the quote. Draft is auto-saved.',
+            style: tt.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ],
       ],
     );
   }

@@ -145,13 +145,44 @@ public class TranscriptionController {
             SttResult result = sttService.transcribe(audioBytes, originalFilename, language, provider);
 
             String transcriptText = result.transcript() != null ? result.transcript() : "";
-            boolean isUncertain = transcriptText.isBlank() || transcriptText.contains("?");
-            Map<String, Object> uncertaintyMetadata = Map.of(
+            // Hallucination guard: Whisper maps unintelligible mic noise to fluent
+            // text in an unrelated language (observed: Icelandic) instead of
+            // failing. Surface that as a mic/clarity warning, never as the
+            // contractor's words.
+            String detected = result.detectedLanguage();
+            double confidence = result.confidence();
+            boolean langMismatch = detected != null
+                && !Set.of("en", "hi", "mr").contains(detected);
+            boolean lowConfidence = confidence < 0.5;
+            boolean isUncertain = transcriptText.isBlank()
+                || transcriptText.contains("?")
+                || langMismatch
+                || lowConfidence;
+            String reason = null;
+            if (langMismatch) {
+                reason = "We couldn't hear you clearly (heard something like '"
+                    + detected + "' instead of Hindi/Marathi/English). "
+                    + "Check the device microphone, speak closer and louder, then re-record.";
+            } else if (lowConfidence) {
+                reason = "We couldn't hear you clearly (low audio clarity). "
+                    + "Check the device microphone, move to a quieter spot and re-record.";
+            }
+            if (reason != null) {
+                log.warn("STT low-quality transcript for user={}: detectedLanguage={}, confidence={}, audioBytes={}",
+                    userId, detected, String.format("%.3f", confidence), audioBytes.length);
+            }
+            java.util.Map<String, Object> uncertaintyMetadata = new java.util.HashMap<>(Map.of(
                 "isUncertain", isUncertain,
-                "confidence", isUncertain ? 0.65 : 0.95,
+                "confidence", isUncertain ? Math.min(0.65, confidence) : 0.95,
                 "provider", result.provider(),
                 "requiresReview", true
-            );
+            ));
+            if (reason != null) {
+                uncertaintyMetadata.put("reason", reason);
+            }
+            if (detected != null) {
+                uncertaintyMetadata.put("detectedLanguage", detected);
+            }
 
             return ResponseEntity.ok(Map.of(
                 "transcript", transcriptText,

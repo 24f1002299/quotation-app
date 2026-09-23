@@ -7,11 +7,20 @@ class UncertaintyMetadata {
   final String provider;
   final bool requiresReview;
 
+  /// Human-readable clarity warning from the server (e.g. mic couldn't be
+  /// heard, wrong language detected). Null when the transcript looks fine.
+  final String? reason;
+
+  /// ISO language code auto-detected by the STT provider, if reported.
+  final String? detectedLanguage;
+
   const UncertaintyMetadata({
     this.isUncertain = false,
     this.confidence = 1.0,
     this.provider = 'grok',
     this.requiresReview = true,
+    this.reason,
+    this.detectedLanguage,
   });
 
   factory UncertaintyMetadata.fromJson(Map<String, dynamic>? json) {
@@ -23,6 +32,8 @@ class UncertaintyMetadata {
       confidence: (json['confidence'] as num?)?.toDouble() ?? 1.0,
       provider: json['provider'] as String? ?? 'grok',
       requiresReview: json['requiresReview'] as bool? ?? true,
+      reason: json['reason'] as String?,
+      detectedLanguage: json['detectedLanguage'] as String?,
     );
   }
 
@@ -31,6 +42,8 @@ class UncertaintyMetadata {
         'confidence': confidence,
         'provider': provider,
         'requiresReview': requiresReview,
+        if (reason != null) 'reason': reason,
+        if (detectedLanguage != null) 'detectedLanguage': detectedLanguage,
       };
 }
 

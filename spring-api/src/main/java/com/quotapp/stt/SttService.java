@@ -97,8 +97,7 @@ public class SttService {
             byte[] audioBytes,
             String originalFilename,
             String languageHint,
-            String requestedProvider) {
-        String provider = StringUtils.hasText(requestedProvider)
+            String requestedProvider) {        String provider = StringUtils.hasText(requestedProvider)
                 ? requestedProvider.trim().toLowerCase()
                 : defaultProvider;
 
@@ -115,9 +114,14 @@ public class SttService {
         long start = System.currentTimeMillis();
 
         String transcript;
+        String detectedLanguage = null;
+        double confidence = 0.9;
         try {
             if ("whisper".equals(provider)) {
-                transcript = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                VerboseParse parsed = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                transcript = parsed.text();
+                detectedLanguage = parsed.language();
+                confidence = parsed.confidence();
             } else if ("grok".equals(provider) || "xai".equals(provider)) {
                 // Explicit Grok request but no Groq alternative confusion:
                 // if no XAI key is configured, route straight to Groq Whisper
@@ -125,7 +129,10 @@ public class SttService {
                 if (!StringUtils.hasText(xaiApiKey) && StringUtils.hasText(openaiApiKey)) {
                     log.warn("Grok requested but XAI_API_KEY is empty; using Groq Whisper instead");
                     provider = "whisper-fallback";
-                    transcript = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                    VerboseParse fallback = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                    transcript = fallback.text();
+                    detectedLanguage = fallback.language();
+                    confidence = fallback.confidence();
                 } else {
                     // Default to Grok STT
                     provider = "grok";
@@ -137,7 +144,10 @@ public class SttService {
                         // retry with Whisper instead of surfacing a raw provider error.
                         if (StringUtils.hasText(openaiApiKey)) {
                             log.warn("Grok STT failed ({}), falling back to whisper", grokEx.getMessage());
-                            transcript = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                            VerboseParse fallback = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                            transcript = fallback.text();
+                            detectedLanguage = fallback.language();
+                            confidence = fallback.confidence();
                             provider = "whisper-fallback";
                         } else {
                             throw grokEx;
@@ -148,7 +158,10 @@ public class SttService {
                 // Unknown provider string: default to Groq Whisper (this project uses Groq).
                 log.warn("Unknown STT provider '{}', defaulting to whisper (Groq)", provider);
                 provider = "whisper";
-                transcript = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                VerboseParse fallback = callOpenAiWhisper(audioBytes, safeFilename, languageHint);
+                transcript = fallback.text();
+                detectedLanguage = fallback.language();
+                confidence = fallback.confidence();
             }
         } catch (Exception ex) {
             boolean isDev = activeProfile != null && activeProfile.toLowerCase().contains("dev");
@@ -181,13 +194,23 @@ public class SttService {
         long latencyMs = System.currentTimeMillis() - start;
         log.info("STT completed: provider={}, audioBytes={}, latencyMs={}, languageHint={}",
                 provider, audioBytes.length, latencyMs, languageHint);
+        // Dev-only transcript preview so a wrong/empty transcript can be diagnosed
+        // without dumping full audio. Never log API keys here.
+        if (transcript != null && !transcript.isBlank()) {
+            String preview = transcript.length() > 160 ? transcript.substring(0, 160) + "…" : transcript;
+            log.info("STT transcript preview ({} chars): {}", transcript.length(), preview);
+        } else {
+            log.warn("STT returned empty transcript for provider={}, audioBytes={}", provider, audioBytes.length);
+        }
 
         return new SttResult(
                 transcript,
                 provider,
                 languageHint,
                 latencyMs,
-                audioBytes.length);
+                audioBytes.length,
+                detectedLanguage,
+                confidence);
     }
 
     private String getDevFallbackTranscript(String languageHint) {
@@ -269,8 +292,15 @@ public class SttService {
      * Calls Whisper-compatible STT API (Groq in this project:
      * https://api.groq.com/openai/v1/audio/transcriptions with
      * model whisper-large-v3-turbo; OpenAI-compatible shape).
+     *
+     * <p>Requests {@code verbose_json} so we get the provider-detected language
+     * plus per-segment {@code no_speech_prob}/{@code avg_logprob}. Those let us
+     * distinguish "contractor spoke Hindi, transcribed with low accuracy" from
+     * "mic captured unintelligible noise and Whisper hallucinated fluent text
+     * in an unrelated language (e.g. Icelandic)" — the latter must surface as
+     * a mic/clarity warning, never as the contractor's words.
      */
-    private String callOpenAiWhisper(byte[] audioBytes, String filename, String languageHint) {
+    private VerboseParse callOpenAiWhisper(byte[] audioBytes, String filename, String languageHint) {
         if (isPlaceholderKey(openaiApiKey)) {
             throw new IllegalStateException(
                     "OPENAI_API_KEY is missing or unconfigured in spring-api/.env. " +
@@ -281,6 +311,8 @@ public class SttService {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("model", openaiModel);
         body.add("prompt", ContractorCatalogTerms.asPromptString(languageHint));
+        body.add("response_format", "verbose_json");
+        body.add("temperature", "0");
 
         String normalizedLang = normalizeLanguageHint(languageHint);
         if (normalizedLang != null) {
@@ -291,19 +323,46 @@ public class SttService {
         body.add("file", fileResource);
 
         try {
-            String rawResponse = restClient.post()
-                    .uri(openaiSttUrl)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + openaiApiKey)
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(body)
-                    .retrieve()
-                    .body(String.class);
-
-            return parseTranscriptFromResponse(rawResponse);
+            String rawResponse = postTranscription(body);
+            return parseVerboseTranscript(rawResponse);
         } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            String lower = msg.toLowerCase();
+            // Provider doesn't accept verbose_json/temperature (model or proxy
+            // difference)? Retry once with the plain OpenAI shape so a param
+            // incompatibility never takes transcription fully offline.
+            if (lower.contains("response_format") || lower.contains("verbose_json")
+                    || lower.contains("temperature")) {
+                log.warn("Verbose STT params rejected ({}), retrying with plain json", msg);
+                try {
+                    MultiValueMap<String, Object> plainBody = new LinkedMultiValueMap<>();
+                    plainBody.add("model", openaiModel);
+                    plainBody.add("prompt", ContractorCatalogTerms.asPromptString(languageHint));
+                    if (normalizedLang != null) {
+                        plainBody.add("language", normalizedLang);
+                    }
+                    plainBody.add("file", new NamedByteArrayResource(audioBytes, filename));
+                    String rawResponse = postTranscription(plainBody);
+                    String text = parseTranscriptFromResponse(rawResponse);
+                    return new VerboseParse(text, null, 0.9);
+                } catch (Exception retryEx) {
+                    log.error("OpenAI Whisper API call failed: {}", retryEx.getMessage());
+                    throw new RuntimeException("OpenAI Whisper transcription failed: " + retryEx.getMessage(), retryEx);
+                }
+            }
             log.error("OpenAI Whisper API call failed: {}", e.getMessage());
             throw new RuntimeException("OpenAI Whisper transcription failed: " + e.getMessage(), e);
         }
+    }
+
+    private String postTranscription(MultiValueMap<String, Object> body) {
+        return restClient.post()
+                .uri(openaiSttUrl)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + openaiApiKey)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(body)
+                .retrieve()
+                .body(String.class);
     }
 
     /**
@@ -330,17 +389,84 @@ public class SttService {
     }
 
     /**
+     * Parses a verbose_json transcription response into text, detected language
+     * (normalized to ISO code) and a 0.0-1.0 speech confidence. Falls back to
+     * plain text parsing when the provider returns simple json.
+     */
+    private VerboseParse parseVerboseTranscript(String rawResponse) {
+        String text = parseTranscriptFromResponse(rawResponse);
+        if (!StringUtils.hasText(rawResponse)) {
+            return new VerboseParse(text, null, 0.0);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(rawResponse);
+            String detected = null;
+            if (root.has("language")) {
+                detected = normalizeDetectedLanguage(root.get("language").asText());
+            }
+            double confidence = 0.9;
+            JsonNode segments = root.get("segments");
+            if (segments != null && segments.isArray() && !segments.isEmpty()) {
+                double noSpeechSum = 0.0;
+                double logprobSum = 0.0;
+                int n = 0;
+                for (JsonNode seg : segments) {
+                    double noSpeech = seg.has("no_speech_prob") ? seg.get("no_speech_prob").asDouble(0.0) : 0.0;
+                    double avgLogprob = seg.has("avg_logprob") ? seg.get("avg_logprob").asDouble(-0.3) : -0.3;
+                    noSpeechSum += Math.min(1.0, Math.max(0.0, noSpeech));
+                    // avg_logprob is <= 0 (0 = perfect). Clamp pathological values.
+                    logprobSum += Math.min(0.0, Math.max(-5.0, avgLogprob));
+                    n++;
+                }
+                double avgNoSpeech = noSpeechSum / n;
+                double avgLogprob = logprobSum / n;
+                confidence = (1.0 - avgNoSpeech) * 0.7 + Math.exp(avgLogprob) * 0.3;
+                confidence = Math.min(1.0, Math.max(0.0, confidence));
+                log.info("STT quality: detectedLanguage={}, segments={}, avgNoSpeechProb={}, avgLogprob={}, confidence={}",
+                        detected, n, String.format("%.3f", avgNoSpeech), String.format("%.3f", avgLogprob), String.format("%.3f", confidence));
+            }
+            return new VerboseParse(text, detected, confidence);
+        } catch (Exception e) {
+            log.warn("Failed to parse verbose_json, using plain text: {}", e.getMessage());
+            return new VerboseParse(text, null, 0.9);
+        }
+    }
+
+    /**
+     * Normalizes provider-detected language labels to ISO codes. Groq/OpenAI
+     * verbose_json returns full English names ("english", "hindi", "marathi",
+     * "icelandic"); explicit codes pass through untouched.
+     */
+    private String normalizeDetectedLanguage(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String lang = raw.trim().toLowerCase();
+        return switch (lang) {
+            case "english" -> "en";
+            case "hindi" -> "hi";
+            case "marathi" -> "mr";
+            default -> lang.length() > 2 ? lang : lang;
+        };
+    }
+
+    /** Parsed verbose_json transcription: text, detected ISO language, confidence. */
+    record VerboseParse(String text, String language, double confidence) {}
+
+    /**
      * Normalizes UI language hints to provider codes.
-     * In Auto / Hinglish mode, returns 'en' so Whisper transcribes mixed speech
-     * in Roman script (Hinglish) rather than native Devanagari script.
+     * In Auto / Hinglish mode, returns null so the provider auto-detects the
+     * language instead of being locked to English. Locking auto speech to 'en'
+     * mistranscribes Hindi/Marathi-dominant audio and makes every re-record
+     * look "wrong". Explicit hi/mr/en codes are passed through untouched.
      */
     private String normalizeLanguageHint(String languageHint) {
         if (!StringUtils.hasText(languageHint)) {
-            return "en";
+            return null;
         }
         String lang = languageHint.trim().toLowerCase();
         if (lang.equals("auto") || lang.equals("und") || lang.equals("default") || lang.equals("hinglish")) {
-            return "en";
+            return null;
         }
         return lang;
     }

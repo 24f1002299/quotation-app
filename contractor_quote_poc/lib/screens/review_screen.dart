@@ -281,10 +281,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 0,
         title: Row(
           children: [
-            const Text('Review Quote / जाँचें'),
-            if (tradeBadge != null) ...[const SizedBox(width: 10), tradeBadge],
+            const Flexible(
+              child: Text(
+                'Review Quote',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (tradeBadge != null) ...[
+              const SizedBox(width: 8),
+              Flexible(child: tradeBadge),
+            ],
           ],
         ),
         actions: [
