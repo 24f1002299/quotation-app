@@ -104,7 +104,7 @@ ThemeData buildAppTheme() {
       style: ElevatedButton.styleFrom(
         backgroundColor: _kSaffron,
         foregroundColor: _kBackground,
-        minimumSize: const Size.fromHeight(kButtonHeight),
+        minimumSize: const Size(64, kButtonHeight),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kButtonRadius)),
         textStyle: const TextStyle(
@@ -118,7 +118,7 @@ ThemeData buildAppTheme() {
       style: OutlinedButton.styleFrom(
         foregroundColor: _kSaffron,
         side: const BorderSide(color: _kSaffron, width: 1.5),
-        minimumSize: const Size.fromHeight(kButtonHeight),
+        minimumSize: const Size(64, kButtonHeight),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kButtonRadius)),
         textStyle: const TextStyle(

@@ -78,6 +78,9 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
         jwtProcessor.setJWSKeySelector(keySelector);
     }
 
+    @Value("${spring.profiles.active:}")
+    private String activeProfile;
+
     @Override
     protected void doFilterInternal(
         @NonNull HttpServletRequest request,
@@ -88,12 +91,21 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            if (isDevProfile()) {
+                authenticateDev(request, response, filterChain);
+                return;
+            }
             // No token — let SecurityConfig decide whether the path requires auth.
             filterChain.doFilter(request, response);
             return;
         }
 
         String token = authHeader.substring(7);
+
+        if (isDevProfile() && (token.startsWith("dev-") || token.equals("mock-token"))) {
+            authenticateDev(request, response, filterChain);
+            return;
+        }
 
         try {
             JWTClaimsSet claims = jwtProcessor.process(token, null);
@@ -126,6 +138,31 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
             sendUnauthorized(response, "Invalid or expired token");
         } finally {
             // Always clear the thread-local to prevent leaking across requests.
+            UserContext.clear();
+        }
+    }
+
+    private boolean isDevProfile() {
+        return activeProfile != null && activeProfile.toLowerCase().contains("dev");
+    }
+
+    private void authenticateDev(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        FilterChain filterChain
+    ) throws ServletException, IOException {
+        String devUserId = "00000000-0000-0000-0000-000000000001";
+        UserContext.set(devUserId);
+        UsernamePasswordAuthenticationToken auth =
+            new UsernamePasswordAuthenticationToken(
+                devUserId,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+            );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
             UserContext.clear();
         }
     }

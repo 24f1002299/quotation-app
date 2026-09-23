@@ -180,6 +180,7 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   Future<void> _stopRecording() async {
+    if (_state != _RecordState.recording) return;
     _timer?.cancel();
     final path = await _recorder.stop();
 
@@ -197,6 +198,7 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   Future<void> _cancelRecording() async {
+    if (_state != _RecordState.recording) return;
     _timer?.cancel();
     await _recorder.stop();
 
@@ -244,9 +246,19 @@ class _VoiceScreenState extends State<VoiceScreen>
       await TranscriptionService.deleteTemporaryAudio(audio);
       _currentAudioFile = null;
 
-      final msg = e is SocketException
-          ? 'Transcription needs internet connection. Your draft is safe.'
-          : 'We could not turn this recording into text. Your draft is safe.';
+      String msg;
+      final errStr = e.toString();
+      if (e is SocketException ||
+          errStr.contains('Connection refused') ||
+          errStr.contains('Failed host lookup') ||
+          errStr.contains('ClientException')) {
+        msg = 'Cannot connect to backend server ($kApiBaseUrl).\n'
+            'Start the Spring Boot API (cd spring-api; .\\run-dev.ps1) or use "Use Demo" below to test.';
+      } else if (e is HttpException) {
+        msg = e.message;
+      } else {
+        msg = 'Could not transcribe recording: $e. Your draft is safe.';
+      }
 
       setState(() {
         _errorMessage = msg;
@@ -910,6 +922,7 @@ class _PermissionRecoveryBanner extends StatelessWidget {
                 onPressed: onAllow,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: cs.primary,
+                  minimumSize: const Size(0, 36),
                   visualDensity: VisualDensity.compact,
                 ),
                 child: const Text('Allow microphone'),
@@ -979,6 +992,10 @@ class _ErrorBanner extends StatelessWidget {
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: onRetry,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     child: const Text('Try again'),
                   ),
                 ],

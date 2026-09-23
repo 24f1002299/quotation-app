@@ -232,6 +232,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 OutlinedButton(
                   onPressed: _uploadLogo,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 38),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
                   child: Text(_logoPath != null ? 'Change' : 'Upload'),
                 ),
               ],

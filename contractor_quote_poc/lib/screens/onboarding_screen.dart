@@ -337,6 +337,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   OutlinedButton(
                     onPressed: _simulateLogoUpload,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 38),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
                     child: Text(_logoPath != null ? 'Change' : 'Upload'),
                   ),
                 ],
