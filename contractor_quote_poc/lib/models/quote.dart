@@ -11,12 +11,24 @@ class QuoteLineItem {
   final int quantity;
   final String unit;
   final int unitRatePaise;
+  final double? confidence;
+  final String? uncertaintyNote;
+  final String? sourceSpan;
+  final bool isUnknown;
+  final bool requiresReview;
+  final bool acknowledged;
 
   const QuoteLineItem({
     required this.description,
     required this.quantity,
     required this.unit,
     required this.unitRatePaise,
+    this.confidence,
+    this.uncertaintyNote,
+    this.sourceSpan,
+    this.isUnknown = false,
+    this.requiresReview = false,
+    this.acknowledged = false,
   }) : assert(quantity >= 0),
        assert(unitRatePaise >= 0);
 }
@@ -26,14 +38,19 @@ class Quote {
   final List<QuoteLineItem> lineItems;
   final int? gstPercent;
   final String? originalTranscript;
+  final List<String> reviewWarnings;
+  final bool reviewWarningsAcknowledged;
 
   Quote({
     required this.customer,
     required List<QuoteLineItem> lineItems,
     this.gstPercent,
     this.originalTranscript,
+    List<String> reviewWarnings = const [],
+    this.reviewWarningsAcknowledged = false,
   }) : assert(gstPercent == null || (gstPercent >= 0 && gstPercent <= 100)),
-       lineItems = List.unmodifiable(lineItems);
+       lineItems = List.unmodifiable(lineItems),
+       reviewWarnings = List.unmodifiable(reviewWarnings);
 }
 
 class QuoteTotals {
@@ -71,4 +88,39 @@ QuoteTotals calculateTotals(Quote quote) {
     gstPaise: gstPaise,
     grandTotalPaise: subtotalPaise + gstPaise,
   );
+}
+
+String? quotePdfBlockingReason(Quote quote) {
+  if (quote.lineItems.isEmpty) {
+    return 'Add at least one line item before creating the PDF.';
+  }
+
+  for (var index = 0; index < quote.lineItems.length; index++) {
+    final item = quote.lineItems[index];
+    final label = item.description.trim().isEmpty
+        ? 'item ${index + 1}'
+        : item.description.trim();
+
+    if (item.description.trim().isEmpty) {
+      return 'Enter an item name for item ${index + 1} before creating the PDF.';
+    }
+    if (item.quantity <= 0) {
+      return 'Enter a quantity greater than 0 for "$label" before creating the PDF.';
+    }
+    if (item.unit.trim().isEmpty) {
+      return 'Enter a unit for "$label" before creating the PDF.';
+    }
+    if (item.unitRatePaise <= 0) {
+      return 'Enter a rate greater than 0 for "$label" before creating the PDF.';
+    }
+    if (item.requiresReview && !item.acknowledged) {
+      return 'Please check "$label" or mark it as checked before creating the PDF.';
+    }
+  }
+
+  if (quote.reviewWarnings.isNotEmpty && !quote.reviewWarningsAcknowledged) {
+    return 'Acknowledge the review message before creating the PDF.';
+  }
+
+  return null;
 }

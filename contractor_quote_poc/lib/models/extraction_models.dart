@@ -34,6 +34,14 @@ class ExtractedItem {
       quantity: quantity.round(),
       unit: unit,
       unitRatePaise: unitRatePaise,
+      confidence: confidence,
+      uncertaintyNote: uncertaintyNote,
+      sourceSpan: sourceSpan,
+      requiresReview:
+          confidence < 0.8 ||
+          unitRatePaise <= 0 ||
+          rateSource == ExtractedRateSource.suggested ||
+          uncertaintyNote != null,
     );
   }
 
@@ -72,8 +80,8 @@ class ExtractedItem {
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.9,
       sourceSpan: json['sourceSpan'] != null
           ? (json['sourceSpan'] is Map
-              ? json['sourceSpan']['text'] as String?
-              : json['sourceSpan'].toString())
+                ? json['sourceSpan']['text'] as String?
+                : json['sourceSpan'].toString())
           : null,
       uncertaintyNote: json['uncertaintyNote'] as String?,
     );
@@ -96,10 +104,29 @@ class ExplicitUnknown {
 
   factory ExplicitUnknown.fromJson(Map<String, dynamic> json) {
     return ExplicitUnknown(
-      text: json['text'] as String? ?? json['sourceSpan'] as String? ?? 'Unknown work',
+      text:
+          json['text'] as String? ??
+          json['sourceSpan'] as String? ??
+          'Unknown work',
       suspectedTerm: json['suspectedTerm'] as String?,
-      reason: json['reason'] as String? ?? 'Item not recognized in trade catalog',
+      reason:
+          json['reason'] as String? ?? 'Item not recognized in trade catalog',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.5,
+    );
+  }
+
+  QuoteLineItem toQuoteLineItem() {
+    return QuoteLineItem(
+      description: suspectedTerm?.trim().isNotEmpty == true
+          ? suspectedTerm!.trim()
+          : text,
+      quantity: 0,
+      unit: 'item',
+      unitRatePaise: 0,
+      confidence: confidence,
+      uncertaintyNote: reason,
+      isUnknown: true,
+      requiresReview: true,
     );
   }
 }

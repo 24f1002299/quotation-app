@@ -18,17 +18,29 @@ class _EditableItem {
   TextEditingController description;
   TextEditingController quantity;
   TextEditingController unit;
-  TextEditingController rate; // in whole rupees (not paise) for UX clarity
+  TextEditingController rate;
+  final double? confidence;
+  final String? uncertaintyNote;
+  final String? sourceSpan;
+  final bool isUnknown;
+  bool requiresReview;
+  bool acknowledged;
 
   _EditableItem({
     String description = '',
     String quantity = '',
     String unit = 'sq ft',
     String rate = '',
-  })  : description = TextEditingController(text: description),
-        quantity = TextEditingController(text: quantity),
-        unit = TextEditingController(text: unit),
-        rate = TextEditingController(text: rate);
+    this.confidence,
+    this.uncertaintyNote,
+    this.sourceSpan,
+    this.isUnknown = false,
+    this.requiresReview = false,
+    this.acknowledged = false,
+  }) : description = TextEditingController(text: description),
+       quantity = TextEditingController(text: quantity),
+       unit = TextEditingController(text: unit),
+       rate = TextEditingController(text: rate);
 
   void dispose() {
     description.dispose();
@@ -37,25 +49,43 @@ class _EditableItem {
     rate.dispose();
   }
 
-  /// Returns whole-rupee amount, or 0 if either field is empty/invalid.
-  int get amountRupees {
-    final q = int.tryParse(quantity.text.trim()) ?? 0;
-    final r = int.tryParse(rate.text.trim()) ?? 0;
-    return q * r;
+  bool get hasValidEssentials {
+    final parsedQuantity = int.tryParse(quantity.text.trim()) ?? 0;
+    final parsedRate = int.tryParse(rate.text.trim()) ?? 0;
+    return description.text.trim().isNotEmpty &&
+        parsedQuantity > 0 &&
+        unit.text.trim().isNotEmpty &&
+        parsedRate > 0;
   }
 
-  /// Returns paise amount (amount × 100).
-  int get amountPaise => amountRupees * 100;
+  _EditableItem copy() {
+    return _EditableItem(
+      description: description.text,
+      quantity: quantity.text,
+      unit: unit.text,
+      rate: rate.text,
+      confidence: confidence,
+      uncertaintyNote: uncertaintyNote,
+      sourceSpan: sourceSpan,
+      isUnknown: isUnknown,
+      requiresReview: requiresReview,
+      acknowledged: acknowledged,
+    );
+  }
 
   QuoteLineItem toLineItem() => QuoteLineItem(
-        description: description.text.trim().isEmpty
-            ? 'Unnamed item'
-            : description.text.trim(),
-        quantity: int.tryParse(quantity.text.trim()) ?? 0,
-        unit: unit.text.trim().isEmpty ? 'unit' : unit.text.trim(),
-        // rate field is in rupees, model stores paise
-        unitRatePaise: (int.tryParse(rate.text.trim()) ?? 0) * 100,
-      );
+    description: description.text.trim(),
+    quantity: int.tryParse(quantity.text.trim()) ?? 0,
+    unit: unit.text.trim(),
+
+    unitRatePaise: (int.tryParse(rate.text.trim()) ?? 0) * 100,
+    confidence: confidence,
+    uncertaintyNote: uncertaintyNote,
+    sourceSpan: sourceSpan,
+    isUnknown: isUnknown,
+    requiresReview: requiresReview,
+    acknowledged: acknowledged,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +109,8 @@ class ReviewScreen extends StatefulWidget {
   /// Warnings emitted by the deterministic parser (Day 7).
   final List<String>? parsingWarnings;
 
+  final bool parsingWarningsAcknowledged;
+
   /// Identifier of an existing saved quote when reopened from History (Day 9).
   final String? savedQuoteId;
 
@@ -100,6 +132,7 @@ class ReviewScreen extends StatefulWidget {
     this.trade,
     this.originalTranscript,
     this.parsingWarnings,
+    this.parsingWarningsAcknowledged = false,
     this.savedQuoteId,
     this.customerName,
     this.customerPhone,
@@ -125,12 +158,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   // ── Voice & Parser state (Day 7) ───────────────────────────────────────────
   late final List<String> _warnings;
+  bool _warningsAcknowledged = false;
   bool _transcriptExpanded = true;
 
   @override
   void initState() {
     super.initState();
     _warnings = List<String>.from(widget.parsingWarnings ?? const []);
+    _warningsAcknowledged = widget.parsingWarningsAcknowledged;
 
     if (widget.customerName != null) {
       _customerNameCtrl.text = widget.customerName!;
@@ -145,7 +180,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _validityDays = widget.validityDays!;
     }
 
-    final seed = widget.initialLineItems ??
+    final seed =
+        widget.initialLineItems ??
         const [
           QuoteLineItem(
             description: 'Tile Labour / टाइल मजदूरी',
@@ -169,9 +205,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
             unit: li.unit,
             // convert paise → rupees for display
             rate: (li.unitRatePaise ~/ 100).toString(),
+            confidence: li.confidence,
+            uncertaintyNote: li.uncertaintyNote,
+            sourceSpan: li.sourceSpan,
+            isUnknown: li.isUnknown,
+            requiresReview: li.requiresReview,
+            acknowledged: li.acknowledged,
           ),
         )
         .toList();
+    for (final item in _items) {
+      _attachListeners(item);
+    }
   }
 
   @override
@@ -186,63 +231,146 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   // ── Totals (computed from current controllers) ─────────────────────────────
-  int get _subtotalPaise =>
-      _items.fold(0, (sum, item) => sum + item.amountPaise);
+  QuoteTotals get _totals => calculateTotals(buildQuote());
+
+  int get _grandTotalPaise => _totals.grandTotalPaise;
+
+  int get _attentionCount =>
+      _items.where((item) => item.requiresReview && !item.acknowledged).length;
 
   // ── Mutations ──────────────────────────────────────────────────────────────
-  void _deleteItem(int index) {
+  Future<void> _deleteItem(int index) async {
+    if (index < 0 || index >= _items.length) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete item / मद हटाएं?'),
+        content: Text(
+          'Remove "${_items[index].description.text.trim().isEmpty ? 'this item' : _items[index].description.text.trim()}" from the quote?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel / रद्द करें'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete / हटाएं'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     setState(() {
-      _items[index].dispose();
-      _items.removeAt(index);
+      _items.removeAt(index).dispose();
     });
   }
 
   void _addItem(_EditableItem item) {
+    _attachListeners(item);
     setState(() => _items.add(item));
   }
 
-  /// Called from each controller's listener to refresh totals.
-  void _onFieldChanged() => setState(() {});
+  void _onFieldChanged(_EditableItem item) {
+    if (item.requiresReview &&
+        !item.acknowledged &&
+        item.hasValidEssentials) {
+      item.acknowledged = true;
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _acknowledgeItem(_EditableItem item) {
+    setState(() => item.acknowledged = true);
+  }
+
+  void _acknowledgeWarnings() {
+    setState(() {
+      _warningsAcknowledged = true;
+      _warnings.clear();
+    });
+  }
 
   void _attachListeners(_EditableItem item) {
-    item.quantity.addListener(_onFieldChanged);
-    item.rate.addListener(_onFieldChanged);
+    void listener() => _onFieldChanged(item);
+    item.description.addListener(listener);
+    item.quantity.addListener(listener);
+    item.unit.addListener(listener);
+    item.rate.addListener(listener);
+  }
+
+  void _moveItem(int index, int offset) {
+    final target = index + offset;
+    if (target < 0 || target >= _items.length) return;
+    setState(() {
+      final item = _items.removeAt(index);
+      _items.insert(target, item);
+    });
+  }
+
+  void _duplicateItem(int index) {
+    if (index < 0 || index >= _items.length) return;
+    final duplicate = _items[index].copy();
+    if (duplicate.requiresReview) {
+      duplicate.acknowledged = false;
+    }
+    _addItemAt(index + 1, duplicate);
+  }
+
+  void _addItemAt(int index, _EditableItem item) {
+    _attachListeners(item);
+    setState(() => _items.insert(index, item));
   }
 
   /// Builds an immutable [Quote] representation of the current screen state.
   Quote buildQuote() => Quote(
-        customer: Customer(
-          name: _customerNameCtrl.text.trim().isEmpty
-              ? 'Client'
-              : _customerNameCtrl.text.trim(),
-          phone: _customerPhoneCtrl.text.trim(),
-        ),
-        lineItems: _items.map((i) => i.toLineItem()).toList(),
-        originalTranscript: widget.originalTranscript,
-      );
+    customer: Customer(
+      name: _customerNameCtrl.text.trim().isEmpty
+          ? 'Client'
+          : _customerNameCtrl.text.trim(),
+      phone: _customerPhoneCtrl.text.trim(),
+    ),
+    lineItems: _items.map((i) => i.toLineItem()).toList(),
+    originalTranscript: widget.originalTranscript,
+    reviewWarnings: _warnings,
+    reviewWarningsAcknowledged: _warningsAcknowledged,
+  );
+
+  String? get _pdfBlockingReason => quotePdfBlockingReason(buildQuote());
 
   Future<void> _saveDraft() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please add at least one item before saving / कम से कम एक मद जोड़ें'),
+          content: Text(
+            'Please add at least one item before saving / कम से कम एक मद जोड़ें',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
 
-    final id = widget.savedQuoteId ?? 'quote_${DateTime.now().millisecondsSinceEpoch}';
+    final id =
+        widget.savedQuoteId ?? 'quote_${DateTime.now().millisecondsSinceEpoch}';
     final saved = SavedQuote(
       id: id,
-      quoteNumber: 'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
+      quoteNumber:
+          'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
       createdAt: DateTime.now(),
       trade: widget.trade,
-      customerName: _customerNameCtrl.text.trim().isEmpty ? 'Client' : _customerNameCtrl.text.trim(),
+      customerName: _customerNameCtrl.text.trim().isEmpty
+          ? 'Client'
+          : _customerNameCtrl.text.trim(),
       customerPhone: _customerPhoneCtrl.text.trim(),
       validityDays: _validityDays,
       notes: _notesCtrl.text.trim(),
       originalTranscript: widget.originalTranscript,
+      reviewWarnings: _warnings,
+      reviewWarningsAcknowledged: _warningsAcknowledged,
       lineItems: _items.map((i) => i.toLineItem()).toList(),
     );
 
@@ -265,6 +393,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final totals = _totals;
+    final blockingReason = _pdfBlockingReason;
 
     // Build a trade badge to show in the AppBar when a trade is known.
     final tradeBadge = widget.trade == null
@@ -285,10 +415,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         title: Row(
           children: [
             const Flexible(
-              child: Text(
-                'Review Quote',
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text('Review Quote', overflow: TextOverflow.ellipsis),
             ),
             if (tradeBadge != null) ...[
               const SizedBox(width: 8),
@@ -324,7 +451,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       transcript: widget.originalTranscript!.trim(),
                       isExpanded: _transcriptExpanded,
                       onToggle: () => setState(
-                          () => _transcriptExpanded = !_transcriptExpanded),
+                        () => _transcriptExpanded = !_transcriptExpanded,
+                      ),
                     ),
                     const SizedBox(height: 14),
                   ],
@@ -333,8 +461,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   if (_warnings.isNotEmpty) ...[
                     _ParsingWarningsBanner(
                       warnings: _warnings,
-                      onDismiss: () => setState(() => _warnings.clear()),
+                      onDismiss: _acknowledgeWarnings,
                     ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  if (_attentionCount > 0) ...[
+                    _AttentionSummary(count: _attentionCount),
                     const SizedBox(height: 14),
                   ],
 
@@ -352,24 +485,34 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   if (_items.isEmpty)
                     _EmptyItemsHint(
                       onAdd: _showAddItemSheet,
-                      hasVoiceTranscript: widget.originalTranscript != null &&
+                      hasVoiceTranscript:
+                          widget.originalTranscript != null &&
                           widget.originalTranscript!.trim().isNotEmpty,
                     ),
 
                   ..._items.asMap().entries.map(
-                        (entry) => _LineItemCard(
-                          key: ObjectKey(entry.value),
-                          item: entry.value,
-                          index: entry.key,
-                          onDelete: () => _deleteItem(entry.key),
-                          onChanged: _onFieldChanged,
-                        ),
-                      ),
+                    (entry) => _LineItemCard(
+                      key: ObjectKey(entry.value),
+                      item: entry.value,
+                      index: entry.key,
+                      amountPaise: totals.lineAmountsPaise[entry.key],
+                      onEdit: () => _showEditItemSheet(entry.key),
+                      onDuplicate: () => _duplicateItem(entry.key),
+                      onMoveUp: entry.key == 0
+                          ? null
+                          : () => _moveItem(entry.key, -1),
+                      onMoveDown: entry.key == _items.length - 1
+                          ? null
+                          : () => _moveItem(entry.key, 1),
+                      onDelete: () => _deleteItem(entry.key),
+                      onAcknowledge: () => _acknowledgeItem(entry.value),
+                    ),
+                  ),
 
                   const SizedBox(height: 20),
 
                   // ── Totals summary ────────────────────────────────────
-                  _TotalsSummary(subtotalPaise: _subtotalPaise),
+                  _TotalsSummary(totals: totals),
 
                   const SizedBox(height: 28),
                   const Divider(),
@@ -384,8 +527,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     notesCtrl: _notesCtrl,
                     validityDays: _validityDays,
                     validityOptions: _validityOptions,
-                    onValidityChanged: (v) =>
-                        setState(() => _validityDays = v),
+                    onValidityChanged: (v) => setState(() => _validityDays = v),
                   ),
 
                   const SizedBox(height: 32),
@@ -395,12 +537,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
             // ── Fixed bottom action bar ───────────────────────────────────
             _BottomActions(
-              subtotalPaise: _subtotalPaise,
+              grandTotalPaise: _grandTotalPaise,
+              blockingReason: blockingReason,
+              showBlockingReason: _items.isNotEmpty,
+
               onGeneratePdf: () {
-                if (_items.isEmpty) {
+                if (blockingReason != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please add at least one item / कम से कम एक मद जोड़ें'),
+                    SnackBar(
+                      content: Text(blockingReason),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -439,135 +584,302 @@ class _ReviewScreenState extends State<ReviewScreen> {
       builder: (_) => _AddItemSheet(trade: widget.trade),
     ).then((item) {
       if (item == null) return;
-      _attachListeners(item);
       _addItem(item);
+    });
+  }
+
+  void _showEditItemSheet(int index) {
+    if (index < 0 || index >= _items.length) return;
+    showModalBottomSheet<_EditableItem>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _AddItemSheet(trade: widget.trade, initialItem: _items[index]),
+    ).then((item) {
+      if (item == null || !mounted) return;
+      final oldItem = _items[index];
+      item.requiresReview = false;
+      item.acknowledged = true;
+      oldItem.dispose();
+      _attachListeners(item);
+      setState(() => _items[index] = item);
     });
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _LineItemCard — the main editable card for a single line item
+// _LineItemCard — Day 14 large read-only card (design.md §4 Review quote).
+// Tapping the card or Edit/Fix now opens the bottom-sheet form; the card
+// itself never shows inline text fields so totals stay trustworthy and the
+// layout stays scannable with large touch targets.
 // ─────────────────────────────────────────────────────────────────────────────
 class _LineItemCard extends StatelessWidget {
   final _EditableItem item;
   final int index;
+  final int amountPaise;
+  final VoidCallback onEdit;
+  final VoidCallback onDuplicate;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
   final VoidCallback onDelete;
-  final VoidCallback onChanged;
+  final VoidCallback onAcknowledge;
 
   const _LineItemCard({
     super.key,
     required this.item,
     required this.index,
+    required this.amountPaise,
+    required this.onEdit,
+    required this.onDuplicate,
+    required this.onMoveUp,
+    required this.onMoveDown,
     required this.onDelete,
-    required this.onChanged,
+    required this.onAcknowledge,
   });
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final needsAttention = item.requiresReview && !item.acknowledged;
+
+    final description = item.description.text.trim().isEmpty
+        ? 'Unnamed item'
+        : item.description.text.trim();
+    final qtyText = item.quantity.text.trim().isEmpty
+        ? '—'
+        : item.quantity.text.trim();
+    final unitText =
+        item.unit.text.trim().isEmpty ? 'unit' : item.unit.text.trim();
+    final rateText =
+        item.rate.text.trim().isEmpty ? '—' : '₹${item.rate.text.trim()}';
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 8, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Row 1: Description + delete button ────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: _FieldLabel(
-                    label: 'Item / मद',
-                    child: TextField(
-                      controller: item.description,
-                      onChanged: (_) => onChanged(),
-                      style: tt.titleMedium,
-                      decoration: _inputDecoration(
-                        context,
-                        hint: 'e.g. Tile Labour',
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Item ${index + 1} / मद ${index + 1}',
+                      style: tt.bodyMedium?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w700,
                       ),
-                      textCapitalization: TextCapitalization.words,
                     ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  onPressed: onDelete,
-                  icon: Icon(Icons.delete_outline_rounded,
-                      color: cs.error, size: 22),
-                  tooltip: 'Delete item / मद हटाएं',
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // ── Row 2: Qty | Unit | Rate ───────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _FieldLabel(
-                    label: 'Qty / मात्रा',
-                    child: TextField(
-                      controller: item.quantity,
-                      onChanged: (_) => onChanged(),
-                      style: tt.bodyLarge,
-                      decoration: _inputDecoration(context, hint: '0'),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
+                  if (needsAttention)
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFF59E0B),
+                      semanticLabel: 'Needs attention',
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: _FieldLabel(
-                    label: 'Unit',
-                    child: TextField(
-                      controller: item.unit,
-                      onChanged: (_) => onChanged(),
-                      style: tt.bodyLarge,
-                      decoration: _inputDecoration(context, hint: 'sq ft'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 3,
-                  child: _FieldLabel(
-                    label: 'Rate ₹ / दर',
-                    child: TextField(
-                      controller: item.rate,
-                      onChanged: (_) => onChanged(),
-                      style: tt.bodyLarge,
-                      decoration: _inputDecoration(context, hint: '0'),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // ── Row 3: Amount (computed, read-only) ───────────────────────
-            Align(
-              alignment: Alignment.centerRight,
-              child: _AmountChip(
-                label: 'Amount / राशि',
-                value: formatRupee(item.amountRupees),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              // Large scannable item name (min 16sp via titleMedium).
+              Text(
+                description,
+                style: tt.titleMedium?.copyWith(fontSize: 18),
+              ),
+              const SizedBox(height: 4),
+              // Quantity × unit × rate line + read-only amount.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    '$qtyText $unitText × $rateText',
+                    style: tt.bodyLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _AmountChip(
+                  label: 'Amount / राशि',
+                  value: formatRupeePaise(amountPaise),
+                ),
+              ),
+              if (needsAttention) ...[
+                const SizedBox(height: 10),
+                _UncertaintyNotice(item: item),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.build_outlined, size: 18),
+                      label: const Text('Fix now'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onAcknowledge,
+                      icon: const Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 18),
+                      label: Text(
+                        item.isUnknown
+                            ? 'I checked this / मैंने जांच ली'
+                            : 'Mark as checked / जांच ली',
+                      ),
+                    ),
+                  ],
+                ),
+              ] else if (item.requiresReview) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 18,
+                      color: Color(0xFF4CAF50),
+                    ),
+                    const SizedBox(width: 6),
+                    Text('Checked / जांच ली गई', style: tt.bodySmall),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 2,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onDuplicate,
+                    icon: const Icon(Icons.copy_outlined, size: 18),
+                    label: const Text('Duplicate'),
+                  ),
+                  IconButton(
+                    onPressed: onMoveUp,
+                    icon: const Icon(Icons.arrow_upward_rounded),
+                    tooltip: 'Move item ${index + 1} up',
+                  ),
+                  IconButton(
+                    onPressed: onMoveDown,
+                    icon: const Icon(Icons.arrow_downward_rounded),
+                    tooltip: 'Move item ${index + 1} down',
+                  ),
+                  TextButton.icon(
+                    // Compact labelled delete with confirmation dialog —
+                    // never gesture-only deletion.
+                    onPressed: onDelete,
+                    style: TextButton.styleFrom(foregroundColor: cs.error),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: const Text('Delete'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _AttentionSummary extends StatelessWidget {
+  final int count;
+
+  const _AttentionSummary({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A2A16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Needs attention ($count)',
+                  style: tt.titleMedium?.copyWith(
+                    color: const Color(0xFFFCD34D),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Check or acknowledge the highlighted items before creating the PDF.',
+                  style: tt.bodySmall?.copyWith(color: const Color(0xFFFDE68A)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UncertaintyNotice extends StatelessWidget {
+  final _EditableItem item;
+
+  const _UncertaintyNotice({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final note = item.uncertaintyNote?.trim();
+    final message = item.isUnknown
+        ? 'Unknown item: ${note == null || note.isEmpty ? 'check this work and add its details' : note}'
+        : note == null || note.isEmpty
+        ? 'Please check this item before creating the PDF.'
+        : 'Please check: $note';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A2A16),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 20,
+            color: Color(0xFFF59E0B),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: tt.bodySmall?.copyWith(color: const Color(0xFFFDE68A)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -582,8 +894,9 @@ class _LineItemCard extends StatelessWidget {
 class _AddItemSheet extends StatefulWidget {
   /// When non-null, catalog suggestions for this trade are shown at the top.
   final Trade? trade;
+  final _EditableItem? initialItem;
 
-  const _AddItemSheet({this.trade});
+  const _AddItemSheet({this.trade, this.initialItem});
 
   @override
   State<_AddItemSheet> createState() => _AddItemSheetState();
@@ -598,6 +911,32 @@ class _AddItemSheetState extends State<_AddItemSheet> {
 
   // Which catalog item (if any) has been tapped — used for highlight only.
   String? _selectedCatalogId;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialItem;
+    if (initial != null) {
+      _descCtrl.text = initial.description.text;
+      _qtyCtrl.text = initial.quantity.text;
+      _unitCtrl.text = initial.unit.text;
+      _rateCtrl.text = initial.rate.text;
+    }
+    // Live amount preview — recalculated with the Day 5 engine on each keystroke.
+    _qtyCtrl.addListener(_refreshPreview);
+    _rateCtrl.addListener(_refreshPreview);
+  }
+
+  void _refreshPreview() {
+    if (mounted) setState(() {});
+  }
+
+  /// Day 5 engine for the sheet preview: qty × rate, in paise.
+  int get _previewAmountPaise {
+    final qty = int.tryParse(_qtyCtrl.text.trim()) ?? 0;
+    final rateRupees = int.tryParse(_rateCtrl.text.trim()) ?? 0;
+    return qty * rateRupees * 100;
+  }
 
   @override
   void dispose() {
@@ -619,6 +958,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final initial = widget.initialItem;
     Navigator.pop(
       context,
       _EditableItem(
@@ -626,6 +966,12 @@ class _AddItemSheetState extends State<_AddItemSheet> {
         quantity: _qtyCtrl.text.trim(),
         unit: _unitCtrl.text.trim().isEmpty ? 'sq ft' : _unitCtrl.text.trim(),
         rate: _rateCtrl.text.trim(),
+        confidence: initial?.confidence,
+        uncertaintyNote: initial?.uncertaintyNote,
+        sourceSpan: initial?.sourceSpan,
+        isUnknown: initial?.isUnknown ?? false,
+        requiresReview: initial?.requiresReview ?? false,
+        acknowledged: initial?.acknowledged ?? false,
       ),
     );
   }
@@ -666,7 +1012,12 @@ class _AddItemSheetState extends State<_AddItemSheet> {
               ),
               const SizedBox(height: 16),
 
-              Text('Add Item / मद जोड़ें', style: tt.titleLarge),
+              Text(
+                widget.initialItem == null
+                    ? 'Add Item / मद जोड़ें'
+                    : 'Edit Item / मद बदलें',
+                style: tt.titleLarge,
+              ),
 
               // ── Catalog picker (only when trade is known) ──────────────
               if (catalogItems.isNotEmpty) ...[
@@ -747,6 +1098,8 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                         controller: _unitCtrl,
                         style: tt.bodyLarge,
                         decoration: _inputDecoration(context, hint: 'sq ft'),
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
                     ),
                   ),
@@ -770,9 +1123,34 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   },
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // ── Live calculated amount (read-only, Day 5 engine) ─────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF13131F),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF2E2E42)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Amount / राशि', style: tt.bodyMedium),
+                    Text(
+                      formatRupeePaise(_previewAmountPaise),
+                      style: tt.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
 
-              // ── Actions ──────────────────────────────────────────────────
+              // ── Actions: Cancel (secondary) + Save changes (sole primary) ─
               Row(
                 children: [
                   Expanded(
@@ -786,7 +1164,9 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                     child: ElevatedButton.icon(
                       onPressed: _submit,
                       icon: const Icon(Icons.check_rounded),
-                      label: const Text('Add'),
+                      label: Text(widget.initialItem == null
+                          ? 'Add'
+                          : 'Save changes'),
                     ),
                   ),
                 ],
@@ -844,8 +1224,7 @@ class _CatalogChip extends StatelessWidget {
                 item.displayName.split(' /').first,
                 style: tt.bodyLarge?.copyWith(
                   color: selected ? cs.primary : null,
-                  fontWeight:
-                      selected ? FontWeight.w700 : FontWeight.normal,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
                 ),
               ),
               const SizedBox(height: 2),
@@ -931,8 +1310,9 @@ class _CustomerSection extends StatelessWidget {
                         selectedColor: cs.primary,
                         labelStyle: tt.bodyMedium?.copyWith(
                           color: selected ? cs.onPrimary : null,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.normal,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.normal,
                         ),
                       ),
                     );
@@ -966,8 +1346,8 @@ class _CustomerSection extends StatelessWidget {
 // _TotalsSummary — live subtotal readout
 // ─────────────────────────────────────────────────────────────────────────────
 class _TotalsSummary extends StatelessWidget {
-  final int subtotalPaise;
-  const _TotalsSummary({required this.subtotalPaise});
+  final QuoteTotals totals;
+  const _TotalsSummary({required this.totals});
 
   @override
   Widget build(BuildContext context) {
@@ -992,7 +1372,8 @@ class _TotalsSummary extends StatelessWidget {
             ],
           ),
           Text(
-            formatRupeePaise(subtotalPaise),
+            formatRupeePaise(totals.subtotalPaise),
+
             style: tt.displaySmall?.copyWith(color: cs.primary),
           ),
         ],
@@ -1005,12 +1386,16 @@ class _TotalsSummary extends StatelessWidget {
 // _BottomActions — pinned bar with grand total preview + CTA buttons
 // ─────────────────────────────────────────────────────────────────────────────
 class _BottomActions extends StatelessWidget {
-  final int subtotalPaise;
+  final int grandTotalPaise;
+  final String? blockingReason;
+  final bool showBlockingReason;
   final VoidCallback onGeneratePdf;
   final VoidCallback onBack;
 
   const _BottomActions({
-    required this.subtotalPaise,
+    required this.grandTotalPaise,
+    required this.blockingReason,
+    required this.showBlockingReason,
     required this.onGeneratePdf,
     required this.onBack,
   });
@@ -1022,12 +1407,14 @@ class _BottomActions extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
-          kPagePadding, 12, kPagePadding, kPagePadding),
+        kPagePadding,
+        12,
+        kPagePadding,
+        kPagePadding,
+      ),
       decoration: const BoxDecoration(
         color: Color(0xFF1E1E2C),
-        border: Border(
-          top: BorderSide(color: Color(0xFF2E2E42), width: 1),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFF2E2E42), width: 1)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1038,11 +1425,33 @@ class _BottomActions extends StatelessWidget {
             children: [
               Text('Total', style: tt.bodyMedium),
               Text(
-                formatRupeePaise(subtotalPaise),
+                formatRupeePaise(grandTotalPaise),
                 style: tt.titleMedium?.copyWith(color: cs.primary),
               ),
             ],
           ),
+          if (blockingReason != null && showBlockingReason) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: Color(0xFFF59E0B),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    blockingReason!,
+                    style: tt.bodySmall?.copyWith(
+                      color: const Color(0xFFFCD34D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
 
           ElevatedButton.icon(
@@ -1120,10 +1529,7 @@ class _AmountChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('$label: ', style: tt.bodyMedium),
-          Text(
-            value,
-            style: tt.titleMedium?.copyWith(color: cs.primary),
-          ),
+          Text(value, style: tt.titleMedium?.copyWith(color: cs.primary)),
         ],
       ),
     );
@@ -1134,10 +1540,7 @@ class _EmptyItemsHint extends StatelessWidget {
   final VoidCallback onAdd;
   final bool hasVoiceTranscript;
 
-  const _EmptyItemsHint({
-    required this.onAdd,
-    this.hasVoiceTranscript = false,
-  });
+  const _EmptyItemsHint({required this.onAdd, this.hasVoiceTranscript = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1240,8 +1643,10 @@ class _VoiceNoteCard extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
@@ -1285,8 +1690,11 @@ class _VoiceNoteCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.check_circle_outline_rounded,
-                          size: 14, color: Color(0xFF4CAF50)),
+                      const Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 14,
+                        color: Color(0xFF4CAF50),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Parsed into line items below',
@@ -1324,7 +1732,9 @@ class _ParsingWarningsBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF2D2013),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       child: Column(
@@ -1348,8 +1758,11 @@ class _ParsingWarningsBanner extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded,
-                    size: 18, color: Color(0xFFF59E0B)),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: Color(0xFFF59E0B),
+                ),
                 onPressed: onDismiss,
                 visualDensity: VisualDensity.compact,
                 tooltip: 'Dismiss warning',
@@ -1363,11 +1776,13 @@ class _ParsingWarningsBanner extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('• ',
-                      style: tt.bodySmall?.copyWith(
-                        color: const Color(0xFFFCD34D),
-                        fontWeight: FontWeight.bold,
-                      )),
+                  Text(
+                    '• ',
+                    style: tt.bodySmall?.copyWith(
+                      color: const Color(0xFFFCD34D),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   Expanded(
                     child: Text(
                       w,

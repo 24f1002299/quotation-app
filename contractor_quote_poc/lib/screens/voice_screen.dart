@@ -20,12 +20,10 @@ import 'package:record/record.dart';
 
 import '../catalog/catalog.dart';
 import '../config/api_config.dart';
-import '../models/extraction_models.dart';
+import '../models/quote.dart';
 import '../models/transcript_draft.dart';
 import '../parser/demo_transcripts.dart';
-import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
-import '../storage/rate_memory_repository.dart';
 import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
 import '../voice/extraction_service.dart';
@@ -76,7 +74,8 @@ class _VoiceScreenState extends State<VoiceScreen>
   int _transcriptionSeq = 0;
 
   // Extraction incremental status
-  String _extractionStatusMessage = 'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
+  String _extractionStatusMessage =
+      'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
   Timer? _extractionTimer;
 
   @override
@@ -142,8 +141,7 @@ class _VoiceScreenState extends State<VoiceScreen>
     if (!hasPermission) {
       setState(() {
         _permissionDenied = true;
-        _errorMessage =
-            'Microphone permission is needed to record. You can still type a quote.';
+        _errorMessage = 'Microphone permission is needed to record. You can still type a quote.';
       });
       return;
     }
@@ -212,7 +210,9 @@ class _VoiceScreenState extends State<VoiceScreen>
 
     final length = await recordedFile.length();
     if (length == 0) {
-      _showError('No voice detected or recording was empty. Please speak clearly into the microphone and try again.');
+      _showError(
+        'No voice detected or recording was empty. Please speak clearly into the microphone and try again.',
+      );
       setState(() => _state = _RecordState.idle);
       return;
     }
@@ -221,8 +221,9 @@ class _VoiceScreenState extends State<VoiceScreen>
     // fluent text instead of failing. Don't send crumbs to STT at all.
     if (length < 4 * 1024 || _recSeconds < 2) {
       debugPrint(
-          '[Voice] recording too short/quiet: ${length}B, ${_recSeconds}s — '
-          'asking user to re-record instead of sending to STT');
+        '[Voice] recording too short/quiet: ${length}B, ${_recSeconds}s — '
+        'asking user to re-record instead of sending to STT',
+      );
       await TranscriptionService.deleteTemporaryAudio(recordedFile);
       _currentAudioFile = null;
       setState(() {
@@ -240,10 +241,13 @@ class _VoiceScreenState extends State<VoiceScreen>
     // hallucinate instead of transcribing — which looks like "wrong transcript".
     if (length < 8 * 1024 || _recSeconds < 2) {
       debugPrint(
-          '[Voice] suspiciously small/quiet recording: ${length}B, ${_recSeconds}s — '
-          'likely silent mic, still sending to STT for diagnosis');
+        '[Voice] suspiciously small/quiet recording: ${length}B, ${_recSeconds}s — '
+        'likely silent mic, still sending to STT for diagnosis',
+      );
     } else {
-      debugPrint('[Voice] recording ready: ${length}B, ${_recSeconds}s -> sending to STT');
+      debugPrint(
+        '[Voice] recording ready: ${length}B, ${_recSeconds}s -> sending to STT',
+      );
     }
 
     setState(() => _state = _RecordState.transcribing);
@@ -282,7 +286,8 @@ class _VoiceScreenState extends State<VoiceScreen>
   Future<void> _transcribeAudio(File audio, int duration) async {
     final seq = ++_transcriptionSeq;
     debugPrint(
-        '[Voice] transcribe start seq=$seq lang=$_selectedLanguage duration=${duration}s');
+      '[Voice] transcribe start seq=$seq lang=$_selectedLanguage duration=${duration}s',
+    );
     try {
       final result = await TranscriptionService.transcribe(
         audioFile: audio,
@@ -291,8 +296,9 @@ class _VoiceScreenState extends State<VoiceScreen>
         provider: kDefaultSttProvider,
       );
       debugPrint(
-          '[Voice] transcribe done seq=$seq provider=${result.provider} '
-          'chars=${result.transcript.length} text="${result.transcript.length > 120 ? '${result.transcript.substring(0, 120)}…' : result.transcript}"');
+        '[Voice] transcribe done seq=$seq provider=${result.provider} '
+        'chars=${result.transcript.length} text="${result.transcript.length > 120 ? '${result.transcript.substring(0, 120)}…' : result.transcript}"',
+      );
 
       if (!mounted || seq != _transcriptionSeq) {
         // A newer recording superseded this one — discard the stale result
@@ -304,8 +310,7 @@ class _VoiceScreenState extends State<VoiceScreen>
       final newTranscript = result.transcript.trim();
       if (newTranscript.isEmpty) {
         setState(() {
-          _errorMessage =
-              'Transcription came back empty. Please try again or type the quote manually.';
+          _errorMessage = 'Transcription came back empty. Please try again or type the quote manually.';
           _state = _transcriptCtrl.text.trim().isNotEmpty
               ? _RecordState.hasTranscript
               : _RecordState.idle;
@@ -361,7 +366,8 @@ class _VoiceScreenState extends State<VoiceScreen>
           errStr.contains('Connection refused') ||
           errStr.contains('Failed host lookup') ||
           errStr.contains('ClientException')) {
-        msg = 'Cannot connect to backend server ($kApiBaseUrl).\n'
+        msg =
+            'Cannot connect to backend server ($kApiBaseUrl).\n'
             'Start the Spring Boot API (cd spring-api; .\\run-dev.ps1) or use "Use Demo" below to test.';
       } else if (lowerErr.contains('incorrect api key') ||
           lowerErr.contains('invalid api key') ||
@@ -369,7 +375,8 @@ class _VoiceScreenState extends State<VoiceScreen>
           lowerErr.contains('grok stt') ||
           lowerErr.contains('whisper') ||
           lowerErr.contains('groq')) {
-        msg = 'Voice service key is missing or invalid on the server (Groq Whisper).\n'
+        msg =
+            'Voice service key is missing or invalid on the server (Groq Whisper).\n'
             'Check GROQ key in spring-api/.env (OPENAI_API_KEY=gsk-..., OPENAI_STT_URL=https://api.groq.com/openai/v1/audio/transcriptions, OPENAI_STT_MODEL=whisper-large-v3-turbo), '
             'restart the API (cd spring-api; .\\run-dev.ps1) and try again.';
       } else if (e is HttpException) {
@@ -394,10 +401,8 @@ class _VoiceScreenState extends State<VoiceScreen>
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => ReviewScreen(
-          trade: widget.trade,
-          initialLineItems: const [],
-        ),
+        builder: (_) =>
+            ReviewScreen(trade: widget.trade, initialLineItems: const []),
       ),
     );
   }
@@ -429,7 +434,8 @@ class _VoiceScreenState extends State<VoiceScreen>
 
     setState(() {
       _state = _RecordState.extracting;
-      _extractionStatusMessage = 'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
+      _extractionStatusMessage =
+          'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
       _errorMessage = null;
     });
 
@@ -443,9 +449,11 @@ class _VoiceScreenState extends State<VoiceScreen>
       step++;
       setState(() {
         if (step == 1) {
-          _extractionStatusMessage = 'Checking catalog... / कैटलॉग से मिला रहे हैं...';
+          _extractionStatusMessage =
+              'Checking catalog... / कैटलॉग से मिला रहे हैं...';
         } else if (step >= 2) {
-          _extractionStatusMessage = 'Applying saved rates... / दरें जोड़ रहे हैं...';
+          _extractionStatusMessage =
+              'Applying saved rates... / दरें जोड़ रहे हैं...';
         }
       });
     });
@@ -462,7 +470,10 @@ class _VoiceScreenState extends State<VoiceScreen>
 
       final warnings = <String>[
         if (result.errorMessage != null) result.errorMessage!,
-        ...result.unknowns.map((u) => 'Review needed: ${u.text} (${u.reason})'),
+      ];
+      final lineItems = <QuoteLineItem>[
+        ...result.lineItems.map((item) => item.toQuoteLineItem()),
+        ...result.unknowns.map((unknown) => unknown.toQuoteLineItem()),
       ];
 
       if (warnings.isNotEmpty) {
@@ -488,8 +499,7 @@ class _VoiceScreenState extends State<VoiceScreen>
             trade: widget.trade,
             originalTranscript: text,
             parsingWarnings: warnings,
-            initialLineItems:
-                result.lineItems.map((i) => i.toQuoteLineItem()).toList(),
+            initialLineItems: lineItems,
           ),
         ),
       );
@@ -550,10 +560,7 @@ class _VoiceScreenState extends State<VoiceScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             const Flexible(
-              child: Text(
-                'Speak Quote',
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text('Speak Quote', overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(width: 8),
             tradeBadge,
@@ -575,7 +582,11 @@ class _VoiceScreenState extends State<VoiceScreen>
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    kPagePadding, 8, kPagePadding, kPagePadding),
+                  kPagePadding,
+                  8,
+                  kPagePadding,
+                  kPagePadding,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -583,15 +594,13 @@ class _VoiceScreenState extends State<VoiceScreen>
                     ElevatedButton.icon(
                       onPressed: _createQuote,
                       icon: const Icon(Icons.arrow_forward_rounded),
-                      label:
-                          const Text('Create Quote / कोटेशन बनाएं'),
+                      label: const Text('Create Quote / कोटेशन बनाएं'),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: _createManually,
                       icon: const Icon(Icons.edit_note_rounded),
-                      label: const Text(
-                          'Type quote instead / लिखकर बनाएं'),
+                      label: const Text('Type quote instead / लिखकर बनाएं'),
                     ),
                   ],
                 ),
@@ -619,12 +628,12 @@ class _VoiceScreenState extends State<VoiceScreen>
                   onRetry: _state == _RecordState.idle
                       ? _startRecording
                       : (_state == _RecordState.hasTranscript
-                          // Low-clarity transcript (mic warning): retry means
-                          // re-record, not extraction of garbage text.
-                          ? (_uncertainty.reason != null
-                              ? _reRecord
-                              : _createQuote)
-                          : null),
+                            // Low-clarity transcript (mic warning): retry means
+                            // re-record, not extraction of garbage text.
+                            ? (_uncertainty.reason != null
+                                  ? _reRecord
+                                  : _createQuote)
+                            : null),
                   onManual: _createManually,
                 ),
 
@@ -642,53 +651,52 @@ class _VoiceScreenState extends State<VoiceScreen>
                       )
                     : SingleChildScrollView(
                         child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_state != _RecordState.extracting) ...[
-                            // Guidance hint
-                            Text(
-                              'Tell us the work and quantities',
-                              style: tt.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_state != _RecordState.extracting) ...[
+                              // Guidance hint
+                              Text(
+                                'Tell us the work and quantities',
+                                style: tt.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
                               ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.trade == Trade.tiling
-                                  ? 'Example: “Kitchen wall tiles, 120 square feet.”'
-                                  : 'Example: “Wall putty, 1200 square feet.”',
-                              style: tt.bodySmall?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.7),
+                              const SizedBox(height: 6),
+                              Text(
+                                widget.trade == Trade.tiling
+                                    ? 'Example: “Kitchen wall tiles, 120 square feet.”'
+                                    : 'Example: “Wall putty, 1200 square feet.”',
+                                style: tt.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.7),
+                                ),
+                                textAlign: TextAlign.center,
                               ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 36),
+                              const SizedBox(height: 36),
 
-                            // Animated mic button
-                            _MicButton(
-                              state: _state,
-                              pulse: _pulse,
-                              onStart: _startRecording,
-                              onStop: _stopRecording,
-                            ),
+                              // Animated mic button
+                              _MicButton(
+                                state: _state,
+                                pulse: _pulse,
+                                onStart: _startRecording,
+                                onStop: _stopRecording,
+                              ),
 
-                            const SizedBox(height: 24),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // Status text & timer
+                            if (_state == _RecordState.idle)
+                              ..._idleHint(tt)
+                            else if (_state == _RecordState.recording)
+                              ..._recordingHint(tt, cs)
+                            else if (_state == _RecordState.transcribing)
+                              ..._transcribingHint(tt, cs)
+                            else if (_state == _RecordState.extracting)
+                              ..._extractingHint(tt, cs),
                           ],
-
-                          // Status text & timer
-                          if (_state == _RecordState.idle)
-                            ..._idleHint(tt)
-                          else if (_state == _RecordState.recording)
-                            ..._recordingHint(tt, cs)
-                          else if (_state == _RecordState.transcribing)
-                            ..._transcribingHint(tt, cs)
-                          else if (_state == _RecordState.extracting)
-                            ..._extractingHint(tt, cs),
-                        ],
+                        ),
                       ),
-                      ),
-
               ),
 
               // ── Bottom actions ──────────────────────────────────────────
@@ -733,37 +741,43 @@ class _VoiceScreenState extends State<VoiceScreen>
   // ── State-specific hint widgets ───────────────────────────────────────────
 
   List<Widget> _idleHint(TextTheme tt) => [
+    Text(
+      'Tap to speak / बोलने के लिए टैप करें',
+      style: tt.titleMedium,
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 6),
+    Text(
+      'Hindi · Marathi · Hinglish',
+      style: tt.bodyMedium,
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 6),
+    Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.wifi_rounded, size: 14, color: Colors.grey),
+        const SizedBox(width: 4),
         Text(
-          'Tap to speak / बोलने के लिए टैप करें',
-          style: tt.titleMedium,
+          'Transcription needs internet · Whisper STT',
+          style: tt.bodySmall?.copyWith(color: Colors.grey),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Hindi · Marathi · Hinglish',
-          style: tt.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.wifi_rounded, size: 14, color: Colors.grey),
-            const SizedBox(width: 4),
-            Text(
-              'Transcription needs internet · Whisper STT',
-              style: tt.bodySmall?.copyWith(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ];
+      ],
+    ),
+  ];
 
   List<Widget> _recordingHint(TextTheme tt, ColorScheme cs) {
     final mm = (_recSeconds ~/ 60).toString().padLeft(2, '0');
     final ss = (_recSeconds % 60).toString().padLeft(2, '0');
-    final maxMm = (kMaxRecordingDurationSeconds ~/ 60).toString().padLeft(2, '0');
-    final maxSs = (kMaxRecordingDurationSeconds % 60).toString().padLeft(2, '0');
+    final maxMm = (kMaxRecordingDurationSeconds ~/ 60).toString().padLeft(
+      2,
+      '0',
+    );
+    final maxSs = (kMaxRecordingDurationSeconds % 60).toString().padLeft(
+      2,
+      '0',
+    );
 
     return [
       Text(
@@ -784,38 +798,38 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   List<Widget> _transcribingHint(TextTheme tt, ColorScheme cs) => [
-        CircularProgressIndicator(color: cs.primary),
-        const SizedBox(height: 20),
-        Text(
-          'Transcribing with Whisper STT…',
-          style: tt.titleMedium,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Turning audio into text. Takes ~2–4 seconds.',
-          style: tt.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-      ];
+    CircularProgressIndicator(color: cs.primary),
+    const SizedBox(height: 20),
+    Text(
+      'Transcribing with Whisper STT…',
+      style: tt.titleMedium,
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 6),
+    Text(
+      'Turning audio into text. Takes ~2–4 seconds.',
+      style: tt.bodyMedium,
+      textAlign: TextAlign.center,
+    ),
+  ];
 
   List<Widget> _extractingHint(TextTheme tt, ColorScheme cs) => [
-        CircularProgressIndicator(color: cs.primary),
-        const SizedBox(height: 20),
-        Text(
-          _extractionStatusMessage,
-          style: tt.titleMedium,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Matching catalog & applying saved rates. Your transcript is safe.',
-          style: tt.bodyMedium?.copyWith(
-            color: cs.onSurface.withValues(alpha: 0.7),
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ];
+    CircularProgressIndicator(color: cs.primary),
+    const SizedBox(height: 20),
+    Text(
+      _extractionStatusMessage,
+      style: tt.titleMedium,
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 8),
+    Text(
+      'Matching catalog & applying saved rates. Your transcript is safe.',
+      style: tt.bodyMedium?.copyWith(
+        color: cs.onSurface.withValues(alpha: 0.7),
+      ),
+      textAlign: TextAlign.center,
+    ),
+  ];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -825,10 +839,7 @@ class _LanguagePicker extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onChanged;
 
-  const _LanguagePicker({
-    required this.selected,
-    required this.onChanged,
-  });
+  const _LanguagePicker({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -863,14 +874,8 @@ class _LanguagePicker extends StatelessWidget {
           value: 'auto',
           child: Text('Auto (Hinglish/हिंदी/मराठी)'),
         ),
-        PopupMenuItem(
-          value: 'hi',
-          child: Text('Hindi (हिंदी)'),
-        ),
-        PopupMenuItem(
-          value: 'mr',
-          child: Text('Marathi (मराठी)'),
-        ),
+        PopupMenuItem(value: 'hi', child: Text('Hindi (हिंदी)')),
+        PopupMenuItem(value: 'mr', child: Text('Marathi (मराठी)')),
       ],
     );
   }
@@ -925,10 +930,7 @@ class _MicButton extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: color.withValues(alpha: isRecording ? 0.2 : 0.15),
-            border: Border.all(
-              color: color,
-              width: isRecording ? 3 : 2,
-            ),
+            border: Border.all(color: color, width: isRecording ? 3 : 2),
             boxShadow: [
               BoxShadow(
                 color: color.withValues(alpha: 0.3),
@@ -994,9 +996,19 @@ class _TranscriptEditor extends StatelessWidget {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber),
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 14,
+                      color: Colors.amber,
+                    ),
                     SizedBox(width: 4),
-                    Text('Review needed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Review needed',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1148,9 +1160,7 @@ class _ErrorBanner extends StatelessWidget {
             children: [
               Icon(Icons.error_outline_rounded, color: cs.error, size: 20),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(message, style: tt.bodyMedium),
-              ),
+              Expanded(child: Text(message, style: tt.bodyMedium)),
               IconButton(
                 onPressed: onDismiss,
                 icon: const Icon(Icons.close_rounded, size: 18),

@@ -85,6 +85,8 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
           validityDays: quote.validityDays,
           notes: quote.notes,
           originalTranscript: quote.originalTranscript,
+          parsingWarnings: quote.reviewWarnings,
+          parsingWarningsAcknowledged: quote.reviewWarningsAcknowledged,
           initialLineItems: quote.lineItems,
         ),
       ),
@@ -181,14 +183,14 @@ class _SavedQuoteCard extends StatelessWidget {
     final tradeIcon = quote.trade == Trade.tiling
         ? '🪣'
         : quote.trade == Trade.painting
-            ? '🖌️'
-            : '📄';
+        ? '🖌️'
+        : '📄';
 
     final tradeLabel = quote.trade == Trade.tiling
         ? 'Tiling'
         : quote.trade == Trade.painting
-            ? 'Painting'
-            : 'Quote';
+        ? 'Painting'
+        : 'Quote';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -205,11 +207,15 @@ class _SavedQuoteCard extends StatelessWidget {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -267,11 +273,16 @@ class _SavedQuoteCard extends StatelessWidget {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline_rounded,
-                                color: Colors.redAccent, size: 18),
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              color: Colors.redAccent,
+                              size: 18,
+                            ),
                             SizedBox(width: 8),
-                            Text('Delete / हटाएं',
-                                style: TextStyle(color: Colors.redAccent)),
+                            Text(
+                              'Delete / हटाएं',
+                              style: TextStyle(color: Colors.redAccent),
+                            ),
                           ],
                         ),
                       ),
@@ -321,8 +332,11 @@ class _SavedQuoteCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.touch_app_outlined,
-                      size: 13, color: Color(0xFF9E9BA8)),
+                  const Icon(
+                    Icons.touch_app_outlined,
+                    size: 13,
+                    color: Color(0xFF9E9BA8),
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Tap to edit numbers & recreate PDF',
@@ -356,7 +370,11 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: cs.primary.withValues(alpha: 0.4)),
+            Icon(
+              Icons.receipt_long_outlined,
+              size: 64,
+              color: cs.primary.withValues(alpha: 0.4),
+            ),
             const SizedBox(height: 16),
             Text('No quotes yet / कोई कोटेशन नहीं', style: tt.titleLarge),
             const SizedBox(height: 6),

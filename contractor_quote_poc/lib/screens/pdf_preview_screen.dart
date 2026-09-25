@@ -63,8 +63,12 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   Future<void> _saveQuoteAndPdf(Uint8List bytes) async {
     final sanitizedCustomer = widget.quote.customer.name.trim().isEmpty
         ? 'Client'
-        : widget.quote.customer.name.trim().replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
-    final fileName = 'Quotation_${sanitizedCustomer}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        : widget.quote.customer.name
+              .trim()
+              .replaceAll(RegExp(r'[^\w\s]+'), '')
+              .replaceAll(' ', '_');
+    final fileName =
+        'Quotation_${sanitizedCustomer}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
     try {
       final savedPath = await PdfService.savePdfToAppStorage(
@@ -72,18 +76,25 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         fileName: fileName,
       );
 
-      final id = widget.savedQuoteId ?? 'quote_${DateTime.now().millisecondsSinceEpoch}';
+      final id =
+          widget.savedQuoteId ??
+          'quote_${DateTime.now().millisecondsSinceEpoch}';
       final saved = SavedQuote(
         id: id,
-        quoteNumber: 'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
+        quoteNumber:
+            'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
         createdAt: DateTime.now(),
         trade: widget.trade,
-        customerName: widget.quote.customer.name.trim().isEmpty ? 'Client' : widget.quote.customer.name.trim(),
+        customerName: widget.quote.customer.name.trim().isEmpty
+            ? 'Client'
+            : widget.quote.customer.name.trim(),
         customerPhone: widget.quote.customer.phone.trim(),
         customerAddress: widget.quote.customer.address.trim(),
         validityDays: widget.validityDays,
         notes: widget.notes ?? '',
         originalTranscript: widget.quote.originalTranscript,
+        reviewWarnings: widget.quote.reviewWarnings,
+        reviewWarningsAcknowledged: widget.quote.reviewWarningsAcknowledged,
         lineItems: widget.quote.lineItems,
         gstPercent: widget.quote.gstPercent,
         pdfPath: savedPath,
@@ -93,7 +104,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('PDF & Quote saved to History / कोटेशन सहेजा गया'),
+            content: const Text(
+              'PDF & Quote saved to History / कोटेशन सहेजा गया',
+            ),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
@@ -110,7 +123,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     if (_lastGeneratedBytes != null) {
       final sanitizedName = widget.quote.customer.name.trim().isEmpty
           ? 'Client'
-          : widget.quote.customer.name.trim().replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
+          : widget.quote.customer.name
+                .trim()
+                .replaceAll(RegExp(r'[^\w\s]+'), '')
+                .replaceAll(' ', '_');
       await Printing.sharePdf(
         bytes: _lastGeneratedBytes!,
         filename: 'Quotation_$sanitizedName.pdf',
@@ -137,17 +153,54 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
     final sanitizedName = widget.quote.customer.name.trim().isEmpty
         ? 'Client'
-        : widget.quote.customer.name.trim().replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
+        : widget.quote.customer.name
+              .trim()
+              .replaceAll(RegExp(r'[^\w\s]+'), '')
+              .replaceAll(' ', '_');
+    final blockingReason = quotePdfBlockingReason(widget.quote);
+
+    if (blockingReason != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('PDF Preview / पूर्वावलोकन')),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 48, color: cs.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This quote is not ready for PDF / यह कोटेशन अभी PDF के लिए तैयार नहीं है',
+                    style: tt.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    blockingReason,
+                    style: tt.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Go back / वापस जाएं'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
             const Text('PDF Preview / पूर्वावलोकन'),
-            if (tradeBadge != null) ...[
-              const SizedBox(width: 10),
-              tradeBadge,
-            ],
+            if (tradeBadge != null) ...[const SizedBox(width: 10), tradeBadge],
           ],
         ),
         actions: [
