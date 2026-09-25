@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 
 import '../catalog/catalog.dart';
 import '../models/quote.dart';
+import '../utils/quote_ids.dart';
 import '../utils/rupee_format.dart';
 
 /// Fonts container for PDF rendering.
@@ -85,8 +86,17 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
     final fonts = fontSet ?? await loadFonts();
-    final date = quoteDate ?? DateTime.now();
-    final expiryDate = date.add(Duration(days: validityDays));
+    final effectiveQuoteNumber =
+        (quote.serverDisplayNumber ?? quote.quoteNumber)?.trim().isNotEmpty == true
+            ? quote.displayNumber
+            : quoteNumber;
+    final date = quote.quoteDate ?? quoteDate ?? DateTime.now();
+    final effectiveValidityDays =
+        quote.validityDays > 0 ? quote.validityDays : validityDays;
+    final expiryDate = date.add(Duration(days: effectiveValidityDays));
+    final effectiveNotes = quote.notes.trim().isNotEmpty
+        ? quote.notes.trim()
+        : (notes?.trim() ?? '');
     final totals = calculateTotals(quote);
 
     final primaryColor = PdfColor.fromHex('#1E3A8A'); // Navy blue
@@ -203,7 +213,7 @@ class PdfService {
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(
-                            'Quote #: $quoteNumber',
+                            'Quote #: $effectiveQuoteNumber',
                             style: pw.TextStyle(
                               fontSize: 8.5,
                               fontWeight: pw.FontWeight.bold,
@@ -214,7 +224,7 @@ class PdfService {
                             style: const pw.TextStyle(fontSize: 8),
                           ),
                           pw.Text(
-                            'Valid: $validityDays Days (until ${dateFormat.format(expiryDate)})',
+                            'Valid: $effectiveValidityDays Days (until ${dateFormat.format(expiryDate)})',
                             style: pw.TextStyle(
                               fontSize: 8,
                               color: primaryColor,
@@ -271,6 +281,13 @@ class PdfService {
                             pw.SizedBox(height: 1),
                             pw.Text(
                               'Phone: ${quote.customer.phone.trim()}',
+                              style: const pw.TextStyle(fontSize: 8.5),
+                            ),
+                          ],
+                          if (quote.customer.address.trim().isNotEmpty) ...[
+                            pw.SizedBox(height: 1),
+                            pw.Text(
+                              'Site: ${quote.customer.address.trim()}',
                               style: const pw.TextStyle(fontSize: 8.5),
                             ),
                           ],
@@ -360,7 +377,7 @@ class PdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        if (notes != null && notes.trim().isNotEmpty) ...[
+                        if (effectiveNotes.isNotEmpty) ...[
                           pw.Text(
                             'Special Notes / विशेष विवरण:',
                             style: pw.TextStyle(
@@ -378,7 +395,7 @@ class PdfService {
                               border: pw.Border.all(color: borderColor),
                             ),
                             child: pw.Text(
-                              notes.trim(),
+                              effectiveNotes,
                               style: const pw.TextStyle(fontSize: 8),
                             ),
                           ),
@@ -393,10 +410,11 @@ class PdfService {
                           ),
                         ),
                         pw.SizedBox(height: 2),
-                        _termBullet('1. Estimate valid for $validityDays days from date of issue.'),
-                        _termBullet('2. 50% advance before commencement, balance as per work progress.'),
-                        _termBullet('3. Water and electricity to be provided by client at site.'),
-                        _termBullet('4. Rates are for standard execution as per industry norms.'),
+                        _termBullet('• Estimate valid for $effectiveValidityDays days from date of issue.'),
+                        if (quote.effectiveAdvanceText.isNotEmpty)
+                          _termBullet('• Advance: ${quote.effectiveAdvanceText}.'),
+                        for (final term in quote.effectiveTerms)
+                          _termBullet('• $term'),
                       ],
                     ),
                   ),
@@ -526,6 +544,16 @@ class PdfService {
                           color: PdfColors.grey600,
                         ),
                       ),
+                      if (quote.id != null && quote.id!.isNotEmpty) ...[
+                        pw.SizedBox(height: 1),
+                        pw.Text(
+                          'Ref: $effectiveQuoteNumber  •  ID: ${shortId(quote.id!)}',
+                          style: const pw.TextStyle(
+                            fontSize: 7.0,
+                            color: PdfColors.grey500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
 

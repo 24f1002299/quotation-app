@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../catalog/catalog.dart';
 import '../models/quote.dart';
+import '../storage/quote_defaults.dart';
 import '../storage/quote_repository.dart';
 import '../storage/saved_quote.dart';
 import '../theme.dart';
+import '../utils/quote_ids.dart';
 import '../utils/rupee_format.dart';
 import 'pdf_preview_screen.dart';
 
@@ -120,11 +123,27 @@ class ReviewScreen extends StatefulWidget {
   /// Pre-filled customer phone when editing a saved quote.
   final String? customerPhone;
 
+  /// Day 15: pre-filled site/address when editing a saved quote.
+  final String? customerAddress;
+
   /// Pre-filled notes when editing a saved quote.
   final String? notes;
 
   /// Pre-filled validity in days when editing a saved quote.
   final int? validityDays;
+
+  /// Day 15 commercial prefill (all optional).
+  final int? gstPercent;
+  final int? advancePercent;
+  final String? advanceText;
+  final List<String>? terms;
+  final DateTime? quoteDate;
+
+  /// Day 15 identity: immutable local ID + human-readable numbers.
+  /// [displayNumber] is the local label; [serverDisplayNumber] wins when sync
+  /// has assigned one.
+  final String? displayNumber;
+  final String? serverDisplayNumber;
 
   const ReviewScreen({
     super.key,
@@ -136,8 +155,16 @@ class ReviewScreen extends StatefulWidget {
     this.savedQuoteId,
     this.customerName,
     this.customerPhone,
+    this.customerAddress,
     this.notes,
     this.validityDays,
+    this.gstPercent,
+    this.advancePercent,
+    this.advanceText,
+    this.terms,
+    this.quoteDate,
+    this.displayNumber,
+    this.serverDisplayNumber,
   });
 
   @override
@@ -148,13 +175,29 @@ class _ReviewScreenState extends State<ReviewScreen> {
   // ── Line items ─────────────────────────────────────────────────────────────
   late final List<_EditableItem> _items;
 
-  // ── Customer / terms ───────────────────────────────────────────────────────
+  // ── Customer / terms (Day 15: all optional except line items) ─────────────
   final _customerNameCtrl = TextEditingController();
   final _customerPhoneCtrl = TextEditingController();
+  final _siteCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final _advancePercentCtrl = TextEditingController();
+  final _advanceTextCtrl = TextEditingController();
+  final _termsCtrl = TextEditingController();
   // Validity in days — we store as an int index into the options list
   static const _validityOptions = [7, 15, 30, 60];
+  static const _gstOptions = [5, 12, 18];
   int _validityDays = 15;
+
+  /// Day 15 GST: null = off (default), else 5/12/18.
+  int? _gstPercent;
+  DateTime? _quoteDate;
+  bool _moreDetailsExpanded = false;
+
+  /// Day 15 identity: immutable local ID (idempotency anchor) + labels.
+  /// Generated once in initState so the number stays stable while editing.
+  late final String _quoteId;
+  late final String _displayNumber;
+  String? _serverDisplayNumber;
 
   // ── Voice & Parser state (Day 7) ───────────────────────────────────────────
   late final List<String> _warnings;
@@ -167,11 +210,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
     _warnings = List<String>.from(widget.parsingWarnings ?? const []);
     _warningsAcknowledged = widget.parsingWarningsAcknowledged;
 
+    // Day 15 identity: stable across edits; id = idempotency anchor.
+    _quoteId = widget.savedQuoteId ?? newQuoteId();
+    _displayNumber = widget.displayNumber ?? newDisplayNumber();
+    _serverDisplayNumber = widget.serverDisplayNumber;
+
     if (widget.customerName != null) {
       _customerNameCtrl.text = widget.customerName!;
     }
     if (widget.customerPhone != null) {
       _customerPhoneCtrl.text = widget.customerPhone!;
+    }
+    if (widget.customerAddress != null) {
+      _siteCtrl.text = widget.customerAddress!;
     }
     if (widget.notes != null) {
       _notesCtrl.text = widget.notes!;
@@ -179,6 +230,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (widget.validityDays != null) {
       _validityDays = widget.validityDays!;
     }
+    if (widget.gstPercent != null) {
+      _gstPercent = widget.gstPercent;
+    }
+    if (widget.advancePercent != null) {
+      _advancePercentCtrl.text = widget.advancePercent.toString();
+    }
+    if (widget.advanceText != null) {
+      _advanceTextCtrl.text = widget.advanceText!;
+    }
+    if (widget.terms != null && widget.terms!.isNotEmpty) {
+      _termsCtrl.text = widget.terms!.join('\n');
+    }
+    if (widget.quoteDate != null) {
+      _quoteDate = widget.quoteDate;
+    }
+    // Last-used defaults fill only what the caller didn't explicitly set.
+    _applyLastUsedDefaults();
 
     final seed =
         widget.initialLineItems ??
@@ -219,6 +287,50 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  /// Loads last-used validity/GST/advance/terms without overwriting values
+  /// the caller explicitly pre-filled (e.g. reopened saved quote).
+  Future<void> _applyLastUsedDefaults() async {
+    final defaults = await QuoteDefaults.load();
+    if (!mounted) return;
+    setState(() {
+      if (widget.validityDays == null) _validityDays = defaults.validityDays;
+      if (widget.gstPercent == null) _gstPercent = defaults.gstPercent;
+      if (widget.advancePercent == null && defaults.advancePercent != null) {
+        _advancePercentCtrl.text = defaults.advancePercent.toString();
+      }
+      if ((widget.terms == null || widget.terms!.isEmpty) &&
+          defaults.termsText.trim().isNotEmpty) {
+        _termsCtrl.text = defaults.termsText;
+      } else if (_termsCtrl.text.trim().isEmpty) {
+        _termsCtrl.text = kDefaultQuoteTerms.join('\n');
+      }
+    });
+  }
+
+  Future<void> _persistDefaults() async {
+    await QuoteDefaults(
+      validityDays: _validityDays,
+      gstPercent: _gstPercent,
+      advancePercent: int.tryParse(_advancePercentCtrl.text.trim()),
+      termsText: _termsCtrl.text.trim(),
+    ).save();
+  }
+
+  /// Terms lines for the domain model: one term per non-empty line.
+  List<String> get _termsList => _termsCtrl.text
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList(growable: false);
+
+  int? get _advancePercent {
+    final raw = _advancePercentCtrl.text.trim();
+    if (raw.isEmpty) return null;
+    final v = int.tryParse(raw);
+    if (v == null || v < 0 || v > 100) return null;
+    return v;
+  }
+
   @override
   void dispose() {
     for (final item in _items) {
@@ -226,7 +338,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
     _customerNameCtrl.dispose();
     _customerPhoneCtrl.dispose();
+    _siteCtrl.dispose();
     _notesCtrl.dispose();
+    _advancePercentCtrl.dispose();
+    _advanceTextCtrl.dispose();
+    _termsCtrl.dispose();
     super.dispose();
   }
 
@@ -326,14 +442,27 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   /// Builds an immutable [Quote] representation of the current screen state.
+  /// Day 15: only client name + line items are required; every other
+  /// commercial field is optional and renders only when supplied.
   Quote buildQuote() => Quote(
+    id: _quoteId,
+    quoteNumber: _displayNumber,
+    serverDisplayNumber: _serverDisplayNumber,
     customer: Customer(
       name: _customerNameCtrl.text.trim().isEmpty
           ? 'Client'
           : _customerNameCtrl.text.trim(),
       phone: _customerPhoneCtrl.text.trim(),
+      address: _siteCtrl.text.trim(),
     ),
     lineItems: _items.map((i) => i.toLineItem()).toList(),
+    gstPercent: _gstPercent,
+    quoteDate: _quoteDate ?? DateTime.now(),
+    validityDays: _validityDays,
+    advancePercent: _advancePercent,
+    advanceText: _advanceTextCtrl.text.trim(),
+    notes: _notesCtrl.text.trim(),
+    terms: _termsList,
     originalTranscript: widget.originalTranscript,
     reviewWarnings: _warnings,
     reviewWarningsAcknowledged: _warningsAcknowledged,
@@ -354,27 +483,35 @@ class _ReviewScreenState extends State<ReviewScreen> {
       return;
     }
 
-    final id =
-        widget.savedQuoteId ?? 'quote_${DateTime.now().millisecondsSinceEpoch}';
+    // Day 15: immutable [_quoteId] is the idempotency anchor — reused on
+    // every re-save of this draft. [_displayNumber] stays stable while
+    // editing; backend may later fill serverDisplayNumber on first sync.
     final saved = SavedQuote(
-      id: id,
-      quoteNumber:
-          'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
+      id: _quoteId,
+      quoteNumber: _displayNumber,
+      serverDisplayNumber: _serverDisplayNumber,
       createdAt: DateTime.now(),
+      quoteDate: _quoteDate ?? DateTime.now(),
       trade: widget.trade,
       customerName: _customerNameCtrl.text.trim().isEmpty
           ? 'Client'
           : _customerNameCtrl.text.trim(),
       customerPhone: _customerPhoneCtrl.text.trim(),
+      customerAddress: _siteCtrl.text.trim(),
       validityDays: _validityDays,
+      advancePercent: _advancePercent,
+      advanceText: _advanceTextCtrl.text.trim(),
       notes: _notesCtrl.text.trim(),
+      terms: _termsList,
       originalTranscript: widget.originalTranscript,
       reviewWarnings: _warnings,
       reviewWarningsAcknowledged: _warningsAcknowledged,
       lineItems: _items.map((i) => i.toLineItem()).toList(),
+      gstPercent: _gstPercent,
     );
 
     await QuoteRepository.saveQuote(saved);
+    await _persistDefaults();
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -524,10 +661,43 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   _CustomerSection(
                     nameCtrl: _customerNameCtrl,
                     phoneCtrl: _customerPhoneCtrl,
-                    notesCtrl: _notesCtrl,
+                    siteCtrl: _siteCtrl,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Section: More quote details (progressive disclosure) ──
+                  _MoreDetailsSection(
+                    isExpanded: _moreDetailsExpanded,
+                    onToggle: () => setState(() => _moreDetailsExpanded = !_moreDetailsExpanded),
+                    quoteId: _quoteId,
+                    displayNumber: _serverDisplayNumber ?? _displayNumber,
+                    quoteDate: _quoteDate ?? DateTime.now(),
+                    onDateChanged: (d) => setState(() => _quoteDate = d),
                     validityDays: _validityDays,
                     validityOptions: _validityOptions,
                     onValidityChanged: (v) => setState(() => _validityDays = v),
+                    gstPercent: _gstPercent,
+                    gstOptions: _gstOptions,
+                    onGstChanged: (g) => setState(() => _gstPercent = g),
+                    advancePercentCtrl: _advancePercentCtrl,
+                    advanceTextCtrl: _advanceTextCtrl,
+                    onAdvancePercentSelected: (p) {
+                      setState(() {
+                        if (p == null) {
+                          _advancePercentCtrl.clear();
+                        } else {
+                          _advancePercentCtrl.text = p.toString();
+                        }
+                      });
+                    },
+                    notesCtrl: _notesCtrl,
+                    termsCtrl: _termsCtrl,
+                    onResetTerms: () {
+                      setState(() {
+                        _termsCtrl.text = kDefaultQuoteTerms.join('\n');
+                      });
+                    },
                   ),
 
                   const SizedBox(height: 32),
@@ -560,7 +730,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       trade: widget.trade,
                       validityDays: _validityDays,
                       notes: _notesCtrl.text.trim(),
-                      savedQuoteId: widget.savedQuoteId,
+                      savedQuoteId: _quoteId,
                     ),
                   ),
                 );
@@ -1238,29 +1408,23 @@ class _CatalogChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _CustomerSection — customer name, phone, notes, validity
+// ─────────────────────────────────────────────────────────────────────────────
+// _CustomerSection — client name, phone, site/address (design.md §5)
 // ─────────────────────────────────────────────────────────────────────────────
 class _CustomerSection extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController phoneCtrl;
-  final TextEditingController notesCtrl;
-  final int validityDays;
-  final List<int> validityOptions;
-  final ValueChanged<int> onValidityChanged;
+  final TextEditingController siteCtrl;
 
   const _CustomerSection({
     required this.nameCtrl,
     required this.phoneCtrl,
-    required this.notesCtrl,
-    required this.validityDays,
-    required this.validityOptions,
-    required this.onValidityChanged,
+    required this.siteCtrl,
   });
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -1268,13 +1432,13 @@ class _CustomerSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Customer name ────────────────────────────────────────────
+            // ── Client name ──────────────────────────────────────────────
             _FieldLabel(
-              label: 'Customer name / ग्राहक का नाम',
+              label: 'Client name / ग्राहक का नाम *',
               child: TextField(
                 controller: nameCtrl,
                 style: tt.bodyLarge,
-                decoration: _inputDecoration(context, hint: 'e.g. Sharma Ji'),
+                decoration: _inputDecoration(context, hint: 'e.g. Sharma Ji / शर्मा जी'),
                 textCapitalization: TextCapitalization.words,
               ),
             ),
@@ -1293,46 +1457,17 @@ class _CustomerSection extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // ── Validity ─────────────────────────────────────────────────
+            // ── Site / Address ───────────────────────────────────────────
             _FieldLabel(
-              label: 'Validity / मान्यता',
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: validityOptions.map((days) {
-                    final selected = days == validityDays;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text('$days days'),
-                        selected: selected,
-                        onSelected: (_) => onValidityChanged(days),
-                        selectedColor: cs.primary,
-                        labelStyle: tt.bodyMedium?.copyWith(
-                          color: selected ? cs.onPrimary : null,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Notes ────────────────────────────────────────────────────
-            _FieldLabel(
-              label: 'Notes / टिप्पणी (optional)',
+              label: 'Site / Address / कार्यस्थल (optional)',
               child: TextField(
-                controller: notesCtrl,
+                controller: siteCtrl,
                 style: tt.bodyLarge,
                 decoration: _inputDecoration(
                   context,
-                  hint: 'Payment terms, special conditions…',
+                  hint: 'e.g. Flat 302, Green Acres / फ्लैट ३०२, मुंबई',
                 ),
-                maxLines: 2,
+                textCapitalization: TextCapitalization.sentences,
               ),
             ),
           ],
@@ -1343,7 +1478,351 @@ class _CustomerSection extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _TotalsSummary — live subtotal readout
+// _MoreDetailsSection — progressive disclosure for commercial details
+// (quote #, date, validity, GST, advance, notes, editable terms)
+// ─────────────────────────────────────────────────────────────────────────────
+class _MoreDetailsSection extends StatelessWidget {
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final String quoteId;
+  final String displayNumber;
+  final DateTime quoteDate;
+  final ValueChanged<DateTime> onDateChanged;
+  final int validityDays;
+  final List<int> validityOptions;
+  final ValueChanged<int> onValidityChanged;
+  final int? gstPercent;
+  final List<int> gstOptions;
+  final ValueChanged<int?> onGstChanged;
+  final TextEditingController advancePercentCtrl;
+  final TextEditingController advanceTextCtrl;
+  final ValueChanged<int?> onAdvancePercentSelected;
+  final TextEditingController notesCtrl;
+  final TextEditingController termsCtrl;
+  final VoidCallback onResetTerms;
+
+  const _MoreDetailsSection({
+    required this.isExpanded,
+    required this.onToggle,
+    required this.quoteId,
+    required this.displayNumber,
+    required this.quoteDate,
+    required this.onDateChanged,
+    required this.validityDays,
+    required this.validityOptions,
+    required this.onValidityChanged,
+    required this.gstPercent,
+    required this.gstOptions,
+    required this.onGstChanged,
+    required this.advancePercentCtrl,
+    required this.advanceTextCtrl,
+    required this.onAdvancePercentSelected,
+    required this.notesCtrl,
+    required this.termsCtrl,
+    required this.onResetTerms,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final dateFormat = DateFormat('dd MMM yyyy');
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Header tile with expand/collapse trigger
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.tune_rounded,
+                    size: 20,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'More quote details / अतिरिक्त विवरण',
+                          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$displayNumber • ${validityDays}d validity • '
+                          '${gstPercent == null ? "No GST" : "GST $gstPercent%"}',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.65),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: onToggle,
+                    icon: Icon(
+                      isExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                    ),
+                    label: Text(isExpanded ? 'Hide' : 'Expand'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (isExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── 1. Quote Number & Offline ID ──────────────────────────
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Quote Number / कोटेशन संख्या', style: tt.bodySmall),
+                            const SizedBox(height: 4),
+                            Text(
+                              displayNumber,
+                              style: tt.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: cs.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('Offline ID / पहचान', style: tt.labelSmall),
+                            Text(
+                              shortId(quoteId),
+                              style: tt.bodySmall?.copyWith(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 2. Quotation Date ─────────────────────────────────────
+                  _FieldLabel(
+                    label: 'Quote Date / दिनांक',
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: quoteDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) onDateChanged(picked);
+                      },
+                      icon: const Icon(Icons.calendar_today_rounded, size: 18),
+                      label: Text(dateFormat.format(quoteDate)),
+                      style: OutlinedButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 3. Validity ───────────────────────────────────────────
+                  _FieldLabel(
+                    label: 'Validity / मान्यता (दिन)',
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: validityOptions.map((days) {
+                          final selected = days == validityDays;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text('$days days'),
+                              selected: selected,
+                              onSelected: (_) => onValidityChanged(days),
+                              selectedColor: cs.primary,
+                              labelStyle: tt.bodyMedium?.copyWith(
+                                color: selected ? cs.onPrimary : null,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 4. GST Toggle / Rate ───────────────────────────────────
+                  _FieldLabel(
+                    label: 'GST / जीएसटी कर',
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: const Text('No GST (0%)'),
+                              selected: gstPercent == null,
+                              onSelected: (_) => onGstChanged(null),
+                              selectedColor: cs.primary,
+                              labelStyle: tt.bodyMedium?.copyWith(
+                                color: gstPercent == null ? cs.onPrimary : null,
+                                fontWeight: gstPercent == null
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          ...gstOptions.map((rate) {
+                            final selected = gstPercent == rate;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text('$rate% GST'),
+                                selected: selected,
+                                onSelected: (_) => onGstChanged(rate),
+                                selectedColor: cs.primary,
+                                labelStyle: tt.bodyMedium?.copyWith(
+                                  color: selected ? cs.onPrimary : null,
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 5. Advance percentage & text ──────────────────────────
+                  _FieldLabel(
+                    label: 'Advance / अग्रिम भुगतान (optional)',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ChoiceChip(
+                                label: const Text('None'),
+                                selected: advancePercentCtrl.text.trim().isEmpty,
+                                onSelected: (_) => onAdvancePercentSelected(null),
+                              ),
+                              const SizedBox(width: 8),
+                              for (final p in [10, 20, 30, 50]) ...[
+                                ChoiceChip(
+                                  label: Text('$p%'),
+                                  selected: advancePercentCtrl.text.trim() == '$p',
+                                  onSelected: (_) => onAdvancePercentSelected(p),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: advanceTextCtrl,
+                          style: tt.bodyLarge,
+                          decoration: _inputDecoration(
+                            context,
+                            hint: 'e.g. 50% advance before tile delivery / ५०% अग्रिम',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 6. Notes ──────────────────────────────────────────────
+                  _FieldLabel(
+                    label: 'Notes / टिप्पणी (optional)',
+                    child: TextField(
+                      controller: notesCtrl,
+                      style: tt.bodyLarge,
+                      decoration: _inputDecoration(
+                        context,
+                        hint: 'Payment terms, special conditions…',
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 7. Editable Terms & Conditions ────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Terms & Conditions / नियम व शर्तें',
+                          style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: onResetTerms,
+                        child: const Text('Reset defaults / डिफ़ॉल्ट'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: termsCtrl,
+                    style: tt.bodyMedium,
+                    decoration: _inputDecoration(
+                      context,
+                      hint: 'Enter terms (one condition per line)',
+                    ),
+                    maxLines: 4,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _TotalsSummary — live subtotal and GST readout
 // ─────────────────────────────────────────────────────────────────────────────
 class _TotalsSummary extends StatelessWidget {
   final QuoteTotals totals;
@@ -1361,23 +1840,59 @@ class _TotalsSummary extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Subtotal / कुल', style: tt.titleMedium),
-              Text('(excl. GST)', style: tt.bodyMedium),
-            ],
-          ),
-          Text(
-            formatRupeePaise(totals.subtotalPaise),
-
-            style: tt.displaySmall?.copyWith(color: cs.primary),
-          ),
-        ],
-      ),
+      child: totals.gstPaise == 0
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Subtotal / कुल', style: tt.titleMedium),
+                    Text('(excl. GST)', style: tt.bodyMedium),
+                  ],
+                ),
+                Text(
+                  formatRupeePaise(totals.subtotalPaise),
+                  style: tt.displaySmall?.copyWith(color: cs.primary),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Subtotal / उप-योग', style: tt.bodyMedium),
+                    Text(
+                      formatRupeePaise(totals.subtotalPaise),
+                      style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('GST / कर', style: tt.bodyMedium),
+                    Text(
+                      formatRupeePaise(totals.gstPaise),
+                      style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total / कुल राशि', style: tt.titleMedium),
+                    Text(
+                      formatRupeePaise(totals.grandTotalPaise),
+                      style: tt.displaySmall?.copyWith(color: cs.primary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 }

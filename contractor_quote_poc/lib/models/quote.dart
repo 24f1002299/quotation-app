@@ -33,24 +33,75 @@ class QuoteLineItem {
        assert(unitRatePaise >= 0);
 }
 
+/// Day 15 default commercial terms (used when a quote has no custom terms).
+/// Kept small on purpose: validity line is generated from [Quote.validityDays].
+const List<String> kDefaultQuoteTerms = [
+  'Water and electricity to be provided by client at site.',
+  'Rates are for standard execution as per industry norms.',
+  'Extra work or material changes will be billed on actuals.',
+];
+
 class Quote {
+  /// Day 15 identity: immutable local ID (idempotency anchor) + human labels.
+  final String? id;
+  final String? quoteNumber;
+  final String? serverDisplayNumber;
+
   final Customer customer;
   final List<QuoteLineItem> lineItems;
   final int? gstPercent;
+
+  /// Day 15 commercial fields — all optional so a quote works with only
+  /// client name + line items. They render in the PDF only when supplied.
+  final DateTime? quoteDate;
+  final int validityDays;
+  final int? advancePercent;
+  final String advanceText;
+  final String notes;
+  final List<String> terms;
+
   final String? originalTranscript;
   final List<String> reviewWarnings;
   final bool reviewWarningsAcknowledged;
 
   Quote({
+    this.id,
+    this.quoteNumber,
+    this.serverDisplayNumber,
     required this.customer,
     required List<QuoteLineItem> lineItems,
     this.gstPercent,
+    this.quoteDate,
+    this.validityDays = 15,
+    this.advancePercent,
+    this.advanceText = '',
+    this.notes = '',
+    List<String> terms = const [],
     this.originalTranscript,
     List<String> reviewWarnings = const [],
     this.reviewWarningsAcknowledged = false,
   }) : assert(gstPercent == null || (gstPercent >= 0 && gstPercent <= 100)),
-       lineItems = List.unmodifiable(lineItems),
-       reviewWarnings = List.unmodifiable(reviewWarnings);
+        assert(validityDays > 0),
+        assert(advancePercent == null ||
+            (advancePercent >= 0 && advancePercent <= 100)),
+        lineItems = List.unmodifiable(lineItems),
+        terms = List.unmodifiable(terms),
+        reviewWarnings = List.unmodifiable(reviewWarnings);
+
+  /// Number shown on screen/PDF: backend value wins when synced, else local quoteNumber.
+  String get displayNumber => serverDisplayNumber ?? quoteNumber ?? 'Q-2026-0001';
+
+  /// Effective advance description.
+  String get effectiveAdvanceText {
+    if (advanceText.trim().isNotEmpty) return advanceText.trim();
+    if (advancePercent != null && advancePercent! > 0) {
+      return '$advancePercent% advance payment';
+    }
+    return '';
+  }
+
+  /// Effective terms for the PDF: custom terms when supplied, else defaults.
+  List<String> get effectiveTerms => terms.isEmpty ? kDefaultQuoteTerms : terms;
 }
 
 class QuoteTotals {

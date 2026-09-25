@@ -45,8 +45,12 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       quote: widget.quote,
       format: format,
       trade: widget.trade,
-      validityDays: widget.validityDays,
-      notes: widget.notes,
+      validityDays: widget.quote.validityDays > 0
+          ? widget.quote.validityDays
+          : widget.validityDays,
+      notes: widget.quote.notes.isNotEmpty ? widget.quote.notes : widget.notes,
+      quoteDate: widget.quote.quoteDate,
+      quoteNumber: widget.quote.displayNumber,
     );
 
     _lastGeneratedBytes = bytes;
@@ -76,22 +80,31 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         fileName: fileName,
       );
 
-      final id =
+      final id = widget.quote.id ??
           widget.savedQuoteId ??
           'quote_${DateTime.now().millisecondsSinceEpoch}';
       final saved = SavedQuote(
         id: id,
-        quoteNumber:
+        quoteNumber: widget.quote.quoteNumber ??
             'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
+        serverDisplayNumber: widget.quote.serverDisplayNumber,
         createdAt: DateTime.now(),
+        quoteDate: widget.quote.quoteDate,
         trade: widget.trade,
         customerName: widget.quote.customer.name.trim().isEmpty
             ? 'Client'
             : widget.quote.customer.name.trim(),
         customerPhone: widget.quote.customer.phone.trim(),
         customerAddress: widget.quote.customer.address.trim(),
-        validityDays: widget.validityDays,
-        notes: widget.notes ?? '',
+        validityDays: widget.quote.validityDays > 0
+            ? widget.quote.validityDays
+            : widget.validityDays,
+        advancePercent: widget.quote.advancePercent,
+        advanceText: widget.quote.advanceText,
+        notes: widget.quote.notes.isNotEmpty
+            ? widget.quote.notes
+            : (widget.notes ?? ''),
+        terms: widget.quote.terms,
         originalTranscript: widget.quote.originalTranscript,
         reviewWarnings: widget.quote.reviewWarnings,
         reviewWarningsAcknowledged: widget.quote.reviewWarningsAcknowledged,

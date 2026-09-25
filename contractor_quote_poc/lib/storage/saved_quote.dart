@@ -6,15 +6,37 @@ import '../models/quote.dart';
 /// Stores all metadata, line items, customer details, and original transcript
 /// in a serializable format for local persistence via SharedPreferences.
 class SavedQuote {
+  /// Immutable local ID (UUID v4) — the idempotency anchor. Never changes.
   final String id;
+
+  /// Local human-readable label (e.g. Q-2026-A3F9). Not gap-free.
   final String quoteNumber;
+
+  /// Day 15: assigned by the backend on first successful sync. Null while
+  /// offline. UI/PDF prefer this when present, else [quoteNumber].
+  final String? serverDisplayNumber;
+
+  /// Idempotency key sent with every write; defaults to [id].
+  final String idempotencyKey;
+
   final DateTime createdAt;
+
+  /// Day 15 commercial date (defaults to [createdAt] when null).
+  final DateTime? quoteDate;
   final Trade? trade;
   final String customerName;
   final String customerPhone;
   final String customerAddress;
   final int validityDays;
+
+  /// Day 15: optional advance, e.g. 50 → "50% advance".
+  final int? advancePercent;
+  final String advanceText;
   final String notes;
+
+  /// Day 15: custom terms (empty → PDF uses [kDefaultQuoteTerms]).
+  final List<String> terms;
+
   final String? originalTranscript;
   final List<String> reviewWarnings;
   final bool reviewWarningsAcknowledged;
@@ -27,12 +49,18 @@ class SavedQuote {
     required this.id,
     required this.quoteNumber,
     required this.createdAt,
+    this.serverDisplayNumber,
+    String? idempotencyKey,
+    this.quoteDate,
     this.trade,
     required this.customerName,
     this.customerPhone = '',
     this.customerAddress = '',
     this.validityDays = 15,
+    this.advancePercent,
+    this.advanceText = '',
     this.notes = '',
+    this.terms = const [],
     this.originalTranscript,
     this.reviewWarnings = const [],
     this.reviewWarningsAcknowledged = false,
@@ -40,10 +68,19 @@ class SavedQuote {
     this.gstPercent,
     this.pdfPath,
     this.status = 'needsReview',
-  });
+  }) : idempotencyKey = idempotencyKey ?? id;
+
+  /// Number shown on screen/PDF: backend value wins when synced.
+  String get displayNumber => serverDisplayNumber ?? quoteNumber;
+
+  /// Effective quote date for PDF/validity math.
+  DateTime get effectiveDate => quoteDate ?? createdAt;
 
   /// Converts this saved record back into an immutable domain [Quote].
   Quote toQuote() => Quote(
+    id: id,
+    quoteNumber: quoteNumber,
+    serverDisplayNumber: serverDisplayNumber,
     customer: Customer(
       name: customerName,
       phone: customerPhone,
@@ -51,6 +88,12 @@ class SavedQuote {
     ),
     lineItems: lineItems,
     gstPercent: gstPercent,
+    quoteDate: effectiveDate,
+    validityDays: validityDays,
+    advancePercent: advancePercent,
+    advanceText: advanceText,
+    notes: notes,
+    terms: terms,
     originalTranscript: originalTranscript,
     reviewWarnings: reviewWarnings,
     reviewWarningsAcknowledged: reviewWarningsAcknowledged,
@@ -65,13 +108,19 @@ class SavedQuote {
   SavedQuote copyWith({
     String? id,
     String? quoteNumber,
+    String? serverDisplayNumber,
+    String? idempotencyKey,
     DateTime? createdAt,
+    DateTime? quoteDate,
     Trade? trade,
     String? customerName,
     String? customerPhone,
     String? customerAddress,
     int? validityDays,
+    int? advancePercent,
+    String? advanceText,
     String? notes,
+    List<String>? terms,
     String? originalTranscript,
     List<String>? reviewWarnings,
     bool? reviewWarningsAcknowledged,
@@ -83,13 +132,19 @@ class SavedQuote {
     return SavedQuote(
       id: id ?? this.id,
       quoteNumber: quoteNumber ?? this.quoteNumber,
+      serverDisplayNumber: serverDisplayNumber ?? this.serverDisplayNumber,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
       createdAt: createdAt ?? this.createdAt,
+      quoteDate: quoteDate ?? this.quoteDate,
       trade: trade ?? this.trade,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerAddress: customerAddress ?? this.customerAddress,
       validityDays: validityDays ?? this.validityDays,
+      advancePercent: advancePercent ?? this.advancePercent,
+      advanceText: advanceText ?? this.advanceText,
       notes: notes ?? this.notes,
+      terms: terms ?? this.terms,
       originalTranscript: originalTranscript ?? this.originalTranscript,
       reviewWarnings: reviewWarnings ?? this.reviewWarnings,
       reviewWarningsAcknowledged:
@@ -104,13 +159,19 @@ class SavedQuote {
   Map<String, dynamic> toJson() => {
     'id': id,
     'quoteNumber': quoteNumber,
+    'serverDisplayNumber': serverDisplayNumber,
+    'idempotencyKey': idempotencyKey,
     'createdAt': createdAt.toIso8601String(),
+    'quoteDate': quoteDate?.toIso8601String(),
     'trade': trade?.name,
     'customerName': customerName,
     'customerPhone': customerPhone,
     'customerAddress': customerAddress,
     'validityDays': validityDays,
+    'advancePercent': advancePercent,
+    'advanceText': advanceText,
     'notes': notes,
+    'terms': terms,
     'originalTranscript': originalTranscript,
     'reviewWarnings': reviewWarnings,
     'reviewWarningsAcknowledged': reviewWarningsAcknowledged,
@@ -173,20 +234,29 @@ class SavedQuote {
       growable: false,
     );
 
+    final rawTerms = json['terms'] as List<dynamic>? ?? const [];
     return SavedQuote(
       id:
           json['id'] as String? ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       quoteNumber: json['quoteNumber'] as String? ?? 'Q-2026-001',
+      serverDisplayNumber: json['serverDisplayNumber'] as String?,
+      idempotencyKey: json['idempotencyKey'] as String? ?? json['id'] as String?,
       createdAt:
           DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
+      quoteDate: json['quoteDate'] != null
+          ? DateTime.tryParse(json['quoteDate'] as String)
+          : null,
       trade: parsedTrade,
       customerName: json['customerName'] as String? ?? 'Client',
       customerPhone: json['customerPhone'] as String? ?? '',
       customerAddress: json['customerAddress'] as String? ?? '',
       validityDays: json['validityDays'] as int? ?? 15,
+      advancePercent: json['advancePercent'] as int?,
+      advanceText: json['advanceText'] as String? ?? '',
       notes: json['notes'] as String? ?? '',
+      terms: rawTerms.whereType<String>().toList(growable: false),
       originalTranscript: json['originalTranscript'] as String?,
       reviewWarnings: reviewWarnings,
       reviewWarningsAcknowledged:
