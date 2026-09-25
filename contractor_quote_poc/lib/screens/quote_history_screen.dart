@@ -1,18 +1,24 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../catalog/catalog.dart';
 import '../storage/quote_repository.dart';
+import '../storage/quote_sync_service.dart';
 import '../storage/saved_quote.dart';
 import '../theme.dart';
 import '../utils/rupee_format.dart';
 import 'pdf_preview_screen.dart';
 import 'review_screen.dart';
 
-/// Day 9 — Interactive Quote History Screen.
+/// Day 9 & Day 16 — Interactive Quote History Screen.
 ///
-/// Loads saved quotes from [QuoteRepository], displays summary cards with
-/// trade branding, and allows reopening any quote for editing or regenerating PDFs.
+/// Features:
+/// - Uncluttered chronological quotation list.
+/// - Server-side search by client name, status chips (Draft, Ready, Shared), and date.
+/// - Paginated loading with offline local fallback.
+/// - Conflict detection and simple conflict choice dialog when edited on another device.
+/// - No analytics dashboard.
 class QuoteHistoryScreen extends StatefulWidget {
   const QuoteHistoryScreen({super.key});
 
@@ -21,18 +27,182 @@ class QuoteHistoryScreen extends StatefulWidget {
 }
 
 class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
-  late Future<List<SavedQuote>> _quotesFuture;
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _debounceTimer;
+
+  String _searchQuery = '';
+  String _selectedStatus = 'All'; // 'All', 'draft', 'ready', 'shared'
+  DateTime? _selectedDate;
+
+  List<SavedQuote> _quotes = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  int _page = 0;
+  final int _pageSize = 10;
+  bool _isLastPage = true;
+  bool _isOffline = false;
+
+  List<SyncConflict> _conflicts = [];
 
   @override
   void initState() {
     super.initState();
-    _loadQuotes();
+    _fetchQuotes(page: 0);
+    _checkForConflictsAndSync();
   }
 
-  void _loadQuotes() {
-    setState(() {
-      _quotesFuture = QuoteRepository.getQuotes();
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String val) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchQuery = val.trim();
+        _page = 0;
+      });
+      _fetchQuotes(page: 0);
     });
+  }
+
+  Future<void> _checkForConflictsAndSync() async {
+    try {
+      final detectedConflicts = await QuoteSyncService.syncPendingQuotes();
+      if (mounted) {
+        setState(() {
+          _conflicts = detectedConflicts;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchQuotes({required int page, bool loadMore = false}) async {
+    if (loadMore) {
+      setState(() => _isLoadingMore = true);
+    } else {
+      setState(() => _isLoading = true);
+    }
+
+    final statusParam = _selectedStatus == 'All'
+        ? null
+        : (_selectedStatus == 'Draft' ? 'draft' : _selectedStatus.toLowerCase());
+
+    final dateParam = _selectedDate != null
+        ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
+        : null;
+
+    final result = await QuoteSyncService.searchQuoteHistory(
+      page: page,
+      size: _pageSize,
+      client: _searchQuery.isNotEmpty ? _searchQuery : null,
+      status: statusParam,
+      date: dateParam,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      if (loadMore) {
+        _quotes.addAll(result.quotes);
+      } else {
+        _quotes = result.quotes;
+      }
+      _page = result.page;
+      _isLastPage = result.isLast;
+      _isOffline = result.isOffline;
+      _isLoading = false;
+      _isLoadingMore = false;
+    });
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || _isLastPage) return;
+    await _fetchQuotes(page: _page + 1, loadMore: true);
+  }
+
+  void _showConflictDialog(SyncConflict conflict) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Expanded(child: Text('Version Conflict / टकराव')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This quote was edited on another device while you were offline.\n\n'
+              'यह कोटेशन किसी अन्य फोन पर भी बदला गया था। कौन सा संस्करण रखना चाहते हैं?',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '📱 This Phone (v${conflict.localQuote.version}):',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text('${conflict.localQuote.customerName} • ${conflict.localQuote.lineItems.length} items • ₹${conflict.localQuote.grandTotalRupees}'),
+                  const Divider(height: 16),
+                  Text(
+                    '☁️ Server / Other Device (v${conflict.serverQuote.version}):',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text('${conflict.serverQuote.customerName} • ${conflict.serverQuote.lineItems.length} items • ₹${conflict.serverQuote.grandTotalRupees}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await QuoteSyncService.resolveKeepServer(conflict.localQuote.id);
+              _checkForConflictsAndSync();
+              _fetchQuotes(page: 0);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Kept server version / सर्वर संस्करण रखा गया')),
+                );
+              }
+            },
+            child: const Text('Keep Server / सर्वर का रखें'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await QuoteSyncService.resolveKeepDevice(conflict.localQuote.id);
+              _checkForConflictsAndSync();
+              _fetchQuotes(page: 0);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Kept this phone\'s version / इस फोन का संस्करण रखा गया')),
+                );
+              }
+            },
+            child: const Text('Keep This Phone / इस फोन का रखें'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteQuote(SavedQuote quote) async {
@@ -61,7 +231,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 
     if (confirmed == true) {
       await QuoteRepository.deleteQuote(quote.id);
-      _loadQuotes();
+      _fetchQuotes(page: 0);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -90,7 +260,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
           initialLineItems: quote.lineItems,
         ),
       ),
-    ).then((_) => _loadQuotes());
+    ).then((_) => _fetchQuotes(page: 0));
   }
 
   void _viewPdf(SavedQuote quote) {
@@ -108,49 +278,219 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
     );
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _page = 0;
+      });
+      _fetchQuotes(page: 0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quote History / पुराने कोटेशन'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh / ताज़ा करें',
-            onPressed: _loadQuotes,
+            tooltip: 'Refresh & Sync / ताज़ा करें',
+            onPressed: () {
+              _checkForConflictsAndSync();
+              _fetchQuotes(page: 0);
+            },
           ),
         ],
       ),
       body: SafeArea(
-        child: FutureBuilder<List<SavedQuote>>(
-          future: _quotesFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final quotes = snapshot.data ?? [];
-
-            if (quotes.isEmpty) {
-              return _EmptyState(
-                onNewQuote: () => Navigator.pushNamed(context, '/new-quote'),
-              );
-            }
-
-            return RefreshIndicator(
-              onRefresh: () async => _loadQuotes(),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(kPagePadding),
-                itemCount: quotes.length,
-                itemBuilder: (ctx, i) => _SavedQuoteCard(
-                  quote: quotes[i],
-                  onTap: () => _openQuoteForEditing(quotes[i]),
-                  onViewPdf: () => _viewPdf(quotes[i]),
-                  onDelete: () => _deleteQuote(quotes[i]),
+        child: Column(
+          children: [
+            // ── Conflict Banner (if any detected) ───────────────────────────
+            if (_conflicts.isNotEmpty)
+              Material(
+                color: Colors.amber.shade100,
+                child: InkWell(
+                  onTap: () => _showConflictDialog(_conflicts.first),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Colors.brown, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${_conflicts.length} conflict(s) detected with another device. Tap to resolve.',
+                            style: const TextStyle(
+                              color: Colors.brown,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => _showConflictDialog(_conflicts.first),
+                          child: const Text('Resolve'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (_isOffline)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: Colors.grey.shade300,
+                child: const Row(
+                  children: [
+                    Icon(Icons.cloud_off_rounded, size: 16, color: Colors.black54),
+                    SizedBox(width: 8),
+                    Text(
+                      'Offline — drafts are safe on this phone',
+                      style: TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
+
+            // ── Search & Filter Controls ────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(kPagePadding, 12, kPagePadding, 4),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search client or quote number / खोजें...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _onSearchChanged('');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: cs.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: cs.outlineVariant),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Filter Chips (Status & Date) ────────────────────────────────
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: kPagePadding, vertical: 8),
+              child: Row(
+                children: [
+                  ...['All', 'Draft', 'Ready', 'Shared'].map((status) {
+                    final isSelected = _selectedStatus == status;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(status),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedStatus = status;
+                            _page = 0;
+                          });
+                          _fetchQuotes(page: 0);
+                        },
+                      ),
+                    );
+                  }),
+                  const SizedBox(width: 4),
+                  InputChip(
+                    avatar: Icon(
+                      Icons.calendar_today_rounded,
+                      size: 14,
+                      color: _selectedDate != null ? cs.primary : null,
+                    ),
+                    label: Text(
+                      _selectedDate != null
+                          ? DateFormat('dd MMM').format(_selectedDate!)
+                          : 'Date / तारीख',
+                    ),
+                    selected: _selectedDate != null,
+                    onPressed: _pickDate,
+                    onDeleted: _selectedDate != null
+                        ? () {
+                            setState(() {
+                              _selectedDate = null;
+                              _page = 0;
+                            });
+                            _fetchQuotes(page: 0);
+                          }
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Quotes List / Loading / Empty State ─────────────────────────
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _quotes.isEmpty
+                      ? _EmptyState(
+                          onNewQuote: () => Navigator.pushNamed(context, '/new-quote'),
+                          hasFilters: _searchQuery.isNotEmpty ||
+                              _selectedStatus != 'All' ||
+                              _selectedDate != null,
+                        )
+                      : RefreshIndicator(
+                          onRefresh: () async {
+                            await _checkForConflictsAndSync();
+                            await _fetchQuotes(page: 0);
+                          },
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(kPagePadding),
+                            itemCount: _quotes.length + (_isLastPage ? 0 : 1),
+                            itemBuilder: (ctx, i) {
+                              if (i == _quotes.length) {
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  child: Center(
+                                    child: _isLoadingMore
+                                        ? const CircularProgressIndicator()
+                                        : TextButton(
+                                            onPressed: _loadMore,
+                                            child: const Text('Load more / और देखें'),
+                                          ),
+                                  ),
+                                );
+                              }
+                              return _SavedQuoteCard(
+                                quote: _quotes[i],
+                                onTap: () => _openQuoteForEditing(_quotes[i]),
+                                onViewPdf: () => _viewPdf(_quotes[i]),
+                                onDelete: () => _deleteQuote(_quotes[i]),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
         ),
       ),
     );
@@ -158,7 +498,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _SavedQuoteCard — Interactive history card for a saved quote
+// _SavedQuoteCard — Uncluttered chronological quote row card
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SavedQuoteCard extends StatelessWidget {
@@ -183,17 +523,36 @@ class _SavedQuoteCard extends StatelessWidget {
     final tradeIcon = quote.trade == Trade.tiling
         ? '🪣'
         : quote.trade == Trade.painting
-        ? '🖌️'
-        : '📄';
+            ? '🖌️'
+            : '📄';
 
     final tradeLabel = quote.trade == Trade.tiling
         ? 'Tiling'
         : quote.trade == Trade.painting
-        ? 'Painting'
-        : 'Quote';
+            ? 'Painting'
+            : 'Quote';
+
+    // Status chip color
+    Color statusBg = Colors.grey.shade200;
+    Color statusFg = Colors.grey.shade800;
+    String statusDisplay = quote.status.toUpperCase();
+    if (quote.status == 'ready') {
+      statusBg = Colors.green.shade100;
+      statusFg = Colors.green.shade900;
+      statusDisplay = 'READY';
+    } else if (quote.status == 'shared') {
+      statusBg = Colors.blue.shade100;
+      statusFg = Colors.blue.shade900;
+      statusDisplay = 'SHARED';
+    } else if (quote.status == 'draft' || quote.status == 'needsReview') {
+      statusBg = Colors.orange.shade100;
+      statusFg = Colors.orange.shade900;
+      statusDisplay = 'DRAFT';
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
@@ -202,20 +561,15 @@ class _SavedQuoteCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Row: Trade badge + Quote Number + Popup Menu
+              // Top Row: Trade badge + Quote Number + Status Chip + Menu
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: cs.primary.withValues(alpha: 0.3),
-                      ),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -234,13 +588,28 @@ class _SavedQuoteCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    quote.quoteNumber,
+                    quote.displayNumber,
                     style: tt.bodySmall?.copyWith(
-                      color: const Color(0xFF9E9BA8),
+                      color: const Color(0xFF757575),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      statusDisplay,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: statusFg,
+                      ),
+                    ),
+                  ),
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded, size: 20),
                     onSelected: (val) {
@@ -273,16 +642,9 @@ class _SavedQuoteCard extends StatelessWidget {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.delete_outline_rounded,
-                              color: Colors.redAccent,
-                              size: 18,
-                            ),
+                            Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
                             SizedBox(width: 8),
-                            Text(
-                              'Delete / हटाएं',
-                              style: TextStyle(color: Colors.redAccent),
-                            ),
+                            Text('Delete / हटाएं', style: TextStyle(color: Colors.redAccent)),
                           ],
                         ),
                       ),
@@ -293,7 +655,7 @@ class _SavedQuoteCard extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              // Middle: Customer name & items count
+              // Middle: Customer name & amount
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
@@ -304,16 +666,12 @@ class _SavedQuoteCard extends StatelessWidget {
                       children: [
                         Text(
                           quote.customerName,
-                          style: tt.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${quote.lineItems.length} items • ${dateFormat.format(quote.createdAt)}',
-                          style: tt.bodySmall?.copyWith(
-                            color: const Color(0xFF9E9BA8),
-                          ),
+                          '${quote.lineItems.length} items • ${dateFormat.format(quote.effectiveDate)}',
+                          style: tt.bodySmall?.copyWith(color: const Color(0xFF757575)),
                         ),
                       ],
                     ),
@@ -323,26 +681,6 @@ class _SavedQuoteCard extends StatelessWidget {
                     style: tt.titleLarge?.copyWith(
                       color: cs.primary,
                       fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Bottom hint
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.touch_app_outlined,
-                    size: 13,
-                    color: Color(0xFF9E9BA8),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Tap to edit numbers & recreate PDF',
-                    style: tt.bodySmall?.copyWith(
-                      fontSize: 11,
-                      color: const Color(0xFF9E9BA8),
                     ),
                   ),
                 ],
@@ -357,7 +695,9 @@ class _SavedQuoteCard extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final VoidCallback onNewQuote;
-  const _EmptyState({required this.onNewQuote});
+  final bool hasFilters;
+
+  const _EmptyState({required this.onNewQuote, this.hasFilters = false});
 
   @override
   Widget build(BuildContext context) {
@@ -376,19 +716,28 @@ class _EmptyState extends StatelessWidget {
               color: cs.primary.withValues(alpha: 0.4),
             ),
             const SizedBox(height: 16),
-            Text('No quotes yet / कोई कोटेशन नहीं', style: tt.titleLarge),
+            Text(
+              hasFilters
+                  ? 'No matching quotes / कोई मेल नहीं'
+                  : 'Your quotations will appear here / आपके कोटेशन यहाँ दिखेंगे',
+              style: tt.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 6),
             Text(
-              'Your spoken and drafted quotes will be saved here automatically.',
-              style: tt.bodyMedium?.copyWith(color: const Color(0xFF9E9BA8)),
+              hasFilters
+                  ? 'Try clearing your search query or filters.'
+                  : 'Start a voice quote to generate your first professional quotation.',
+              style: tt.bodyMedium?.copyWith(color: const Color(0xFF757575)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: onNewQuote,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Create New Quote / नया कोटेशन बनाएं'),
-            ),
+            if (!hasFilters)
+              ElevatedButton.icon(
+                onPressed: onNewQuote,
+                icon: const Icon(Icons.mic_none_rounded),
+                label: const Text('Create a voice quote / नया कोटेशन'),
+              ),
           ],
         ),
       ),

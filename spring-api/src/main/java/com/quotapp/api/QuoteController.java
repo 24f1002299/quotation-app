@@ -81,14 +81,20 @@ public class QuoteController {
     }
 
     @GetMapping
-    public ResponseEntity<?> listMyQuotes() {
+    public ResponseEntity<?> listMyQuotes(
+        @RequestParam(value = "page", defaultValue = "0") int page,
+        @RequestParam(value = "size", defaultValue = "10") int size,
+        @RequestParam(value = "client", required = false) String client,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "date", required = false) String date
+    ) {
         String userId = UserContext.getUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse("UNAUTHORIZED", "Authentication required"));
         }
-        List<QuoteDto> list = quoteRepository.findAllByUserId(userId);
-        return ResponseEntity.ok(list);
+        var pageResult = quoteRepository.searchQuotes(userId, page, size, client, status, date);
+        return ResponseEntity.ok(pageResult);
     }
 
     @GetMapping("/{quoteId}")

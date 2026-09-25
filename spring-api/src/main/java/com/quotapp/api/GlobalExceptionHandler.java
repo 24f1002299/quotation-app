@@ -64,6 +64,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(com.quotapp.api.exception.QuoteVersionConflictException.class)
+    public ResponseEntity<com.quotapp.api.dto.QuoteConflictResponse> handleVersionConflict(
+        com.quotapp.api.exception.QuoteVersionConflictException ex
+    ) {
+        log.warn("Quote version conflict: {}", ex.getMessage());
+        var response = new com.quotapp.api.dto.QuoteConflictResponse(
+            "VERSION_CONFLICT",
+            ex.getMessage(),
+            ex.getServerQuote()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
     @ExceptionHandler(OwnershipViolationException.class)
     public ResponseEntity<ErrorResponse> handleOwnershipViolation(OwnershipViolationException ex) {
         log.warn("Ownership violation: {}", ex.getMessage());

@@ -7,9 +7,16 @@ import '../models/quote.dart';
 import '../parser/demo_transcripts.dart';
 import 'saved_quote.dart';
 
-/// Day 9 — Local repository for persistent quotation management.
+import 'encrypted_draft_store.dart';
+import 'quote_sync_service.dart';
+import 'sync_outbox.dart';
+
+/// Day 9 & Day 16 — Local repository for persistent quotation management.
 ///
-/// Handles CRUD operations via SharedPreferences with JSON serialization.
+/// Features:
+/// - Encrypted local draft store protecting sensitive quotation data at rest.
+/// - Durable sync outbox containing operation ID, idempotency key, retry count, and payload version.
+/// - Sync with Spring Boot API / Supabase with bounded exponential backoff.
 class QuoteRepository {
   static const _storageKey = 'contractor_saved_quotes_v1';
 
@@ -36,8 +43,33 @@ class QuoteRepository {
     }
   }
 
-  /// Saves or updates [quote]. If a quote with the same `id` exists, it is replaced.
+  /// Saves or updates [quote].
+  /// Persists locally, encrypts draft, enqueues to durable SyncOutbox,
+  /// and initiates background synchronization.
   static Future<void> saveQuote(SavedQuote quote) async {
+    await saveQuoteLocallyOnly(quote);
+
+    // Save to Encrypted Draft Store
+    await EncryptedDraftStore.saveDraft(quote);
+
+    // Enqueue outbox mutation
+    await SyncOutbox.enqueue(OutboxItem(
+      operationId: 'quote_${quote.id}',
+      entityType: 'quote',
+      action: 'upsert',
+      payload: quote.toJson(),
+      idempotencyKey: quote.idempotencyKey,
+      retryCount: 0,
+      payloadVersion: quote.version,
+      createdAt: DateTime.now(),
+    ));
+
+    // Attempt non-blocking remote sync
+    QuoteSyncService.syncPendingQuotes();
+  }
+
+  /// Saves quote locally without enqueueing a new outbox mutation (used during sync updates).
+  static Future<void> saveQuoteLocallyOnly(SavedQuote quote) async {
     final quotes = await getQuotes();
     final existingIndex = quotes.indexWhere((q) => q.id == quote.id);
 
@@ -55,6 +87,7 @@ class QuoteRepository {
     final quotes = await getQuotes();
     quotes.removeWhere((q) => q.id == id);
     await saveAll(quotes);
+    await EncryptedDraftStore.removeDraft(id);
   }
 
   /// Looks up a quote by [id]. Returns null if not found.
@@ -74,10 +107,11 @@ class QuoteRepository {
     await prefs.setStringList(_storageKey, jsonList);
   }
 
-  /// Clears all saved quotes (useful for test resets).
+  /// Clears all saved quotes and drafts (useful for test resets).
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
+    await EncryptedDraftStore.clearAll();
   }
 
   // ── Initial demo seeds for seamless presentation ──────────────────────────

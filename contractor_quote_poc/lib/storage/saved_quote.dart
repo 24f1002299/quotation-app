@@ -45,6 +45,9 @@ class SavedQuote {
   final String? pdfPath;
   final String status;
 
+  /// Day 16: Record version for optimistic concurrency and conflict detection.
+  final int version;
+
   const SavedQuote({
     required this.id,
     required this.quoteNumber,
@@ -68,6 +71,7 @@ class SavedQuote {
     this.gstPercent,
     this.pdfPath,
     this.status = 'needsReview',
+    this.version = 1,
   }) : idempotencyKey = idempotencyKey ?? id;
 
   /// Number shown on screen/PDF: backend value wins when synced.
@@ -128,6 +132,7 @@ class SavedQuote {
     int? gstPercent,
     String? pdfPath,
     String? status,
+    int? version,
   }) {
     return SavedQuote(
       id: id ?? this.id,
@@ -153,6 +158,7 @@ class SavedQuote {
       gstPercent: gstPercent ?? this.gstPercent,
       pdfPath: pdfPath ?? this.pdfPath,
       status: status ?? this.status,
+      version: version ?? this.version,
     );
   }
 
@@ -176,6 +182,7 @@ class SavedQuote {
     'reviewWarnings': reviewWarnings,
     'reviewWarningsAcknowledged': reviewWarningsAcknowledged,
     'status': status,
+    'version': version,
     'lineItems': lineItems
         .map(
           (item) => {
@@ -265,6 +272,7 @@ class SavedQuote {
       gstPercent: json['gstPercent'] as int?,
       pdfPath: json['pdfPath'] as String?,
       status: json['status'] as String? ?? 'needsReview',
+      version: json['version'] as int? ?? 1,
     );
   }
 }

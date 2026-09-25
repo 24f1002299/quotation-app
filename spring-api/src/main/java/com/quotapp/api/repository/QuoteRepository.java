@@ -1,6 +1,8 @@
 package com.quotapp.api.repository;
 
+import com.quotapp.api.dto.PageResponse;
 import com.quotapp.api.dto.QuoteDto;
+import com.quotapp.api.exception.QuoteVersionConflictException;
 import org.springframework.stereotype.Repository;
 
 import java.security.SecureRandom;
@@ -127,16 +129,65 @@ public class QuoteRepository {
         return list;
     }
 
+    public PageResponse<QuoteDto> searchQuotes(String userId, int page, int size, String client, String status, String date) {
+        if (userId == null) {
+            return PageResponse.of(Collections.emptyList(), page, size, 0);
+        }
+        Map<String, QuoteDto> quotes = userQuotes.get(userId);
+        if (quotes == null || quotes.isEmpty()) {
+            return PageResponse.of(Collections.emptyList(), page, size, 0);
+        }
+
+        List<QuoteDto> all = new ArrayList<>(quotes.values());
+        all.sort((a, b) -> {
+            Instant bTime = b.createdAt() != null ? b.createdAt() : Instant.MIN;
+            Instant aTime = a.createdAt() != null ? a.createdAt() : Instant.MIN;
+            return bTime.compareTo(aTime);
+        });
+
+        List<QuoteDto> filtered = all.stream().filter(q -> {
+            if (client != null && !client.isBlank()) {
+                if (q.clientName() == null || !q.clientName().toLowerCase().contains(client.toLowerCase().trim())) {
+                    return false;
+                }
+            }
+            if (status != null && !status.isBlank()) {
+                if (q.status() == null || !q.status().equalsIgnoreCase(status.trim())) {
+                    return false;
+                }
+            }
+            if (date != null && !date.isBlank()) {
+                String dTrim = date.trim();
+                String effectiveDate = (q.quoteDate() != null && !q.quoteDate().isBlank())
+                    ? q.quoteDate()
+                    : (q.createdAt() != null ? q.createdAt().toString() : "");
+                if (!effectiveDate.contains(dTrim)) {
+                    return false;
+                }
+            }
+            return true;
+        }).toList();
+
+        long totalElements = filtered.size();
+        int safePage = Math.max(0, page);
+        int safeSize = size > 0 ? size : 10;
+        int fromIndex = Math.min(safePage * safeSize, filtered.size());
+        int toIndex = Math.min(fromIndex + safeSize, filtered.size());
+        List<QuoteDto> pagedContent = filtered.subList(fromIndex, toIndex);
+
+        return PageResponse.of(pagedContent, safePage, safeSize, totalElements);
+    }
+
     public QuoteDto save(String userId, QuoteDto quote) {
         if (userId == null || quote == null) {
             throw new IllegalArgumentException("userId and quote cannot be null");
         }
         String idempKey = quote.idempotencyKey() != null ? quote.idempotencyKey().trim() : null;
         if (idempKey != null && !idempKey.isBlank()) {
-            Optional<QuoteDto> existing = findByIdempotencyKey(userId, idempKey);
-            if (existing.isPresent()) {
+            Optional<QuoteDto> existingByIdemp = findByIdempotencyKey(userId, idempKey);
+            if (existingByIdemp.isPresent()) {
                 // Idempotent: server accepts each idempotency key once and returns existing
-                return existing.get();
+                return existingByIdemp.get();
             }
         }
 
@@ -144,14 +195,38 @@ public class QuoteRepository {
             ? quote.id()
             : UUID.randomUUID().toString();
 
-        // Assign a human-readable display number on first sync if not provided.
-        // "do not promise gap-free sequential numbering"
+        Optional<QuoteDto> existingForQuoteId = findById(userId, quoteId);
+        Instant now = Instant.now();
+        Instant createdAt = now;
+        int targetVersion = 1;
         String displayNumber = quote.displayNumber();
-        if (displayNumber == null || displayNumber.isBlank()) {
-            displayNumber = generateDisplayNumber();
+
+        if (existingForQuoteId.isPresent()) {
+            QuoteDto existing = existingForQuoteId.get();
+            createdAt = existing.createdAt();
+            if (displayNumber == null || displayNumber.isBlank()) {
+                displayNumber = existing.displayNumber();
+            }
+            int incomingVersion = quote.version() != null ? quote.version() : 1;
+            int existingVersion = existing.version() != null ? existing.version() : 1;
+            if (incomingVersion < existingVersion) {
+                // Same quote was updated on another device: version conflict
+                throw new QuoteVersionConflictException(
+                    "Quote was modified on another device (server version: " + existingVersion + ", device version: " + incomingVersion + ")",
+                    existing
+                );
+            }
+            targetVersion = existingVersion + 1;
+        } else {
+            targetVersion = (quote.version() != null && quote.version() > 0) ? quote.version() : 1;
+            if (quote.createdAt() != null) {
+                createdAt = quote.createdAt();
+            }
+            if (displayNumber == null || displayNumber.isBlank()) {
+                displayNumber = generateDisplayNumber();
+            }
         }
 
-        Instant now = Instant.now();
         QuoteDto saved = new QuoteDto(
             quoteId,
             idempKey != null ? idempKey : quoteId,
@@ -172,8 +247,8 @@ public class QuoteRepository {
             quote.notes(),
             quote.terms() != null ? quote.terms() : Collections.emptyList(),
             quote.lineItems() != null ? quote.lineItems() : Collections.emptyList(),
-            quote.version() != null ? quote.version() : 1,
-            quote.createdAt() != null ? quote.createdAt() : now,
+            targetVersion,
+            createdAt,
             now
         );
 
