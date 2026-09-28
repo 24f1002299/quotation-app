@@ -2,11 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:contractor_quote_poc/catalog/catalog.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/pdf/pdf_service.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
-import 'package:contractor_quote_poc/storage/quote_defaults.dart';
 import 'package:contractor_quote_poc/storage/saved_quote.dart';
 import 'package:contractor_quote_poc/utils/quote_ids.dart';
 

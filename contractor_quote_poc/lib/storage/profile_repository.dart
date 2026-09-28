@@ -107,7 +107,7 @@ class ProfileRepository {
       final storage = Supabase.instance.client.storage.from('user-files');
       await storage.uploadBinary(
         storagePath,
-        bytes is List<int> ? (bytes is Uint8List ? bytes : Uint8List.fromList(bytes)) : Uint8List.fromList(bytes),
+        bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
         fileOptions: FileOptions(
           contentType: mimeType,
           upsert: true,

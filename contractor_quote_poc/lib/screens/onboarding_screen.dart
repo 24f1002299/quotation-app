@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../catalog/catalog.dart';
-import '../models/contractor_profile.dart';
 import '../models/rate_memory_item.dart';
 import '../storage/profile_repository.dart';
 import '../storage/rate_memory_repository.dart';

@@ -5,8 +5,10 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import '../catalog/catalog.dart';
+import '../models/contractor_profile.dart';
 import '../models/quote.dart';
 import '../pdf/pdf_service.dart';
+import '../storage/profile_repository.dart';
 import '../storage/quote_repository.dart';
 import '../storage/saved_quote.dart';
 
@@ -39,10 +41,23 @@ class PdfPreviewScreen extends StatefulWidget {
 class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   Uint8List? _lastGeneratedBytes;
   bool _hasSaved = false;
+  ContractorProfile? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final profile = await ProfileRepository.getProfile();
+    if (mounted) setState(() => _profile = profile);
+  }
 
   Future<Uint8List> _buildPdf(PdfPageFormat format) async {
     final bytes = await PdfService.generateQuotationPdf(
       quote: widget.quote,
+      profile: _profile,
       format: format,
       trade: widget.trade,
       validityDays: widget.quote.validityDays > 0
