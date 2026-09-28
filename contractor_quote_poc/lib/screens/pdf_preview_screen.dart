@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
@@ -8,16 +9,23 @@ import '../catalog/catalog.dart';
 import '../models/contractor_profile.dart';
 import '../models/quote.dart';
 import '../pdf/pdf_service.dart';
+import '../storage/pdf_backup_service.dart';
+import '../storage/pdf_backup_settings.dart';
 import '../storage/profile_repository.dart';
 import '../storage/quote_repository.dart';
 import '../storage/saved_quote.dart';
+import '../theme.dart';
+import '../utils/rupee_format.dart';
 
-/// Day 8 & 9 — PDF Preview Screen.
+/// Day 18 — PDF Preview & Share Screen.
 ///
-/// Displays an interactive preview of the generated A4 quotation PDF,
-/// auto-saves the document to app-scoped storage, persists quote metadata
-/// to QuoteRepository, and provides direct sharing via the native Android
-/// Sharesheet (WhatsApp, Gmail, etc.).
+/// - Saves PDFs to app-scoped storage (`quotations/Quotation_<quoteId>.pdf`).
+/// - "Share PDF" is the sole primary CTA; opens Android's native share sheet
+///   (WhatsApp, Gmail, Drive, …).
+/// - Regeneration after editing overwrites the same app-owned file.
+/// - Cloud backup to Storage happens only when the user opts in.
+/// - Never claims delivery: status becomes `shared` only after the user
+///   confirms "Mark as shared"; otherwise shows "Share sheet opened".
 class PdfPreviewScreen extends StatefulWidget {
   final Quote quote;
   final Trade? trade;
@@ -40,18 +48,49 @@ class PdfPreviewScreen extends StatefulWidget {
 
 class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   Uint8List? _lastGeneratedBytes;
-  bool _hasSaved = false;
   ContractorProfile? _profile;
+  SavedQuote? _existingQuote;
+  String? _savedPdfPath;
+  bool _hasSaved = false;
+  bool _saveAnnounced = false;
+
+  /// Day 18 share state: '' → 'sheet-opened' → 'shared'.
+  String _shareState = '';
+  bool _backupOptIn = false;
+
+  String get _quoteId =>
+      widget.quote.id ??
+      widget.savedQuoteId ??
+      'quote_${DateTime.now().millisecondsSinceEpoch}';
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadExisting();
+    _loadBackupOptIn();
   }
 
   Future<void> _loadProfile() async {
     final profile = await ProfileRepository.getProfile();
     if (mounted) setState(() => _profile = profile);
+  }
+
+  Future<void> _loadExisting() async {
+    final id = widget.quote.id ?? widget.savedQuoteId;
+    if (id == null) return;
+    final existing = await QuoteRepository.getQuoteById(id);
+    if (!mounted) return;
+    setState(() {
+      _existingQuote = existing;
+      _savedPdfPath = existing?.pdfPath;
+      if (existing?.status == 'shared') _shareState = 'shared';
+    });
+  }
+
+  Future<void> _loadBackupOptIn() async {
+    final optedIn = await PdfBackupSettings.isOptedIn();
+    if (mounted) setState(() => _backupOptIn = optedIn);
   }
 
   Future<Uint8List> _buildPdf(PdfPageFormat format) async {
@@ -70,7 +109,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
     _lastGeneratedBytes = bytes;
 
-    // Auto-save to app storage & update local repository (Day 9)
+    // Persist once per screen instance (fire-and-forget).
+    // Regeneration after editing pushes a NEW screen instance, which saves
+    // to the same stable path and overwrites the previous app-owned file.
     if (!_hasSaved) {
       _hasSaved = true;
       _saveQuoteAndPdf(bytes);
@@ -80,60 +121,91 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   }
 
   Future<void> _saveQuoteAndPdf(Uint8List bytes) async {
-    final sanitizedCustomer = widget.quote.customer.name.trim().isEmpty
-        ? 'Client'
-        : widget.quote.customer.name
-              .trim()
-              .replaceAll(RegExp(r'[^\w\s]+'), '')
-              .replaceAll(' ', '_');
-    final fileName =
-        'Quotation_${sanitizedCustomer}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
     try {
-      final savedPath = await PdfService.savePdfToAppStorage(
+      // Day 18: stable path — regeneration replaces the same app-owned file.
+      final savedPath = await PdfService.savePdfReplacingPrevious(
         bytes: bytes,
-        fileName: fileName,
+        quoteId: _quoteId,
+        existingPdfPath: _existingQuote?.pdfPath ?? _savedPdfPath,
       );
 
-      final id = widget.quote.id ??
-          widget.savedQuoteId ??
-          'quote_${DateTime.now().millisecondsSinceEpoch}';
+      final now = DateTime.now();
+      final id = _quoteId;
+      final existing = _existingQuote ??
+          await QuoteRepository.getQuoteById(id);
+
       final saved = SavedQuote(
         id: id,
         quoteNumber: widget.quote.quoteNumber ??
-            'Q-${DateTime.now().year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
-        serverDisplayNumber: widget.quote.serverDisplayNumber,
-        createdAt: DateTime.now(),
-        quoteDate: widget.quote.quoteDate,
-        trade: widget.trade,
+            existing?.quoteNumber ??
+            'Q-${now.year}-${id.length > 4 ? id.substring(id.length - 4) : id}',
+        serverDisplayNumber:
+            widget.quote.serverDisplayNumber ?? existing?.serverDisplayNumber,
+        createdAt: existing?.createdAt ?? now,
+        quoteDate: widget.quote.quoteDate ?? existing?.quoteDate ?? now,
+        trade: widget.trade ?? existing?.trade,
         customerName: widget.quote.customer.name.trim().isEmpty
-            ? 'Client'
+            ? (existing?.customerName ?? 'Client')
             : widget.quote.customer.name.trim(),
-        customerPhone: widget.quote.customer.phone.trim(),
-        customerAddress: widget.quote.customer.address.trim(),
+        customerPhone: widget.quote.customer.phone.trim().isEmpty
+            ? (existing?.customerPhone ?? '')
+            : widget.quote.customer.phone.trim(),
+        customerAddress: widget.quote.customer.address.trim().isEmpty
+            ? (existing?.customerAddress ?? '')
+            : widget.quote.customer.address.trim(),
         validityDays: widget.quote.validityDays > 0
             ? widget.quote.validityDays
-            : widget.validityDays,
-        advancePercent: widget.quote.advancePercent,
-        advanceText: widget.quote.advanceText,
+            : (existing?.validityDays ?? widget.validityDays),
+        advancePercent:
+            widget.quote.advancePercent ?? existing?.advancePercent,
+        advanceText: widget.quote.advanceText.isNotEmpty
+            ? widget.quote.advanceText
+            : (existing?.advanceText ?? ''),
         notes: widget.quote.notes.isNotEmpty
             ? widget.quote.notes
-            : (widget.notes ?? ''),
-        terms: widget.quote.terms,
-        originalTranscript: widget.quote.originalTranscript,
-        reviewWarnings: widget.quote.reviewWarnings,
-        reviewWarningsAcknowledged: widget.quote.reviewWarningsAcknowledged,
+            : (widget.notes ?? existing?.notes ?? ''),
+        terms: widget.quote.terms.isEmpty
+            ? (existing?.terms ?? const [])
+            : widget.quote.terms,
+        originalTranscript:
+            widget.quote.originalTranscript ?? existing?.originalTranscript,
+        reviewWarnings:
+            widget.quote.reviewWarnings.isEmpty
+                ? (existing?.reviewWarnings ?? const [])
+                : widget.quote.reviewWarnings,
+        reviewWarningsAcknowledged:
+            widget.quote.reviewWarningsAcknowledged ||
+                (existing?.reviewWarningsAcknowledged ?? false),
         lineItems: widget.quote.lineItems,
-        gstPercent: widget.quote.gstPercent,
+        gstPercent: widget.quote.gstPercent ?? existing?.gstPercent,
         pdfPath: savedPath,
+        // Regeneration resets an already-shared quote to ready until the
+        // user shares the new file; a never-shared quote is ready.
+        status: _shareState == 'shared' && existing?.status == 'shared'
+            ? 'shared'
+            : 'ready',
+        version: (existing?.version ?? 0) + 1,
       );
 
       await QuoteRepository.saveQuote(saved);
-      if (mounted) {
+      if (!mounted) return;
+      setState(() {
+        _savedPdfPath = savedPath;
+        _existingQuote = saved;
+      });
+
+      // Opt-in cloud backup only — never automatic.
+      await PdfBackupService.backupPdfIfOptedIn(
+        quoteId: id,
+        pdfPath: savedPath,
+      );
+
+      if (mounted && !_saveAnnounced) {
+        _saveAnnounced = true;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text(
-              'PDF & Quote saved to History / कोटेशन सहेजा गया',
+              'PDF saved on this phone / पीडीएफ इस फोन में सहेजी गई',
             ),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
@@ -148,16 +220,98 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   }
 
   Future<void> _sharePdf() async {
-    if (_lastGeneratedBytes != null) {
-      final sanitizedName = widget.quote.customer.name.trim().isEmpty
-          ? 'Client'
-          : widget.quote.customer.name
-                .trim()
-                .replaceAll(RegExp(r'[^\w\s]+'), '')
-                .replaceAll(' ', '_');
-      await Printing.sharePdf(
-        bytes: _lastGeneratedBytes!,
-        filename: 'Quotation_$sanitizedName.pdf',
+    final bytes = _lastGeneratedBytes;
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('PDF is still generating… / कृपया प्रतीक्षा करें'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename:
+          PdfService.shareFileNameForQuote(widget.quote.customer.name),
+    );
+    if (!mounted) return;
+    // Android's share sheet gives no delivery receipt — record only that
+    // the sheet was opened, and ask the user to confirm.
+    setState(() => _shareState = 'sheet-opened');
+    _showMarkSharedDialog();
+  }
+
+  void _showMarkSharedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Share sheet opened'),
+        content: const Text(
+          'Android can send this PDF to WhatsApp, Gmail, Drive, or any app '
+          'you choose.\n\nWe cannot confirm delivery — '
+          'mark as shared only after you have sent it.\n'
+          'शीट खुल गई है — भेजने के बाद "Mark as shared" दबाएं।',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Not yet / अभी नहीं'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _markAsShared();
+            },
+            child: const Text('Mark as shared'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markAsShared() async {
+    final existing = _existingQuote ??
+        await QuoteRepository.getQuoteById(_quoteId);
+    final updated = (existing ??
+            SavedQuote(
+              id: _quoteId,
+              quoteNumber: widget.quote.displayNumber,
+              createdAt: DateTime.now(),
+              customerName: widget.quote.customer.name,
+              lineItems: widget.quote.lineItems,
+              pdfPath: _savedPdfPath,
+            ))
+        .copyWith(status: 'shared', pdfPath: _savedPdfPath);
+    await QuoteRepository.saveQuote(updated);
+    if (!mounted) return;
+    setState(() {
+      _shareState = 'shared';
+      _existingQuote = updated;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Marked as shared / साझा किया गया ✓'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _toggleBackup(bool value) async {
+    setState(() => _backupOptIn = value);
+    await PdfBackupSettings.setOptedIn(value);
+    if (value && _savedPdfPath != null) {
+      await PdfBackupService.backupPdfIfOptedIn(
+        quoteId: _quoteId,
+        pdfPath: _savedPdfPath!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cloud backup enabled / क्लाउड बैकअप चालू'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -179,14 +333,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             visualDensity: VisualDensity.compact,
           );
 
-    final sanitizedName = widget.quote.customer.name.trim().isEmpty
-        ? 'Client'
-        : widget.quote.customer.name
-              .trim()
-              .replaceAll(RegExp(r'[^\w\s]+'), '')
-              .replaceAll(' ', '_');
     final blockingReason = quotePdfBlockingReason(widget.quote);
-
     if (blockingReason != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('PDF Preview / पूर्वावलोकन')),
@@ -223,11 +370,17 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       );
     }
 
+    final totals = calculateTotals(widget.quote);
+    final dateLabel =
+        DateFormat('dd MMM yyyy').format(widget.quote.quoteDate ?? DateTime.now());
+    final metaLine =
+        'Quote ${widget.quote.displayNumber} · ${formatRupeePaise(totals.grandTotalPaise)} · $dateLabel';
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('PDF Preview / पूर्वावलोकन'),
+            const Text('Quotation ready'),
             if (tradeBadge != null) ...[const SizedBox(width: 10), tradeBadge],
           ],
         ),
@@ -239,26 +392,127 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           ),
         ],
       ),
-      body: PdfPreview(
-        build: _buildPdf,
-        canChangeOrientation: false,
-        canChangePageFormat: false,
-        canDebug: false,
-        allowPrinting: true,
-        allowSharing: true,
-        pdfFileName: 'Quotation_$sanitizedName.pdf',
-        loadingWidget: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: cs.primary),
-              const SizedBox(height: 16),
-              Text(
-                'Generating PDF / पीडीएफ तैयार हो रही है…',
-                style: tt.bodyMedium,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: PdfPreview(
+                build: _buildPdf,
+                canChangeOrientation: false,
+                canChangePageFormat: false,
+                canDebug: false,
+                allowPrinting: true,
+                allowSharing: true,
+                pdfFileName: PdfService.shareFileNameForQuote(
+                    widget.quote.customer.name),
+                loadingWidget: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: cs.primary),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Generating PDF / पीडीएफ तैयार हो रही है…',
+                        style: tt.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ],
-          ),
+            ),
+            // ── Day 18 primary completion action ──────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                border: Border(
+                  top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(
+                  kPagePadding, 12, kPagePadding, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    metaLine,
+                    style: tt.bodySmall,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (_shareState == 'sheet-opened')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Share sheet opened — not yet marked as shared',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  if (_shareState == 'shared')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              size: 14, color: Colors.green.shade700),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Shared ✓',
+                            style: tt.bodySmall?.copyWith(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: _sharePdf,
+                    icon: const Icon(Icons.share_rounded),
+                    label: const Text('Share PDF'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: forest,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(56),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Edit quote'),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Saved on this phone. Editing & regenerating replaces the same file.',
+                          style: tt.bodySmall,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Backup', style: TextStyle(fontSize: 12)),
+                          Switch(
+                            value: _backupOptIn,
+                            onChanged: _toggleBackup,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

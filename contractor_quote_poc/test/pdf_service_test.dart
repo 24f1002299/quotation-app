@@ -142,8 +142,8 @@ void main() {
         ),
       );
 
-      // Verify app bar title
-      expect(find.text('PDF Preview / पूर्वावलोकन'), findsOneWidget);
+      // Verify app bar title (Day 18: "Quotation ready" per design.md §6)
+      expect(find.text('Quotation ready'), findsOneWidget);
       // Verify trade chip
       expect(find.text('🪣 Tiling'), findsOneWidget);
     });

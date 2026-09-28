@@ -106,6 +106,82 @@ class PdfService {
     return file.path;
   }
 
+  /// Day 18 — Stable app-scoped file name for a quote.
+  ///
+  /// Uses the immutable quote ID as the anchor so regeneration overwrites
+  /// the same app-owned file instead of creating timestamp orphans.
+  /// Pure (no platform calls) so it is unit-testable.
+  static String stableFileNameForQuote(String quoteId) {
+    final raw = quoteId.trim().isEmpty ? 'quote' : quoteId.trim();
+    final sanitized = raw
+        .replaceAll(RegExp(r'[^\w\-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+    final short = sanitized.length > 48
+        ? sanitized.substring(sanitized.length - 48)
+        : sanitized;
+    return 'Quotation_$short.pdf';
+  }
+
+  /// Day 18 — Friendly file name for the Android share sheet / WhatsApp.
+  /// Only used as the share-sheet label; storage always uses [stableFileNameForQuote].
+  /// Pure (no platform calls) so it is unit-testable.
+  static String shareFileNameForQuote(String customerName) {
+    final raw = customerName.trim().isEmpty ? 'Client' : customerName.trim();
+    final sanitized = raw
+        .replaceAll(RegExp(r'[^\w\s]+'), '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), '_');
+    final short = sanitized.isEmpty
+        ? 'Client'
+        : (sanitized.length > 32 ? sanitized.substring(0, 32) : sanitized);
+    return 'Quotation_$short.pdf';
+  }
+
+  /// Day 18 — Saves [bytes] to the stable app-owned path for [quoteId],
+  /// overwriting the previous file when it exists.
+  ///
+  /// When [existingPdfPath] points to an older timestamp-named file for the
+  /// same quote, the new bytes go to the stable path and the old file is
+  /// deleted. Only files inside the app `quotations/` dir are ever touched.
+  static Future<String> savePdfReplacingPrevious({
+    required Uint8List bytes,
+    required String quoteId,
+    String? existingPdfPath,
+  }) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final quotesDir = Directory('${dir.path}/quotations');
+    if (!await quotesDir.exists()) {
+      await quotesDir.create(recursive: true);
+    }
+    final stablePath = '${quotesDir.path}/${stableFileNameForQuote(quoteId)}';
+
+    // Fast path: previous save already used the stable path — overwrite it.
+    if (existingPdfPath != null && existingPdfPath == stablePath) {
+      final file = File(stablePath);
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    }
+
+    final stableFile = File(stablePath);
+    await stableFile.writeAsBytes(bytes, flush: true);
+
+    // Migrate: remove the old timestamp-named file, but only when it is
+    // inside our own app-scoped quotations directory.
+    try {
+      if (existingPdfPath != null &&
+          existingPdfPath != stablePath &&
+          existingPdfPath.startsWith(quotesDir.path)) {
+        final oldFile = File(existingPdfPath);
+        if (await oldFile.exists()) {
+          await oldFile.delete();
+        }
+      }
+    } catch (_) {
+      // Cleanup is best-effort; the new stable file is already written.
+    }
+    return stableFile.path;
+  }
+
   // ── Logo loader ─────────────────────────────────────────────────────────────
 
   /// Tries to load a logo image from a local file path.
