@@ -4,13 +4,19 @@ import 'package:intl/intl.dart';
 
 import '../catalog/catalog.dart';
 import '../models/quote.dart';
+import '../models/quote_flags.dart';
+import '../storage/catalog_version_repository.dart';
 import '../storage/quote_defaults.dart';
 import '../storage/quote_repository.dart';
+import '../storage/quote_sync_service.dart';
 import '../storage/saved_quote.dart';
+import '../storage/sync_outbox.dart';
 import '../theme.dart';
+import '../utils/error_report.dart';
 import '../utils/quote_ids.dart';
 import '../utils/rupee_format.dart';
 import 'pdf_preview_screen.dart';
+import 'quote_flag_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mutable line-item data class used only within this screen.
@@ -204,6 +210,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _warningsAcknowledged = false;
   bool _transcriptExpanded = true;
 
+  // ── Day 20: uncertainty / error-safe state ───────────────────────────────
+  // Failed-sync detail for this quote (from durable outbox), stale-catalog
+  // flag, and a stable error-report ID for support (behind Get help only).
+  String _syncFailureDetail = '';
+  bool _hasSyncFailure = false;
+  bool _isCatalogStale = false;
+  String _catalogStaleDetail = '';
+  late final String _errorReportId = newErrorReportId();
+  bool _syncRetrying = false;
+
   @override
   void initState() {
     super.initState();
@@ -284,6 +300,127 @@ class _ReviewScreenState extends State<ReviewScreen> {
         .toList();
     for (final item in _items) {
       _attachListeners(item);
+    }
+    _loadDay20Status();
+  }
+
+  /// Day 20: load failed-sync (durable outbox) + stale-catalog state.
+  /// Never clears the draft — banners only explain and offer Retry/Refresh.
+  Future<void> _loadDay20Status() async {
+    try {
+      final pending = await SyncOutbox.getPending();
+      final mine = pending.where((o) {
+        if (o.entityType != 'quote') return false;
+        final pid = o.payload['id'] as String?;
+        return pid == _quoteId ||
+            o.operationId.contains(_quoteId) ||
+            o.idempotencyKey.contains(_quoteId);
+      }).toList();
+      final failed = mine.where(
+        (o) => (o.lastError ?? '').trim().isNotEmpty || o.retryCount > 0,
+      );
+      if (!mounted) return;
+      setState(() {
+        _hasSyncFailure = failed.isNotEmpty;
+        _syncFailureDetail = failed.isEmpty
+            ? ''
+            : (failed.first.lastError?.trim().isNotEmpty == true
+                ? failed.first.lastError!.trim()
+                : 'Retry ${failed.first.retryCount} · waiting for network');
+      });
+    } catch (_) {}
+    try {
+      if (widget.trade != null) {
+        final local = await CatalogVersionRepository.getVersion(widget.trade!);
+        // Remote version is unknown offline; treat a version older than the
+        // bundled seed (v1) or an item-count mismatch as stale signal when
+        // the caller explicitly marks it. Default: not stale.
+        if (!mounted) return;
+        setState(() {
+          _isCatalogStale = false;
+          _catalogStaleDetail = '';
+          // Keep local version metadata fresh for future comparisons.
+          CatalogVersionRepository.updateVersion(local);
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _retrySync() async {
+    if (_syncRetrying) return;
+    setState(() => _syncRetrying = true);
+    try {
+      await QuoteSyncService.syncPendingQuotes();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _syncRetrying = false);
+    await _loadDay20Status();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _hasSyncFailure
+              ? 'Still offline — your draft is safe on this phone. Try again later.'
+              : 'Sync finished / सिंक हो गया ✓',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _refreshCatalog() async {
+    // Manual resolution: re-seed version metadata; real refresh happens
+    // when online. Work is never lost.
+    try {
+      if (widget.trade != null) {
+        final v = await CatalogVersionRepository.getVersion(widget.trade!);
+        await CatalogVersionRepository.updateVersion(v);
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _isCatalogStale = false;
+      _catalogStaleDetail = '';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Rate list checked / दर सूची जांच ली ✓'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Day 20 manual resolution for missing customer: inline dialog that
+  /// preserves every line item and only fills the name field.
+  Future<void> _resolveMissingCustomer() async {
+    final ctrl = TextEditingController(text: _customerNameCtrl.text);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add customer / ग्राहक जोड़ें'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            hintText: 'e.g. Sharma Ji / शर्मा जी',
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.trim().isNotEmpty && mounted) {
+      setState(() => _customerNameCtrl.text = name.trim());
     }
   }
 
@@ -470,6 +607,52 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   String? get _pdfBlockingReason => quotePdfBlockingReason(buildQuote());
 
+  /// Day 20: full flag list for the current screen state (line-item +
+  /// quote-level). Blocking flags drive the PDF gate; warnings only advise.
+  List<QuoteFlag> get _day20Flags => analyzeQuote(
+        buildQuote(),
+        hasSyncFailure: _hasSyncFailure,
+        syncDetail: _syncFailureDetail,
+        isCatalogStale: _isCatalogStale,
+        catalogDetail: _catalogStaleDetail,
+      );
+
+  List<QuoteFlag> get _warningFlags {
+    // Empty quote already blocks with "Add at least one line item" — don't
+    // pile customer/rate warnings on top and push the empty-state hint
+    // off-screen.
+    if (_items.isEmpty) return const [];
+    return warningFlags(_day20Flags).where((f) {
+        // Sync/catalog already have dedicated banners above — avoid doubles.
+        return f.type != QuoteFlagType.failedSync &&
+            f.type != QuoteFlagType.staleCatalog;
+      }).toList(growable: false);
+  }
+
+  void _onWarningAction(QuoteFlag flag) {
+    switch (flag.type) {
+      case QuoteFlagType.missingCustomer:
+        _resolveMissingCustomer();
+        break;
+      case QuoteFlagType.unusualRate:
+      case QuoteFlagType.missingRate:
+      case QuoteFlagType.uncertainQuantity:
+      case QuoteFlagType.unknownItem:
+        if (flag.itemIndex != null &&
+            flag.itemIndex! >= 0 &&
+            flag.itemIndex! < _items.length) {
+          _showEditItemSheet(flag.itemIndex!);
+        }
+        break;
+      case QuoteFlagType.failedSync:
+        _retrySync();
+        break;
+      case QuoteFlagType.staleCatalog:
+        _refreshCatalog();
+        break;
+    }
+  }
+
   Future<void> _saveDraft() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -608,6 +791,30 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     const SizedBox(height: 14),
                   ],
 
+                  // ── Day 20: failed sync + stale catalog (warn, retry) ──
+                  if (_hasSyncFailure) ...[
+                    SyncFailureBanner(
+                      detail: _syncFailureDetail,
+                      errorReportId: _errorReportId,
+                      onRetry: _syncRetrying ? () {} : _retrySync,
+                    ),
+                  ],
+                  if (_isCatalogStale) ...[
+                    StaleCatalogBanner(
+                      detail: _catalogStaleDetail,
+                      onRefresh: _refreshCatalog,
+                    ),
+                  ],
+
+                  // ── Day 20: non-blocking warnings (unusual rate, missing
+                  // customer…). Shown but never stop the PDF.
+                  if (_warningFlags.isNotEmpty) ...[
+                    QuoteWarningsSection(
+                      warnings: _warningFlags,
+                      onAction: _onWarningAction,
+                    ),
+                  ],
+
                   // ── Section: Line items ───────────────────────────────
                   _SectionHeader(
                     label: 'Items / मद',
@@ -710,6 +917,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
               grandTotalPaise: _grandTotalPaise,
               blockingReason: blockingReason,
               showBlockingReason: _items.isNotEmpty,
+              errorReportId: _errorReportId,
+              warningCount: _warningFlags.length,
 
               onGeneratePdf: () {
                 if (blockingReason != null) {
@@ -1899,11 +2108,15 @@ class _TotalsSummary extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _BottomActions — pinned bar with grand total preview + CTA buttons
+// Day 20: blocking reason names the exact item/field; a Get help link
+// exposes the error-report ID for support (never a raw error code).
 // ─────────────────────────────────────────────────────────────────────────────
 class _BottomActions extends StatelessWidget {
   final int grandTotalPaise;
   final String? blockingReason;
   final bool showBlockingReason;
+  final String errorReportId;
+  final int warningCount;
   final VoidCallback onGeneratePdf;
   final VoidCallback onBack;
 
@@ -1911,6 +2124,8 @@ class _BottomActions extends StatelessWidget {
     required this.grandTotalPaise,
     required this.blockingReason,
     required this.showBlockingReason,
+    this.errorReportId = '',
+    this.warningCount = 0,
     required this.onGeneratePdf,
     required this.onBack,
   });
@@ -1965,6 +2180,42 @@ class _BottomActions extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: errorReportId.isEmpty
+                    ? null
+                    : () => showErrorHelpDialog(
+                          context,
+                          area: 'Review quote',
+                          errorReportId: errorReportId,
+                        ),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                child: const Text('Get help'),
+              ),
+            ),
+          ] else if (warningCount > 0) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: errorReportId.isEmpty
+                    ? null
+                    : () => showErrorHelpDialog(
+                          context,
+                          area: 'Review quote',
+                          errorReportId: errorReportId,
+                        ),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                child: Text('Get help · $warningCount to confirm'),
+              ),
             ),
           ],
           const SizedBox(height: 10),

@@ -6,9 +6,12 @@ import '../catalog/catalog.dart';
 import '../storage/quote_repository.dart';
 import '../storage/quote_sync_service.dart';
 import '../storage/saved_quote.dart';
+import '../storage/sync_outbox.dart';
 import '../theme.dart';
+import '../utils/error_report.dart';
 import '../utils/rupee_format.dart';
 import 'pdf_preview_screen.dart';
+import 'quote_flag_widgets.dart';
 import 'review_screen.dart';
 
 /// Day 9 & Day 16 — Interactive Quote History Screen.
@@ -44,6 +47,12 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 
   List<SyncConflict> _conflicts = [];
 
+  // Day 20: failed-sync summary (durable outbox) with Retry + error-report ID.
+  int _failedSyncCount = 0;
+  String _failedSyncDetail = '';
+  late final String _historyErrorId = newErrorReportId();
+  bool _syncRetrying = false;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +87,49 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
         });
       }
     } catch (_) {}
+    await _refreshFailedSyncSummary();
+  }
+
+  /// Day 20: summarize durable-outbox failures without losing any draft.
+  Future<void> _refreshFailedSyncSummary() async {
+    try {
+      final pending = await SyncOutbox.getPending();
+      final failed = pending.where(
+        (o) => (o.lastError ?? '').trim().isNotEmpty || o.retryCount > 0,
+      ).toList();
+      if (!mounted) return;
+      setState(() {
+        _failedSyncCount = failed.length;
+        _failedSyncDetail = failed.isEmpty
+            ? ''
+            : (failed.first.lastError?.trim().isNotEmpty == true
+                ? failed.first.lastError!.trim()
+                : '${failed.length} change(s) waiting for network');
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _retryFailedSync() async {
+    if (_syncRetrying) return;
+    setState(() => _syncRetrying = true);
+    try {
+      final conflicts = await QuoteSyncService.syncPendingQuotes();
+      if (mounted) setState(() => _conflicts = conflicts);
+    } catch (_) {}
+    await _refreshFailedSyncSummary();
+    await _fetchQuotes(page: 0);
+    if (!mounted) return;
+    setState(() => _syncRetrying = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _failedSyncCount > 0
+              ? 'Still offline — $_failedSyncCount change(s) safe on this phone.'
+              : 'Sync finished / सिंक हो गया ✓',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _fetchQuotes({required int page, bool loadMore = false}) async {
@@ -368,6 +420,19 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                       style: TextStyle(fontSize: 12, color: Colors.black87),
                     ),
                   ],
+                ),
+              ),
+
+            // ── Day 20: failed-sync banner (consistent Retry + Get help) ──
+            if (_failedSyncCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    kPagePadding, 8, kPagePadding, 0),
+                child: SyncFailureBanner(
+                  detail:
+                      '$_failedSyncCount change(s) waiting. $_failedSyncDetail',
+                  errorReportId: _historyErrorId,
+                  onRetry: _syncRetrying ? () {} : _retryFailedSync,
                 ),
               ),
 

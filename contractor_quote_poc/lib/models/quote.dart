@@ -142,36 +142,71 @@ QuoteTotals calculateTotals(Quote quote) {
 }
 
 String? quotePdfBlockingReason(Quote quote) {
+  // Day 20: PDF blocks ONLY on essential unresolved values.
+  // Structural problems first (empty quote / missing name / unit).
   if (quote.lineItems.isEmpty) {
     return 'Add at least one line item before creating the PDF.';
   }
 
   for (var index = 0; index < quote.lineItems.length; index++) {
     final item = quote.lineItems[index];
-    final label = item.description.trim().isEmpty
-        ? 'item ${index + 1}'
-        : item.description.trim();
-
     if (item.description.trim().isEmpty) {
       return 'Enter an item name for item ${index + 1} before creating the PDF.';
     }
-    if (item.quantity <= 0) {
-      return 'Enter a quantity greater than 0 for "$label" before creating the PDF.';
-    }
     if (item.unit.trim().isEmpty) {
+      final label = item.description.trim();
       return 'Enter a unit for "$label" before creating the PDF.';
     }
-    if (item.unitRatePaise <= 0) {
-      return 'Enter a rate greater than 0 for "$label" before creating the PDF.';
-    }
-    if (item.requiresReview && !item.acknowledged) {
-      return 'Please check "$label" or mark it as checked before creating the PDF.';
-    }
   }
+
+  // Delegate uncertainty analysis to the Day 20 flag engine so the Review
+  // screen, PDF gate, and tests share one definition of "blocking".
+  // ignore: avoid circular import via relative path — quote_flags imports quote.
+  final flags = _blockingItemFlags(quote);
+  if (flags != null) return flags;
 
   if (quote.reviewWarnings.isNotEmpty && !quote.reviewWarningsAcknowledged) {
     return 'Acknowledge the review message before creating the PDF.';
   }
 
+  return null;
+}
+
+/// Day 20 helper kept in quote.dart to avoid a hard import cycle in tests.
+/// Mirrors analyzeQuote() blocking rules: unknown-unacknowledged, qty<=0 or
+/// uncertain-unacknowledged, missing rate, generic requiresReview.
+String? _blockingItemFlags(Quote quote) {
+  for (var index = 0; index < quote.lineItems.length; index++) {
+    final item = quote.lineItems[index];
+    final label = item.description.trim().isEmpty
+        ? 'item ${index + 1}'
+        : item.description.trim();
+
+    if (item.isUnknown && !item.acknowledged) {
+      final note = item.uncertaintyNote?.trim();
+      if (note == null || note.isEmpty) {
+        return 'Unknown item: "$label" is not in the catalog. Check the work and fix its details.';
+      }
+      return 'Unknown item: "$label" — $note';
+    }
+    if (item.quantity <= 0) {
+      return 'Enter a quantity greater than 0 for "$label" before creating the PDF.';
+    }
+    if (item.unitRatePaise <= 0) {
+      return 'Add a rate for "$label" before creating the PDF.';
+    }
+    final qtyNote = (item.uncertaintyNote ?? '').toLowerCase();
+    final qtyMentioned =
+        qtyNote.contains('quant') || qtyNote.contains('मात्रा');
+    final lowConfidence =
+        item.confidence != null && item.confidence! < 0.8;
+    if (!item.acknowledged &&
+        (qtyMentioned || (lowConfidence && item.requiresReview))) {
+      return 'Please check "$label" — quantity needs checking.';
+    }
+    if (item.requiresReview && !item.acknowledged) {
+      return 'Please check "$label" or mark it as checked before creating the PDF.';
+    }
+  }
   return null;
 }

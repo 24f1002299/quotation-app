@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import '../catalog/catalog.dart';
 import '../models/contractor_profile.dart';
 import '../models/quote.dart';
+import '../models/quote_flags.dart';
 import '../pdf/pdf_service.dart';
 import '../storage/pdf_backup_service.dart';
 import '../storage/pdf_backup_settings.dart';
@@ -15,7 +16,9 @@ import '../storage/profile_repository.dart';
 import '../storage/quote_repository.dart';
 import '../storage/saved_quote.dart';
 import '../theme.dart';
+import '../utils/error_report.dart';
 import '../utils/rupee_format.dart';
+import 'quote_flag_widgets.dart';
 
 /// Day 18 — PDF Preview & Share Screen.
 ///
@@ -57,6 +60,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   /// Day 18 share state: '' → 'sheet-opened' → 'shared'.
   String _shareState = '';
   bool _backupOptIn = false;
+
+  /// Day 20: stable support reference for this preview (behind Get help).
+  late final String _previewErrorId = newErrorReportId();
 
   String get _quoteId =>
       widget.quote.id ??
@@ -357,10 +363,24 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     style: tt.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your work is saved — go back, fix the highlighted item, then come back.',
+                    style: tt.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Go back / वापस जाएं'),
+                    child: const Text('Go back and fix / वापस जाकर ठीक करें'),
+                  ),
+                  TextButton(
+                    onPressed: () => showErrorHelpDialog(
+                      context,
+                      area: 'PDF preview',
+                      errorReportId: _previewErrorId,
+                    ),
+                    child: const Text('Get help'),
                   ),
                 ],
               ),
@@ -375,6 +395,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         DateFormat('dd MMM yyyy').format(widget.quote.quoteDate ?? DateTime.now());
     final metaLine =
         'Quote ${widget.quote.displayNumber} · ${formatRupeePaise(totals.grandTotalPaise)} · $dateLabel';
+
+    // Day 20: non-blocking warnings ride along to the PDF screen so an
+    // unusual rate or missing customer never looks silently confident.
+    final pdfWarnings = warningFlags(analyzeQuote(widget.quote));
 
     return Scaffold(
       appBar: AppBar(
@@ -473,6 +497,59 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                       ),
                     ),
                   const SizedBox(height: 8),
+                  // ── Day 20: non-blocking confirmations + Get help ───
+                  if (pdfWarnings.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9FB8AD).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFF475841).withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final w in pdfWarnings)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Icon(iconForFlag(w.type),
+                                      size: 16,
+                                      color: forest),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(w.message,
+                                        style: tt.bodySmall),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => showErrorHelpDialog(
+                                context,
+                                area: 'PDF preview',
+                                errorReportId: _previewErrorId,
+                              ),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4),
+                              ),
+                              child: const Text('Get help'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   ElevatedButton.icon(
                     onPressed: _sharePdf,
                     icon: const Icon(Icons.share_rounded),
