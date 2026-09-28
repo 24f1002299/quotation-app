@@ -24,6 +24,7 @@ import '../models/quote.dart';
 import '../models/transcript_draft.dart';
 import '../parser/demo_transcripts.dart';
 import '../screens/review_screen.dart';
+import '../storage/app_preferences.dart';
 import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
 import '../voice/extraction_service.dart';
@@ -87,6 +88,7 @@ class _VoiceScreenState extends State<VoiceScreen>
     )..repeat(reverse: true);
 
     _transcriptCtrl.addListener(_onTranscriptChanged);
+    _loadPreferredLanguage();
     _loadExistingDraft();
   }
 
@@ -102,6 +104,15 @@ class _VoiceScreenState extends State<VoiceScreen>
   }
 
   // ── Draft loading & auto-save ─────────────────────────────────────────────
+
+  /// Day 19: Hindi-first default persisted across Home and Voice screens.
+  Future<void> _loadPreferredLanguage() async {
+    final preferred = await AppPreferences.getLanguage();
+    if (!mounted) return;
+    // A saved per-trade draft language (loaded next) still wins when the
+    // user already dictated in another language.
+    setState(() => _selectedLanguage = preferred);
+  }
 
   Future<void> _loadExistingDraft() async {
     final draft = await TranscriptDraftRepository.getDraft(widget.trade);
@@ -570,7 +581,10 @@ class _VoiceScreenState extends State<VoiceScreen>
           // Language selector dropdown as per design.md
           _LanguagePicker(
             selected: _selectedLanguage,
-            onChanged: (lang) => setState(() => _selectedLanguage = lang),
+            onChanged: (lang) {
+              setState(() => _selectedLanguage = lang);
+              AppPreferences.setLanguage(lang);
+            },
           ),
           const SizedBox(width: 8),
         ],

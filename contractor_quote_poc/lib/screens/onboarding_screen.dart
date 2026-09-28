@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../catalog/catalog.dart';
 import '../models/rate_memory_item.dart';
+import '../storage/auth_repository.dart';
 import '../storage/profile_repository.dart';
 import '../storage/rate_memory_repository.dart';
 import '../theme.dart';
@@ -33,6 +34,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Trade _selectedTrade = Trade.tiling;
   String? _logoPath;
   String? _logoSignedUrl;
+  bool _signedIn = false;
+  String _signedInPhone = '';
 
   // Controllers for Step 2
   final Map<String, TextEditingController> _rateControllers = {};
@@ -47,10 +50,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _loadInitialData() async {
     final profile = await ProfileRepository.getProfile();
     final rates = await RateMemoryRepository.getAllRates();
+    final signedIn = await AuthRepository.isSignedIn();
+    final phone = await AuthRepository.cachedPhone();
 
     if (!mounted) return;
 
     setState(() {
+      _signedIn = signedIn;
+      _signedInPhone = phone;
       _nameCtrl.text = profile.name;
       _businessNameCtrl.text = profile.businessName;
       _phoneCtrl.text = profile.phone;
@@ -212,7 +219,72 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'Used to generate clean, branded quotation PDFs for your clients.',
           style: tt.bodyMedium,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+
+        // Day 19: phone sign-in status (Step 0 lives on Home + /sign-in;
+        // this row keeps it visible inside setup without renumbering steps).
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: surfaceMuted.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: surfaceMuted),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _signedIn ? Icons.verified_rounded : Icons.phone_outlined,
+                color: _signedIn ? forest : ink,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _signedIn
+                      ? 'Signed in${_signedInPhone.isNotEmpty ? ' · $_signedInPhone' : ''} / साइन इन ✓'
+                      : 'Sign in to sync quotes (optional) / साइन इन करें',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (_signedIn)
+                TextButton(
+                  onPressed: () async {
+                    await AuthRepository.signOut();
+                    if (!mounted) return;
+                    setState(() {
+                      _signedIn = false;
+                      _signedInPhone = '';
+                    });
+                  },
+                  child: const Text('Sign out'),
+                )
+              else
+                OutlinedButton(
+                  onPressed: () async {
+                    await Navigator.pushNamed(context, '/sign-in');
+                    if (!mounted) return;
+                    final signedIn = await AuthRepository.isSignedIn();
+                    final phone = await AuthRepository.cachedPhone();
+                    if (!mounted) return;
+                    setState(() {
+                      _signedIn = signedIn;
+                      _signedInPhone = phone;
+                    });
+                    if (_signedIn && _phoneCtrl.text.trim().isEmpty) {
+                      setState(() => _phoneCtrl.text = _signedInPhone);
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 38),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  child: const Text('Sign in'),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
 
         // Contractor Name
         TextFormField(

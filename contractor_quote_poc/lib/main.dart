@@ -7,6 +7,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/quote_history_screen.dart';
 import 'screens/review_screen.dart';
+import 'screens/sign_in_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +36,7 @@ class ContractorQuoteApp extends StatelessWidget {
         '/new-quote': (_) => const NewQuoteScreen(),
         '/review': (_) => const ReviewScreen(),
         '/history': (_) => const QuoteHistoryScreen(),
+        '/sign-in': (_) => const SignInScreen(),
       },
     );
   }
