@@ -8,6 +8,7 @@ import '../parser/demo_transcripts.dart';
 import 'saved_quote.dart';
 
 import 'encrypted_draft_store.dart';
+import 'feedback_repository.dart';
 import 'quote_sync_service.dart';
 import 'sync_outbox.dart';
 
@@ -83,11 +84,16 @@ class QuoteRepository {
   }
 
   /// Deletes the quote with [id].
+  /// Day 21: also removes/anonymizes associated correction feedback
+  /// (matched by hashed quote id) per docs/feedback-privacy.md.
   static Future<void> deleteQuote(String id) async {
     final quotes = await getQuotes();
     quotes.removeWhere((q) => q.id == id);
     await saveAll(quotes);
     await EncryptedDraftStore.removeDraft(id);
+    try {
+      await FeedbackRepository.deleteForQuoteId(id);
+    } catch (_) {}
   }
 
   /// Looks up a quote by [id]. Returns null if not found.

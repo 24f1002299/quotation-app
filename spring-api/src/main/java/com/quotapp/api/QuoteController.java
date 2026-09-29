@@ -3,6 +3,7 @@ package com.quotapp.api;
 import com.quotapp.api.dto.ErrorResponse;
 import com.quotapp.api.dto.QuoteDto;
 import com.quotapp.api.exception.OwnershipViolationException;
+import com.quotapp.api.repository.FeedbackRepository;
 import com.quotapp.api.repository.QuoteRepository;
 import com.quotapp.security.UserContext;
 import jakarta.validation.Valid;
@@ -27,10 +28,12 @@ public class QuoteController {
     private static final Logger log = LoggerFactory.getLogger(QuoteController.class);
 
     private final QuoteRepository quoteRepository;
+    private final FeedbackRepository feedbackRepository;
 
     @Autowired
-    public QuoteController(QuoteRepository quoteRepository) {
+    public QuoteController(QuoteRepository quoteRepository, FeedbackRepository feedbackRepository) {
         this.quoteRepository = quoteRepository;
+        this.feedbackRepository = feedbackRepository;
     }
 
     @PostMapping(value = {"", "/sync"}, consumes = "application/json", produces = "application/json")
@@ -169,6 +172,15 @@ public class QuoteController {
 
         boolean deleted = quoteRepository.delete(userId, quoteId);
         if (deleted) {
+            // Day 21 policy: deleting a quote removes its correction feedback.
+            // Feedback rows are keyed by SHA-256(quoteId), never the raw ID.
+            try {
+                String quoteHash = FeedbackHash.sha256Hex(quoteId);
+                int removed = feedbackRepository.deleteByQuoteHash(userId, quoteHash);
+                log.info("Quote deleted with feedback cleanup: quoteId={} feedbackRemoved={}", quoteId, removed);
+            } catch (Exception e) {
+                log.warn("Feedback cleanup failed for deleted quote {}", quoteId);
+            }
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();

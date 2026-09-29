@@ -196,6 +196,7 @@ class SavedQuote {
             'isUnknown': item.isUnknown,
             'requiresReview': item.requiresReview,
             'acknowledged': item.acknowledged,
+            'catalogItemId': item.catalogItemId,
           },
         )
         .toList(),
@@ -233,6 +234,7 @@ class SavedQuote {
         isUnknown: m['isUnknown'] as bool? ?? false,
         requiresReview: m['requiresReview'] as bool? ?? false,
         acknowledged: m['acknowledged'] as bool? ?? false,
+        catalogItemId: m['catalogItemId'] as String?,
       );
     }).toList();
 

@@ -42,6 +42,7 @@ class ExtractedItem {
           unitRatePaise <= 0 ||
           rateSource == ExtractedRateSource.suggested ||
           uncertaintyNote != null,
+      catalogItemId: catalogItemId,
     );
   }
 

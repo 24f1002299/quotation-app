@@ -6,6 +6,7 @@ import '../catalog/catalog.dart';
 import '../models/quote.dart';
 import '../models/quote_flags.dart';
 import '../storage/catalog_version_repository.dart';
+import '../storage/feedback_repository.dart';
 import '../storage/quote_defaults.dart';
 import '../storage/quote_repository.dart';
 import '../storage/quote_sync_service.dart';
@@ -35,6 +36,9 @@ class _EditableItem {
   bool requiresReview;
   bool acknowledged;
 
+  /// Day 21: catalog id the model picked (if any), carried for feedback.
+  final String? catalogItemId;
+
   _EditableItem({
     String description = '',
     String quantity = '',
@@ -46,6 +50,7 @@ class _EditableItem {
     this.isUnknown = false,
     this.requiresReview = false,
     this.acknowledged = false,
+    this.catalogItemId,
   }) : description = TextEditingController(text: description),
        quantity = TextEditingController(text: quantity),
        unit = TextEditingController(text: unit),
@@ -79,6 +84,7 @@ class _EditableItem {
       isUnknown: isUnknown,
       requiresReview: requiresReview,
       acknowledged: acknowledged,
+      catalogItemId: catalogItemId,
     );
   }
 
@@ -94,6 +100,7 @@ class _EditableItem {
     isUnknown: isUnknown,
     requiresReview: requiresReview,
     acknowledged: acknowledged,
+    catalogItemId: catalogItemId,
   );
 }
 
@@ -180,6 +187,10 @@ class ReviewScreen extends StatefulWidget {
 class _ReviewScreenState extends State<ReviewScreen> {
   // ── Line items ─────────────────────────────────────────────────────────────
   late final List<_EditableItem> _items;
+
+  /// Day 21: extraction snapshot taken once in initState. Used to diff what
+  /// the model produced vs what the user finally kept, without storing audio.
+  late final List<QuoteLineItem> _extractionSnapshot;
 
   // ── Customer / terms (Day 15: all optional except line items) ─────────────
   final _customerNameCtrl = TextEditingController();
@@ -295,9 +306,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
             isUnknown: li.isUnknown,
             requiresReview: li.requiresReview,
             acknowledged: li.acknowledged,
+            catalogItemId: li.catalogItemId,
           ),
         )
         .toList();
+    // Day 21 snapshot: immutable copy of what extraction produced.
+    _extractionSnapshot = List<QuoteLineItem>.from(seed);
     for (final item in _items) {
       _attachListeners(item);
     }
@@ -969,13 +983,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   void _showEditItemSheet(int index) {
     if (index < 0 || index >= _items.length) return;
+    final originalSnapshot = index < _extractionSnapshot.length
+        ? _extractionSnapshot[index]
+        : _items[index].toLineItem();
     showModalBottomSheet<_EditableItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
           _AddItemSheet(trade: widget.trade, initialItem: _items[index]),
-    ).then((item) {
+    ).then((item) async {
       if (item == null || !mounted) return;
       final oldItem = _items[index];
       item.requiresReview = false;
@@ -983,6 +1000,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
       oldItem.dispose();
       _attachListeners(item);
       setState(() => _items[index] = item);
+      // Day 21: record minimal correction feedback (no audio, hashed quote id).
+      // Fire-and-forget: feedback must never block saving the user's edit.
+      try {
+        await FeedbackRepository.recordCorrection(
+          quoteId: _quoteId,
+          trade: widget.trade?.name,
+          original: originalSnapshot,
+          edited: item.toLineItem(),
+          catalogItemId:
+              originalSnapshot.catalogItemId ?? item.catalogItemId,
+          modelResult: originalSnapshot.description,
+        );
+      } catch (_) {}
     });
   }
 }
@@ -1351,6 +1381,8 @@ class _AddItemSheetState extends State<_AddItemSheet> {
         isUnknown: initial?.isUnknown ?? false,
         requiresReview: initial?.requiresReview ?? false,
         acknowledged: initial?.acknowledged ?? false,
+        // Day 21: keep the model's catalog pick (or the chip the user tapped).
+        catalogItemId: _selectedCatalogId ?? initial?.catalogItemId,
       ),
     );
   }

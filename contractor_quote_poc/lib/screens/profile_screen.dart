@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../catalog/catalog.dart';
 import '../models/rate_memory_item.dart';
+import '../storage/diagnostic_consent.dart';
+import '../storage/pdf_backup_settings.dart';
 import '../storage/profile_repository.dart';
 import '../storage/rate_memory_repository.dart';
 import '../theme.dart';
@@ -38,6 +40,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<RateMemoryItem> _rates = [];
   Trade _rateViewTrade = Trade.tiling;
 
+  // Day 21: privacy toggles (both OFF by default).
+  bool _diagnosticOptIn = false;
+  bool _pdfBackupOptIn = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +54,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _loadData() async {
     final profile = await ProfileRepository.getProfile();
     final rates = await RateMemoryRepository.getAllRates();
+    final diagnosticOptIn = await DiagnosticConsent.isOptedIn();
+    final pdfOptIn = await PdfBackupSettings.isOptedIn();
 
     if (!mounted) return;
 
@@ -62,6 +70,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       _rateViewTrade = profile.trade;
       _logoPath = profile.logoPath;
       _logoSignedUrl = profile.logoSignedUrl;
+      _diagnosticOptIn = diagnosticOptIn;
+      _pdfBackupOptIn = pdfOptIn;
 
       _rates = rates;
       for (final r in rates) {
@@ -312,6 +322,63 @@ class _ProfileScreenState extends State<ProfileScreen>
               minimumSize: const Size.fromHeight(56),
             ),
             child: const Text('Save Profile Changes / सुरक्षित करें'),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Day 21: Privacy & diagnostics (both OFF by default) ──
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: surfaceMuted),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Privacy / गोपनीयता', style: tt.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'Correction notes help improve item matching. '
+                  'They never include audio or customer details.',
+                  style: tt.bodySmall,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Help improve with diagnostic notes',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Off by default. When on, we keep an extra copy of the typed transcript for troubleshooting. Audio is never kept.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _diagnosticOptIn,
+                  onChanged: (v) async {
+                    await DiagnosticConsent.setOptedIn(v);
+                    if (!mounted) return;
+                    setState(() => _diagnosticOptIn = v);
+                  },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Back up PDFs to cloud',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Off by default. When on, PDFs are also saved to your private cloud folder.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _pdfBackupOptIn,
+                  onChanged: (v) async {
+                    await PdfBackupSettings.setOptedIn(v);
+                    if (!mounted) return;
+                    setState(() => _pdfBackupOptIn = v);
+                  },
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
         ],
