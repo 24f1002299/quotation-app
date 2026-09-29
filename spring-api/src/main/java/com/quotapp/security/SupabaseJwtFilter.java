@@ -81,6 +81,12 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
     @Value("${spring.profiles.active:}")
     private String activeProfile;
 
+    // Day 22: dev JWT bypass is opt-in AND profile-gated. Default false, so a
+    // production deploy that accidentally runs with the dev profile still
+    // requires real JWTs unless the operator explicitly enables the bypass.
+    @Value("${quotapp.auth.dev-bypass-enabled:false}")
+    private boolean devBypassEnabled;
+
     @Override
     protected void doFilterInternal(
         @NonNull HttpServletRequest request,
@@ -91,7 +97,7 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            if (isDevProfile()) {
+            if (isDevBypassActive()) {
                 authenticateDev(request, response, filterChain);
                 return;
             }
@@ -102,7 +108,7 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(7);
 
-        if (isDevProfile() && (token.startsWith("dev-") || token.equals("mock-token"))) {
+        if (isDevBypassActive() && (token.startsWith("dev-") || token.equals("mock-token"))) {
             authenticateDev(request, response, filterChain);
             return;
         }
@@ -144,6 +150,11 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
 
     private boolean isDevProfile() {
         return activeProfile != null && activeProfile.toLowerCase().contains("dev");
+    }
+
+    /** Day 22: bypass only when the dev profile AND the explicit flag agree. */
+    private boolean isDevBypassActive() {
+        return devBypassEnabled && isDevProfile();
     }
 
     private void authenticateDev(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../catalog/catalog.dart';
 import '../models/rate_memory_item.dart';
+import '../storage/data_deletion_service.dart';
 import '../storage/diagnostic_consent.dart';
 import '../storage/pdf_backup_settings.dart';
 import '../storage/profile_repository.dart';
@@ -377,6 +378,35 @@ class _ProfileScreenState extends State<ProfileScreen>
                     setState(() => _pdfBackupOptIn = v);
                   },
                 ),
+                const Divider(),
+                // ── Day 22: notice + export/delete request path ──
+                TextButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/privacy'),
+                  icon: const Icon(Icons.privacy_tip_outlined, size: 18),
+                  label: const Text('Read privacy notice / गोपनीयता सूचना'),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _exportMyData(context),
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: const Text('Export my data'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _deleteMyData(context),
+                        icon: const Icon(Icons.delete_forever_outlined, size: 18),
+                        label: const Text('Delete my data'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -386,8 +416,76 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildRatesTab(TextTheme tt) {
-    final tradeRates = _rates.where((r) => r.trade == _rateViewTrade).toList();
+  /// Day 22: export a JSON snapshot of on-device data (never audio).
+  Future<void> _exportMyData(BuildContext context) async {
+    try {
+      final snapshot = await DataDeletionService.exportAll();
+      final json = DataDeletionService.exportJson(snapshot);
+      if (!context.mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Your data / आपका डेटा'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              json.length > 4000 ? '${json.substring(0, 4000)}\n…(truncated)' : json,
+              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Export failed — try again.')),
+      );
+    }
+  }
+
+  /// Day 22: delete everything on this phone (confirm first).
+  /// Cloud copies are deleted per-quote via the API while signed in;
+  /// see docs/data-retention.md for the server path.
+  Future<void> _deleteMyData(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete all data on this phone?'),
+        content: const Text(
+          'This removes quotes, drafts, rates, settings and PDFs stored on '
+          'this phone. Cloud copies need per-quote delete while signed in. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete everything'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final summary = await DataDeletionService.deleteAllLocal();
+    if (!mounted) return;
+    setState(() {
+      _diagnosticOptIn = false;
+      _pdfBackupOptIn = false;
+    });
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
+  }
+
+  Widget _buildRatesTab(TextTheme tt) {    final tradeRates = _rates.where((r) => r.trade == _rateViewTrade).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(kPagePadding),

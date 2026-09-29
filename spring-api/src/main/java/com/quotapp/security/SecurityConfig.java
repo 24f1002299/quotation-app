@@ -7,6 +7,12 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Spring Security configuration.
@@ -23,10 +29,38 @@ public class SecurityConfig {
 
     private final SupabaseJwtFilter supabaseJwtFilter;
     private final RequestIdFilter requestIdFilter;
+    private final List<String> allowedOrigins;
 
-    public SecurityConfig(SupabaseJwtFilter supabaseJwtFilter, RequestIdFilter requestIdFilter) {
+    public SecurityConfig(
+        SupabaseJwtFilter supabaseJwtFilter,
+        RequestIdFilter requestIdFilter,
+        @org.springframework.beans.factory.annotation.Value("${quotapp.cors.allowed-origins:}") String allowedOriginsCsv
+    ) {
         this.supabaseJwtFilter = supabaseJwtFilter;
         this.requestIdFilter = requestIdFilter;
+        this.allowedOrigins = allowedOriginsCsv == null || allowedOriginsCsv.isBlank()
+            ? List.of()
+            : Arrays.stream(allowedOriginsCsv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+    }
+
+    /**
+     * Day 22: restrictive CORS. Default is deny-all for browser origins
+     * (the Android app is not a browser and sends no Origin).
+     * Set {@code CORS_ALLOWED_ORIGINS=https://...} only for trusted web admin
+     * origins. Credentials and wildcard origins are never allowed together.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Request-Id"));
+        config.setExposedHeaders(List.of("X-Request-Id"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     @Bean
@@ -34,6 +68,7 @@ public class SecurityConfig {
         return http
             // Stateless REST API — disable CSRF and sessions
             .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )

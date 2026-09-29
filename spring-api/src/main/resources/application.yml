@@ -14,6 +14,14 @@ spring:
       enabled: true
 
 quotapp:
+  # Day 22: restrictive CORS. Empty = deny browser origins (Android app
+  # sends no Origin). Set CORS_ALLOWED_ORIGINS only for trusted web origins.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  # Day 22: dev JWT bypass. Default OFF everywhere; dev profile must also
+  # opt in explicitly (see application-dev.yml). Never enable in production.
+  auth:
+    dev-bypass-enabled: ${DEV_BYPASS_ENABLED:false}
   stt:
     default-provider: ${DEFAULT_STT_PROVIDER:whisper}
     grok:

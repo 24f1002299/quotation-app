@@ -4,6 +4,7 @@ import 'theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/new_quote_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/privacy_notice_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/quote_history_screen.dart';
 import 'screens/review_screen.dart';
@@ -33,6 +34,7 @@ class ContractorQuoteApp extends StatelessWidget {
         '/': (_) => const HomeScreen(),
         '/onboarding': (_) => const OnboardingScreen(),
         '/profile': (_) => const ProfileScreen(),
+        '/privacy': (_) => const PrivacyNoticeScreen(),
         '/new-quote': (_) => const NewQuoteScreen(),
         '/review': (_) => const ReviewScreen(),
         '/history': (_) => const QuoteHistoryScreen(),

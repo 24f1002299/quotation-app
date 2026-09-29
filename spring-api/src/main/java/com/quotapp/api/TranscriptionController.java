@@ -137,10 +137,17 @@ public class TranscriptionController {
 
         try {
             byte[] audioBytes = file.getBytes();
+            // Day 22: log the file extension only, never the full device
+            // filename — it may contain user-identifying path segments.
             String originalFilename = file.getOriginalFilename();
+            String ext = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                ext = originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase();
+                if (ext.length() > 5) ext = "";
+            }
 
-            log.info("Processing transcription for user={}, filename={}, size={}, provider={}, language={}",
-                userId, originalFilename, audioBytes.length, provider, language);
+            log.info("Processing transcription for user={}, fileType={}, size={}, provider={}, language={}",
+                userId, ext.isEmpty() ? "unknown" : ext, audioBytes.length, provider, language);
 
             SttResult result = sttService.transcribe(audioBytes, originalFilename, language, provider);
 

@@ -1,15 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- ── Permissions ──────────────────────────────────────────────────── -->
-    <!-- Microphone access for voice capture (Whisper workflow) -->
+    <!-- Microphone: voice capture only, while the user holds the record
+         button on the Voice screen. No background recording. The user can
+         always type instead; denying this permission never blocks quoting. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Network access to call the OpenAI Whisper API -->
+    <!-- Network: calls ONLY our authenticated Spring Boot API over TLS.
+         Provider keys (OpenAI/Groq) stay on the server, never on device. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="Contractor Quote"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -133,9 +133,11 @@ public class LlmExtractionClient {
             )
         );
 
-        String redactedSnippet = sanitizeForLogs(transcript);
-        log.info("Sending constrained LLM request: provider={}, model={}, trade={}, snippet='{}'",
-            provider, activeModel, trade, redactedSnippet);
+        // Day 22: never log transcript content — log lengths/counts only.
+        // Contractor speech may contain customer PII; the transcript itself
+        // is sent to the provider API but must not land in our logs.
+        log.info("Sending constrained LLM request: provider={}, model={}, trade={}, transcriptChars={}, catalogEntries={}",
+            provider, activeModel, trade, transcript != null ? transcript.length() : 0, catalogEntries.size());
 
         int attempts = 0;
         Exception lastException = null;
@@ -295,11 +297,5 @@ public class LlmExtractionClient {
         }
 
         return new RawExtractionResult(items, unknowns);
-    }
-
-    private static String sanitizeForLogs(String transcript) {
-        if (transcript == null || transcript.isBlank()) return "";
-        String clean = transcript.trim().replaceAll("\\s+", " ");
-        return clean.length() <= 30 ? clean : clean.substring(0, 27) + "...";
     }
 }

@@ -779,6 +779,14 @@ class _VoiceScreenState extends State<VoiceScreen>
         ),
       ],
     ),
+    const SizedBox(height: 4),
+    // Day 22: explicit upload purpose — mic audio goes only to our server
+    // to make a transcript, then the recording is deleted from the phone.
+    Text(
+      'Mic is used only while recording. Audio is sent only to make your transcript, then deleted. / माइक सिर्फ रिकॉर्डिंग में चलता है।',
+      style: tt.bodySmall?.copyWith(color: Colors.grey),
+      textAlign: TextAlign.center,
+    ),
   ];
 
   List<Widget> _recordingHint(TextTheme tt, ColorScheme cs) {

@@ -194,11 +194,10 @@ public class SttService {
         long latencyMs = System.currentTimeMillis() - start;
         log.info("STT completed: provider={}, audioBytes={}, latencyMs={}, languageHint={}",
                 provider, audioBytes.length, latencyMs, languageHint);
-        // Dev-only transcript preview so a wrong/empty transcript can be diagnosed
-        // without dumping full audio. Never log API keys here.
+        // Day 22: never log transcript content — contractor speech may contain
+        // customer names, addresses, or rates. Length-only diagnostics.
         if (transcript != null && !transcript.isBlank()) {
-            String preview = transcript.length() > 160 ? transcript.substring(0, 160) + "…" : transcript;
-            log.info("STT transcript preview ({} chars): {}", transcript.length(), preview);
+            log.info("STT transcript ready ({} chars)", transcript.length());
         } else {
             log.warn("STT returned empty transcript for provider={}, audioBytes={}", provider, audioBytes.length);
         }

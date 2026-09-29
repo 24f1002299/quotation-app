@@ -23,6 +23,13 @@ supabase:
   jwks-url: http://localhost:54321/auth/v1/.well-known/jwks.json
   project-url: http://localhost:54321
 
+quotapp:
+  # Day 22: local-dev convenience only. Enables the dev JWT bypass
+  # (missing/dev- Bearer tokens map to a fixed dev user). The bypass ALSO
+  # requires the dev profile, and production never sets this flag.
+  auth:
+    dev-bypass-enabled: true
+
 logging:
   level:
     com.quotapp: DEBUG
