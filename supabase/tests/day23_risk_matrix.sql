@@ -17,6 +17,14 @@
 -- 'ALL 8 DAY-23 RISK CHECKS PASSED'. Seed rows are deleted at the end.
 
 -- Seed: one User B quote + one line item (postgres; RLS bypassed for setup).
+-- Teardown-first so re-runs are deterministic even if a previous run
+-- aborted halfway (e.g. a FAIL stops the script before its cleanup).
+delete from public.quote_line_items
+  where quote_id = 'bbbbbbbb-0000-0000-0000-000000000023';
+delete from public.quotes
+  where id = 'bbbbbbbb-0000-0000-0000-000000000023'
+     or idempotency_key in
+       ('day23-seed-key-b', 'day23-dup-key', 'day23-evil-key', 'day23-evil-total');
 insert into public.quotes (id, user_id, idempotency_key, trade, client_name,
   subtotal_paise, gst_paise, grand_total_paise, version)
 values ('bbbbbbbb-0000-0000-0000-000000000023',
