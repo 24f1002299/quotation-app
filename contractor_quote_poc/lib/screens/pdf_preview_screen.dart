@@ -100,6 +100,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   }
 
   Future<Uint8List> _buildPdf(PdfPageFormat format) async {
+    // Day 24: wall-time for the device test matrix (debug builds only).
+    final perfTimer = Stopwatch()..start();
     final bytes = await PdfService.generateQuotationPdf(
       quote: widget.quote,
       profile: _profile,
@@ -111,6 +113,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       notes: widget.quote.notes.isNotEmpty ? widget.quote.notes : widget.notes,
       quoteDate: widget.quote.quoteDate,
       quoteNumber: widget.quote.displayNumber,
+    );
+    debugPrint(
+      '[perf] pdf render wall-time=${perfTimer.elapsedMilliseconds}ms '
+      'bytes=${bytes.length}',
     );
 
     _lastGeneratedBytes = bytes;

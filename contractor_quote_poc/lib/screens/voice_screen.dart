@@ -299,6 +299,7 @@ class _VoiceScreenState extends State<VoiceScreen>
     debugPrint(
       '[Voice] transcribe start seq=$seq lang=$_selectedLanguage duration=${duration}s',
     );
+    final perfTimer = Stopwatch()..start();
     try {
       final result = await TranscriptionService.transcribe(
         audioFile: audio,
@@ -310,6 +311,8 @@ class _VoiceScreenState extends State<VoiceScreen>
         '[Voice] transcribe done seq=$seq provider=${result.provider} '
         'chars=${result.transcript.length} text="${result.transcript.length > 120 ? '${result.transcript.substring(0, 120)}…' : result.transcript}"',
       );
+      // Day 24: wall-time for the device test matrix (debug builds only).
+      debugPrint('[perf] transcription wall-time=${perfTimer.elapsedMilliseconds}ms');
 
       if (!mounted || seq != _transcriptionSeq) {
         // A newer recording superseded this one — discard the stale result
@@ -470,10 +473,15 @@ class _VoiceScreenState extends State<VoiceScreen>
     });
 
     try {
+      final perfTimer = Stopwatch()..start();
       final result = await ExtractionService.extract(
         transcript: text,
         trade: widget.trade,
         languageHint: _selectedLanguage,
+      );
+      debugPrint(
+        '[perf] extraction wall-time=${perfTimer.elapsedMilliseconds}ms '
+        'fallback=${result.isFromLocalFallback}',
       );
 
       _extractionTimer?.cancel();

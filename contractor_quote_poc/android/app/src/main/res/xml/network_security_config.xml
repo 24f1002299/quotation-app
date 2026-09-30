@@ -2,8 +2,8 @@
 <!-- Day 22: cleartext (HTTP) is denied everywhere by default.
      The ONLY exception is the Android emulator loopback (10.0.2.2) and
      localhost, used for local dev against `supabase start` / Spring on
-     the host machine. Production builds must use an HTTPS API_BASE_URL
-     (--dart-define=API_BASE_URL=https://...) so no cleartext is used. -->
+      the host machine. Production builds must use an HTTPS API_BASE_URL
+      (dart-define API_BASE_URL=https://...) so no cleartext is used. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
