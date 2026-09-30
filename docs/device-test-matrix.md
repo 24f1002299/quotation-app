@@ -103,8 +103,10 @@ P0/P1. A deferral is only valid with a user-safe fallback in the right column.
 
 | ID | Device | Scenario | What happened | Severity (P0/P1/P2) | Fix or explicit fallback | Status |
 |---|---|---|---|---|---|---|
-| _ex_ | D1 | D-low-storage | _example: PDF save spins forever_ | P1 | _deferred: SnackBar "Storage full — free space and retry"; draft kept_ | open |
-| | | | | | | |
+| B1 | D1 (Realme RMX3686) | Quote sync | Every `/api/quotes/sync` → 400: app sent zone-less local timestamps, server parses `Instant`. Sync never completed; outbox retried the identical payload. | P0 | Fixed in `SavedQuote`/`ContractorProfile`/`EditFeedback.toJson` (UTC `Z`) + contract test; verify 200 on re-save | fixed, verify on device |
+| B2 | D1 | Quote sync | After B1: 400 `clientName is required` — app sent `customerName`, server binds `clientName`. Second stuck outbox item. | P0 | Fixed: `toJson` now emits server aliases + `displayNumber` (null pre-sync so server assigns) + recomputed totals; app-shaped regression test | fixed, verify on device |
+| B3 | D1 | PDF preview | AppBar title Row overflowed ~20px right on 360dp width (`Quotation ready` + trade chip) | P1 | Fixed: flexible title with ellipsis; loading-widget Column made scrollable (63px bottom overflow) | fixed, verify on device |
+| B4 | D1 | PDF preview → Edit quote | "Edit quote" used blind `pop()`; landed on Home instead of Review (no Review underneath from History path / on-device task behavior) | P0 | Fixed: `_editQuote` rebuilds Review from latest saved state via pushReplacement on every path + widget regression test | fixed, verify on device |
 
 **Sign-off:** matrix filled for D1 + D2, zero open P0/P1 → Day 25 may start.
 

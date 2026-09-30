@@ -324,6 +324,39 @@ void main() {
       expect(restored.conflictingPayload!['version'], 2);
     });
 
+    test('SavedQuote JSON carries the server wire contract', () {
+      final q = SavedQuote(
+        id: 'uuid-wire-1',
+        quoteNumber: 'Q-LOCAL-1',
+        createdAt: DateTime(2026, 9, 30, 19, 23, 2),
+        customerName: 'Sharma Ji',
+        lineItems: const [
+          QuoteLineItem(
+            description: 'X',
+            quantity: 2,
+            unit: 'job',
+            unitRatePaise: 5000,
+          ),
+        ],
+      );
+      final json = q.toJson();
+      // Server field names (QuoteDto) must be present and correct.
+      expect(json['clientName'], 'Sharma Ji');
+      expect(json['clientPhone'], '');
+      expect(json['siteAddress'], '');
+      // First sync: displayNumber is null so the server assigns one;
+      // the local label travels separately and never overwrites it.
+      expect(json['displayNumber'], isNull);
+      expect(json['quoteNumber'], 'Q-LOCAL-1');
+      // Timestamps carry an explicit zone (Instant-parseable).
+      expect(json['createdAt'].toString(), endsWith('Z'));
+      // Money travels recomputed, never model-supplied.
+      expect(json['subtotalPaise'], 10000);
+      expect(json['grandTotalPaise'], 10000);
+      // Local round-trip still reads the same object back.
+      expect(SavedQuote.fromJson(json).customerName, 'Sharma Ji');
+    });
+
     test('outbox enqueue dedups same quote (no duplicate write)', () async {
       SharedPreferences.setMockInitialValues({});
       await SyncOutbox.clear();

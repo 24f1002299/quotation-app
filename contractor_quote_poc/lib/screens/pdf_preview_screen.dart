@@ -19,6 +19,7 @@ import '../theme.dart';
 import '../utils/error_report.dart';
 import '../utils/rupee_format.dart';
 import 'quote_flag_widgets.dart';
+import 'review_screen.dart';
 
 /// Day 18 — PDF Preview & Share Screen.
 ///
@@ -310,6 +311,50 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     );
   }
 
+  /// Deterministic return-to-editing (Day-24 device fix).
+  ///
+  /// The old blind `pop()` assumed the Review screen was underneath Preview,
+  /// which is false from History → "view PDF" and proved unreliable on-device
+  /// (users landed on Home). Instead, rebuild Review from the latest saved
+  /// state and replace Preview, so Back from Review lands on a sensible
+  /// parent on every entry path.
+  Future<void> _editQuote() async {
+    final saved =
+        _existingQuote ?? await QuoteRepository.getQuoteById(_quoteId);
+    if (!mounted) return;
+    if (saved == null) {
+      // Nothing persisted (shouldn't happen — a PDF implies a save).
+      Navigator.pop(context);
+      return;
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        // Same field mapping as history "open for editing".
+        builder: (_) => ReviewScreen(
+          savedQuoteId: saved.id,
+          trade: saved.trade ?? widget.trade,
+          customerName: saved.customerName,
+          customerPhone: saved.customerPhone,
+          customerAddress: saved.customerAddress,
+          validityDays: saved.validityDays,
+          gstPercent: saved.gstPercent,
+          advancePercent: saved.advancePercent,
+          advanceText: saved.advanceText,
+          terms: saved.terms,
+          quoteDate: saved.effectiveDate,
+          displayNumber: saved.quoteNumber,
+          serverDisplayNumber: saved.serverDisplayNumber,
+          notes: saved.notes,
+          originalTranscript: saved.originalTranscript,
+          parsingWarnings: saved.reviewWarnings,
+          parsingWarningsAcknowledged: saved.reviewWarningsAcknowledged,
+          initialLineItems: saved.lineItems,
+        ),
+      ),
+    );
+  }
+
   Future<void> _toggleBackup(bool value) async {
     setState(() => _backupOptIn = value);
     await PdfBackupSettings.setOptedIn(value);
@@ -583,7 +628,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _editQuote,
                     child: const Text('Edit quote'),
                   ),
                   Row(

@@ -173,9 +173,17 @@ class SavedQuote {
     'createdAt': createdAt.toUtc().toIso8601String(),
     'quoteDate': quoteDate?.toIso8601String(),
     'trade': trade?.name,
+    // Local names are kept for on-device storage; server-named aliases
+    // follow so the API (clientName, displayNumber, …) binds correctly.
+    // displayNumber carries ONLY the backend value (null on first sync so
+    // the server assigns one); the local label stays in quoteNumber.
     'customerName': customerName,
+    'clientName': customerName,
     'customerPhone': customerPhone,
+    'clientPhone': customerPhone,
     'customerAddress': customerAddress,
+    'siteAddress': customerAddress,
+    'displayNumber': serverDisplayNumber,
     'validityDays': validityDays,
     'advancePercent': advancePercent,
     'advanceText': advanceText,
@@ -204,6 +212,11 @@ class SavedQuote {
         )
         .toList(),
     'gstPercent': gstPercent,
+    // Server keeps its own copy of the money (defaults to 0 when absent).
+    // Always recomputed here by the Day-5 engine — never model-supplied.
+    'subtotalPaise': totals.subtotalPaise,
+    'gstPaise': totals.gstPaise,
+    'grandTotalPaise': totals.grandTotalPaise,
     'pdfPath': pdfPath,
   };
 

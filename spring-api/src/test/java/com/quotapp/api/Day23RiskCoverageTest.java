@@ -285,6 +285,61 @@ class Day23RiskCoverageTest {
         ).andExpect(status().isOk());
     }
 
+    // ── Day24 wire contract: app-shaped payload syncs ─────────────────────
+
+    @Test
+    @DisplayName("Day24: app-shaped quote payload (customerName keys) syncs with server number assigned")
+    void appShapedPayload_syncsAndMapsNames() throws Exception {
+        String user = "day24-wire-" + UUID.randomUUID();
+        // Mirrors SavedQuote.toJson(): local key names + server aliases,
+        // UTC timestamps, recomputed totals, displayNumber null pre-sync.
+        String payload = """
+            {
+              "id": %s,
+              "quoteNumber": "Q-LOCAL-9",
+              "serverDisplayNumber": null,
+              "idempotencyKey": %s,
+              "createdAt": "2026-09-30T19:23:02.101410Z",
+              "quoteDate": "2026-09-30T00:00:00.000",
+              "trade": "tiling",
+              "customerName": "Sharma Ji",
+              "clientName": "Sharma Ji",
+              "customerPhone": "",
+              "clientPhone": "",
+              "customerAddress": "",
+              "siteAddress": "",
+              "displayNumber": null,
+              "validityDays": 15,
+              "notes": "",
+              "terms": [],
+              "status": "ready",
+              "version": 1,
+              "lineItems": [
+                {"description": "Tile Labour", "quantity": 120, "unit": "sq ft",
+                 "unitRatePaise": 4500, "confidence": 0.95}
+              ],
+              "gstPercent": null,
+              "subtotalPaise": 540000,
+              "gstPaise": 0,
+              "grandTotalPaise": 540000
+            }
+            """.formatted(
+                objectMapper.writeValueAsString(UUID.randomUUID().toString()),
+                objectMapper.writeValueAsString("day24-wire-key-" + UUID.randomUUID()));
+
+        mockMvc.perform(
+            post("/api/quotes/sync")
+                .with(user(user))
+                .header("Idempotency-Key", "day24-wire-hdr-" + UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.clientName").value("Sharma Ji"))
+            .andExpect(jsonPath("$.grandTotalPaise").value(540000))
+            .andExpect(jsonPath("$.displayNumber").exists());
+    }
+
     // ── 6. Bounded concurrency smoke: history reads never exhaust the pool ──
 
     @Test

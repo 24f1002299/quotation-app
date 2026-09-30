@@ -3,11 +3,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:contractor_quote_poc/catalog/catalog.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/pdf/pdf_service.dart';
 import 'package:contractor_quote_poc/screens/pdf_preview_screen.dart';
+import 'package:contractor_quote_poc/screens/review_screen.dart';
+import 'package:contractor_quote_poc/storage/quote_repository.dart';
+import 'package:contractor_quote_poc/storage/saved_quote.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -146,6 +150,72 @@ void main() {
       expect(find.text('Quotation ready'), findsOneWidget);
       // Verify trade chip
       expect(find.text('🪣 Tiling'), findsOneWidget);
+    });
+
+    testWidgets('Day-24: Edit quote returns to Review with saved items, never Home',
+        (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      const lineItems = [
+        QuoteLineItem(
+          description: 'Tile Labour',
+          quantity: 10,
+          unit: 'sq ft',
+          unitRatePaise: 4500,
+        ),
+      ];
+      final quote = Quote(
+        id: 'edit-flow-1',
+        quoteNumber: 'Q-EDIT-1',
+        customer: const Customer(name: 'Edit Client'),
+        lineItems: lineItems,
+      );
+      await QuoteRepository.saveQuoteLocallyOnly(
+        SavedQuote(
+          id: 'edit-flow-1',
+          quoteNumber: 'Q-EDIT-1',
+          createdAt: DateTime(2026, 9, 30),
+          customerName: 'Edit Client',
+          lineItems: lineItems,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PdfPreviewScreen(
+                      quote: quote,
+                      trade: Trade.tiling,
+                    ),
+                  ),
+                ),
+                child: const Text('open preview'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open preview'));
+      // PdfPreview keeps a ticker alive, so pumpAndSettle never finishes —
+      // advance time explicitly instead.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      expect(find.text('Quotation ready'), findsOneWidget);
+
+      await tester.tap(find.text('Edit quote'));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+
+      // Must land on the Review screen with the saved line item —
+      // not Home, not a blank screen.
+      expect(find.byType(ReviewScreen), findsOneWidget);
+      expect(find.text('Tile Labour'), findsWidgets);
     });
   });
 }
