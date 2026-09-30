@@ -323,8 +323,14 @@ class _VoiceScreenState extends State<VoiceScreen>
 
       final newTranscript = result.transcript.trim();
       if (newTranscript.isEmpty) {
+        // Phase 4: prefer the server's specific clarity reason (e.g. "we
+        // couldn't hear you clearly") over the generic message, so a far-mic
+        // recording gets mic guidance instead of a dead end.
+        final serverReason = result.uncertainty.reason?.trim();
         setState(() {
-          _errorMessage = 'Transcription came back empty. Please try again or type the quote manually.';
+          _errorMessage = (serverReason != null && serverReason.isNotEmpty)
+              ? serverReason
+              : 'Transcription came back empty. Please try again or type the quote manually.';
           _state = _transcriptCtrl.text.trim().isNotEmpty
               ? _RecordState.hasTranscript
               : _RecordState.idle;

@@ -124,6 +124,56 @@ void main() {
     });
   });
 
+  // ── Day-24 root matching (fuzzy site transcripts) ───────────────────────
+
+  group('bare-root matching', () {
+    test('bare Latin "tiles" maps to tile labour', () {
+      final result = parser.parse('tiles 120 square feet at 45 rupaye');
+      expect(result.items, hasLength(1));
+      expect(result.items.first.description, contains('Tile Labour'));
+      expect(result.items.first.quantity, equals(120));
+      expect(result.items.first.unitRatePaise, equals(4500));
+    });
+
+    test('bare Devanagari root maps with real-transcript shape', () {
+      final result = parser.parse('किचन टाइल 120 वर्ग फुट 45 रुपये');
+      expect(result.items, hasLength(1));
+      expect(result.items.first.description, contains('Tile Labour'));
+      expect(result.items.first.quantity, equals(120));
+      expect(result.items.first.unit, equals('sq ft'));
+      expect(result.items.first.unitRatePaise, equals(4500));
+    });
+
+    test('Devanagari putty root maps to wall putty', () {
+      final result = parser.parse('पुट्टी 500 square feet at 18 rupaye');
+      expect(result.items, hasLength(1));
+      expect(result.items.first.description, contains('Wall Putty'));
+      expect(result.items.first.quantity, equals(500));
+    });
+
+    test('waterproofing root maps without false friends', () {
+      final result = parser.parse('bathroom waterproofing 50 sq ft at 30 rupaye');
+      expect(result.items, hasLength(1));
+      expect(result.items.first.description, contains('Waterproofing'));
+    });
+
+    test('root does not match inside a longer Devanagari word', () {
+      // 'रंग' (paint root) sits inside 'औरंगाबाद' — strict boundaries
+      // must prevent a painting false positive.
+      final result = parser.parse(
+        'औरंगाबाद tiles 100 square feet at 45 rupaye',
+      );
+      expect(result.items, hasLength(1));
+      expect(result.items.first.description, contains('Tile Labour'));
+    });
+
+    test('plaster stays an explicit unknown (not in the 6-item catalog)', () {
+      final result = parser.parse('terrace plaster 200 square feet at 30 rupaye');
+      expect(result.items, isEmpty);
+      expect(result.warnings, isNotEmpty);
+    });
+  });
+
   // ── toQuoteLineItem round-trip ────────────────────────────────────────────
 
   test('ParsedLineItem.toQuoteLineItem preserves all fields', () {

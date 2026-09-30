@@ -224,8 +224,69 @@ class TranscriptParser {
       }
     }
 
+    // ── Root pass (speech-robustness): bare Hinglish/Devanagari roots ──
+    // Site-noise transcripts keep numbers and root nouns ("tiles 120",
+    // "टाइल 120") while mangling full names ("बेडरों", "वॉटरों"). For items
+    // still unmatched, accept a bare root — but with STRICT boundaries:
+    // neighbours must be neither Latin word chars nor Devanagari
+    // letters/marks, so 'रंग' never matches inside 'औरंगाबाद'.
+    for (final item in kCatalog) {
+      if (matches.any((m) => m.item.id == item.id)) continue;
+      for (final root in _rootSynonyms[item.id] ?? const <String>[]) {
+        if (_claimRoot(text, root, item, matches, claimed)) break;
+      }
+    }
+
     matches.sort((a, b) => a.start.compareTo(b.start));
     return matches;
+  }
+
+  /// Bare-root synonyms per catalog item, tried only when no full synonym
+  /// matched. All lower-case; matched against normalized text.
+  static const _rootSynonyms = <String, List<String>>{
+    'tile_labour': ['tile', 'tiles', 'टाइल', 'टाईल', 'फरशी'],
+    'skirting': ['skirt', 'स्कर्ट'],
+    'waterproofing': ['waterproof', 'वॉटर', 'पाणी'],
+    'wall_putty': ['putty', 'पुट्टी'],
+    'primer': ['primer', 'प्राइम'],
+    'painting': ['paint', 'पेंट', 'रंग'],
+  };
+
+  /// Strict boundary for root matching: Latin word chars AND Devanagari
+  /// letters/marks (U+0900–U+097F) both count as "inside a word".
+  static bool _isRootBoundaryChar(String ch) =>
+      RegExp('[\\w\\u0900-\\u097F]').hasMatch(ch);
+
+  /// Tries to claim one occurrence of [root] for [item]. Returns true when
+  /// claimed (caller stops after the first root hit per item).
+  static bool _claimRoot(
+    String text,
+    String root,
+    CatalogItem item,
+    List<_CatalogMatch> matches,
+    Map<int, String> claimed,
+  ) {
+    int searchFrom = 0;
+    while (searchFrom < text.length) {
+      final pos = text.indexOf(root, searchFrom);
+      if (pos == -1) return false;
+      final end = pos + root.length;
+
+      final beforeOk = pos == 0 || !_isRootBoundaryChar(text[pos - 1]);
+      final afterOk = end >= text.length || !_isRootBoundaryChar(text[end]);
+      final overlaps = Iterable<int>.generate(root.length, (k) => pos + k)
+          .any(claimed.containsKey);
+
+      if (beforeOk && afterOk && !overlaps) {
+        matches.add(_CatalogMatch(item: item, start: pos, end: end));
+        for (int k = pos; k < end; k++) {
+          claimed[k] = item.id;
+        }
+        return true;
+      }
+      searchFrom = pos + 1;
+    }
+    return false;
   }
 
   // ── Rate extraction ─────────────────────────────────────────────────────

@@ -313,10 +313,11 @@ public class SttService {
         body.add("response_format", "verbose_json");
         body.add("temperature", "0");
 
-        String normalizedLang = normalizeLanguageHint(languageHint);
-        if (normalizedLang != null) {
-            body.add("language", normalizedLang);
-        }
+        // Phase 1 (Hinglish-first): deliberately NO 'language' parameter.
+        // Locking Whisper to 'hi' forced Devanagari output and mistranscribed
+        // Marathi-dominant audio; omitting it lets the provider auto-detect
+        // code-switched contractor speech. Script bias comes from the Roman-
+        // script prompt above, vocabulary bias from its per-mode variants.
 
         ByteArrayResource fileResource = new NamedByteArrayResource(audioBytes, filename);
         body.add("file", fileResource);
@@ -337,9 +338,6 @@ public class SttService {
                     MultiValueMap<String, Object> plainBody = new LinkedMultiValueMap<>();
                     plainBody.add("model", openaiModel);
                     plainBody.add("prompt", ContractorCatalogTerms.asPromptString(languageHint));
-                    if (normalizedLang != null) {
-                        plainBody.add("language", normalizedLang);
-                    }
                     plainBody.add("file", new NamedByteArrayResource(audioBytes, filename));
                     String rawResponse = postTranscription(plainBody);
                     String text = parseTranscriptFromResponse(rawResponse);
