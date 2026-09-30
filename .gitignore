@@ -34,6 +34,14 @@ build/
 **/ios/Pods/
 **/macos/Pods/
 
+# ── Node / Supabase CLI (npm) ───────────────────────────────────
+# Never commit node_modules — it is rebuilt from package-lock.json.
+# DO commit package.json + package-lock.json: they pin the CLI version
+# so the whole team runs the same Supabase CLI.
+node_modules/
+# Studio scratch queries auto-saved by the SQL editor (local only).
+supabase/snippets/
+
 # ── IDEs and System files ─────────────────────────────────────
 .idea/
 *.iml
