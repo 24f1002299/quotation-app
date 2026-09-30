@@ -2,6 +2,7 @@ package com.quotapp.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.quotapp.api.dto.CatalogItemDto;
 import com.quotapp.api.dto.ExtractRequest;
 import com.quotapp.api.dto.QuoteDto;
@@ -249,6 +250,39 @@ class Day23RiskCoverageTest {
         assertThat(spec).contains("Idempotency-Key");
         assertThat(spec).contains("5000");
         assertThat(spec.toLowerCase()).contains("never computes arithmetic");
+    }
+
+    // ── Day24 wire contract: timestamps must carry a zone ─────────────────
+
+    @Test
+    @DisplayName("Day24: zone-less timestamps rejected (400); UTC accepted (200)")
+    void timestampContract_utcRequired() throws Exception {
+        String user = "day24-ts-" + UUID.randomUUID();
+
+        // What the Flutter app used to send: local ISO without zone.
+        ObjectNode zoneless = objectMapper.valueToTree(
+            quoteBody(UUID.randomUUID().toString(), "day24-ts-zoneless-" + UUID.randomUUID(), 1));
+        zoneless.put("createdAt", "2026-09-30T19:23:02.101410");
+        mockMvc.perform(
+            post("/api/quotes/sync")
+                .with(user(user))
+                .header("Idempotency-Key", "day24-ts-hdr-" + UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(zoneless))
+        ).andExpect(status().isBadRequest());
+
+        // What the app sends now: UTC with zone — must sync cleanly.
+        // (Fresh idempotency key: same key would replay the earlier call.)
+        ObjectNode utc = objectMapper.valueToTree(
+            quoteBody(UUID.randomUUID().toString(), "day24-ts-utc-" + UUID.randomUUID(), 1));
+        utc.put("createdAt", "2026-09-30T19:23:02.101410Z");
+        mockMvc.perform(
+            post("/api/quotes/sync")
+                .with(user(user))
+                .header("Idempotency-Key", "day24-ts-hdr-" + UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(utc))
+        ).andExpect(status().isOk());
     }
 
     // ── 6. Bounded concurrency smoke: history reads never exhaust the pool ──

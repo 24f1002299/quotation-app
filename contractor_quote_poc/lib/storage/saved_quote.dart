@@ -167,7 +167,10 @@ class SavedQuote {
     'quoteNumber': quoteNumber,
     'serverDisplayNumber': serverDisplayNumber,
     'idempotencyKey': idempotencyKey,
-    'createdAt': createdAt.toIso8601String(),
+    // Wire contract: the API parses timestamps as Instant, which requires
+    // an explicit zone. Local ISO without zone ("...T19:23:02.101410") is
+    // rejected with 400 and sync silently never completes — always UTC.
+    'createdAt': createdAt.toUtc().toIso8601String(),
     'quoteDate': quoteDate?.toIso8601String(),
     'trade': trade?.name,
     'customerName': customerName,

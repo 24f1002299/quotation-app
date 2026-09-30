@@ -92,7 +92,9 @@ class ContractorProfile {
       'quote_terms': quoteTerms,
       'schema_version': schemaVersion,
       'version': version,
-      'updated_at': updatedAt.toIso8601String(),
+      // Wire contract: ProfileDto.updatedAt is an Instant — zone-less ISO
+      // is rejected with 400. Always emit UTC (see SavedQuote.toJson).
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 

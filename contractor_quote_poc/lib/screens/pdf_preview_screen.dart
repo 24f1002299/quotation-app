@@ -408,10 +408,21 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Flexible title: the middle slot is only ~224px once the back
+        // button and share action take their space; an inflexible Row
+        // overflowed by ~20px on 360dp-wide phones (Day-24 device finding).
         title: Row(
           children: [
-            const Text('Quotation ready'),
-            if (tradeBadge != null) ...[const SizedBox(width: 10), tradeBadge],
+            const Flexible(
+              child: Text(
+                'Quotation ready',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (tradeBadge != null) ...[
+              const SizedBox(width: 8),
+              tradeBadge,
+            ],
           ],
         ),
         actions: [
@@ -436,16 +447,21 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                 pdfFileName: PdfService.shareFileNameForQuote(
                     widget.quote.customer.name),
                 loadingWidget: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(color: cs.primary),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Generating PDF / पीडीएफ तैयार हो रही है…',
-                        style: tt.bodyMedium,
-                      ),
-                    ],
+                  // Scrollable: PdfPreview measures this with near-zero
+                  // height on first layout; a bare Column overflows by
+                  // ~63px and trips the RenderFlex assertion on device.
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: cs.primary),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Generating PDF / पीडीएफ तैयार हो रही है…',
+                          style: tt.bodyMedium,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -48,7 +48,9 @@ class EditFeedback {
         'model_result': modelResult,
         'final_value': finalValue,
         'changed_field': changedField,
-        'created_at': createdAt.toIso8601String(),
+        // Wire contract: FeedbackDto.createdAt is an Instant — zone-less
+        // ISO is rejected with 400. Always emit UTC (see SavedQuote.toJson).
+        'created_at': createdAt.toUtc().toIso8601String(),
       };
 
   factory EditFeedback.fromJson(Map<String, dynamic> json) => EditFeedback(
