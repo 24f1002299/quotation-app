@@ -35,7 +35,7 @@ public class GlobalExceptionHandler {
             ))
             .toList();
 
-        log.warn("Request validation failed with {} field error(s)", details.size());
+        log.warn("Request validation failed with {} field error(s): {}", details.size(), details);
         ErrorResponse response = new ErrorResponse(
             "VALIDATION_FAILED",
             "Validation failed for one or more request fields",
