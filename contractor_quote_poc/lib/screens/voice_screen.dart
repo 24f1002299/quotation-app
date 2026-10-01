@@ -30,6 +30,7 @@ import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
 import '../voice/extraction_service.dart';
 import '../voice/transcription_service.dart';
+import '../widgets/common_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State machine
@@ -47,8 +48,7 @@ class VoiceScreen extends StatefulWidget {
   State<VoiceScreen> createState() => _VoiceScreenState();
 }
 
-class _VoiceScreenState extends State<VoiceScreen>
-    with SingleTickerProviderStateMixin {
+class _VoiceScreenState extends State<VoiceScreen> {
   _RecordState _state = _RecordState.idle;
   final _recorder = AudioRecorder();
 
@@ -60,9 +60,6 @@ class _VoiceScreenState extends State<VoiceScreen>
 
   // Selected language for Groq Whisper STT
   String _selectedLanguage = 'auto'; // 'auto', 'hi', 'mr'
-
-  // Pulse animation on the mic button while recording
-  late final AnimationController _pulse;
 
   // Elapsed duration counter while recording
   int _recSeconds = 0;
@@ -83,11 +80,6 @@ class _VoiceScreenState extends State<VoiceScreen>
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-
     _transcriptCtrl.addListener(_onTranscriptChanged);
     _loadPreferredLanguage();
     _loadExistingDraft();
@@ -100,7 +92,6 @@ class _VoiceScreenState extends State<VoiceScreen>
     _recorder.dispose();
     _transcriptCtrl.removeListener(_onTranscriptChanged);
     _transcriptCtrl.dispose();
-    _pulse.dispose();
     super.dispose();
   }
 
@@ -564,15 +555,20 @@ class _VoiceScreenState extends State<VoiceScreen>
     setState(() => _errorMessage = msg);
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // ── Build: immersive recording mode ─────────────────────────────
+  // One state, one focus. AppBar holds back + language only; the mic
+  // lives in the bottom-third thumb zone; a single primary action
+  // anchors the bottom. The demo entry stays as a quiet text link.
+
+  String get _elapsedLabel {
+    final mm = (_recSeconds ~/ 60).toString().padLeft(2, '0');
+    final ss = (_recSeconds % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    // Phase 3: trade was already chosen on Home — no badge in the AppBar.
-    // Recording stays distraction-free: back + language only.
+    final inTranscript = _state == _RecordState.hasTranscript;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -593,7 +589,7 @@ class _VoiceScreenState extends State<VoiceScreen>
       // Keep the Create-Quote CTA above the keyboard instead of inside the
       // body Column: previously the editor (Expanded) + buttons + keyboard
       // exceeded the viewport by ~31px (RenderFlex bottom overflow).
-      bottomNavigationBar: _state == _RecordState.hasTranscript
+      bottomNavigationBar: inTranscript
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -611,11 +607,10 @@ class _VoiceScreenState extends State<VoiceScreen>
                       icon: const Icon(Icons.arrow_forward_rounded),
                       label: const Text('Create Quote / कोटेशन बनाएं'),
                     ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
+                    TextButton(
                       onPressed: _createManually,
-                      icon: const Icon(Icons.edit_note_rounded),
-                      label: const Text('Type quote instead / लिखकर बनाएं'),
+                      child:
+                          const Text('Type quote instead / लिखकर बनाएं'),
                     ),
                   ],
                 ),
@@ -628,14 +623,13 @@ class _VoiceScreenState extends State<VoiceScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Permission Recovery Banner ──────────────────────────────
+              // ── Inline recovery (permission / error) ──────────────────
               if (_permissionDenied)
                 _PermissionRecoveryBanner(
                   onAllow: _startRecording,
                   onTypeManually: _createManually,
                 ),
 
-              // ── Error banner ────────────────────────────────────────────
               if (_errorMessage != null && !_permissionDenied)
                 _ErrorBanner(
                   message: _errorMessage!,
@@ -652,100 +646,14 @@ class _VoiceScreenState extends State<VoiceScreen>
                   onManual: _createManually,
                 ),
 
-              const SizedBox(height: 12),
-
-              // ── Central area (state-dependent) ──────────────────────────
-              // Flexible (not Expanded) + scrollable idle content so the
-              // keyboard can shrink this area without overflowing.
-              Flexible(
-                child: _state == _RecordState.hasTranscript
-                    ? _TranscriptEditor(
-                        ctrl: _transcriptCtrl,
-                        uncertainty: _uncertainty,
-                        onReRecord: _reRecord,
-                      )
-                    : SingleChildScrollView(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (_state != _RecordState.extracting) ...[
-                              // Guidance hint
-                              Text(
-                                'Tell us the work and quantities',
-                                style: tt.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                widget.trade == Trade.tiling
-                                    ? 'Example: “Kitchen wall tiles, 120 square feet.”'
-                                    : 'Example: “Wall putty, 1200 square feet.”',
-                                style: tt.bodySmall?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.7),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 36),
-
-                              // Animated mic button
-                              _MicButton(
-                                state: _state,
-                                pulse: _pulse,
-                                onStart: _startRecording,
-                                onStop: _stopRecording,
-                              ),
-
-                              const SizedBox(height: 24),
-                            ],
-
-                            // Status text & timer
-                            if (_state == _RecordState.idle)
-                              ..._idleHint(tt)
-                            else if (_state == _RecordState.recording)
-                              ..._recordingHint(tt, cs)
-                            else if (_state == _RecordState.transcribing)
-                              ..._transcribingHint(tt, cs)
-                            else if (_state == _RecordState.extracting)
-                              ..._extractingHint(tt, cs),
-                          ],
-                        ),
-                      ),
-              ),
-
-              // ── Bottom actions ──────────────────────────────────────────
-              if (_state == _RecordState.hasTranscript)
-                const SizedBox(height: 8),
-
-              // Recording controls (Cancel during recording)
-              if (_state == _RecordState.recording) ...[
-                OutlinedButton(
-                  onPressed: _cancelRecording,
-                  child: const Text('Cancel / रद्द करें'),
-                ),
+              if (_permissionDenied || _errorMessage != null)
                 const SizedBox(height: 12),
-              ],
 
-              if (_state == _RecordState.idle) ...[
-                OutlinedButton.icon(
-                  onPressed: _createManually,
-                  icon: const Icon(Icons.edit_note_rounded),
-                  label: const Text('Type quote instead / लिखकर बनाएं'),
-                ),
-                const SizedBox(height: 16),
-                const _DemoSection(),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _useDemo,
-                  icon: const Icon(Icons.play_circle_outline_rounded),
-                  label: Text(
-                    widget.trade == Trade.tiling
-                        ? 'Use Tiling Demo / टाइलिंग डेमो'
-                        : 'Use Painting Demo / पेंटिंग डेमो',
-                  ),
-                ),
-              ],
+              // ── Center stage (state-dependent) ────────────────────────
+              Expanded(child: _buildCenterStage()),
+
+              // ── Bottom controls (one primary action per state) ────────
+              _buildBottomControls(),
             ],
           ),
         ),
@@ -753,106 +661,175 @@ class _VoiceScreenState extends State<VoiceScreen>
     );
   }
 
-  // ── State-specific hint widgets ───────────────────────────────────────────
-
-  List<Widget> _idleHint(TextTheme tt) => [
-    Text(
-      'Tap to speak / बोलने के लिए टैप करें',
-      style: tt.titleMedium,
-      textAlign: TextAlign.center,
-    ),
-    const SizedBox(height: 6),
-    Text(
-      'Hindi · Marathi · Hinglish',
-      style: tt.bodyMedium,
-      textAlign: TextAlign.center,
-    ),
-    const SizedBox(height: 6),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.wifi_rounded, size: 14, color: Colors.grey),
-        const SizedBox(width: 4),
-        Text(
-          'Transcription needs internet · Whisper STT',
-          style: tt.bodySmall?.copyWith(color: Colors.grey),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    ),
-    const SizedBox(height: 4),
-    // Day 22: explicit upload purpose — mic audio goes only to our server
-    // to make a transcript, then the recording is deleted from the phone.
-    Text(
-      'Mic is used only while recording. Audio is sent only to make your transcript, then deleted. / माइक सिर्फ रिकॉर्डिंग में चलता है।',
-      style: tt.bodySmall?.copyWith(color: Colors.grey),
-      textAlign: TextAlign.center,
-    ),
-  ];
-
-  List<Widget> _recordingHint(TextTheme tt, ColorScheme cs) {
-    final mm = (_recSeconds ~/ 60).toString().padLeft(2, '0');
-    final ss = (_recSeconds % 60).toString().padLeft(2, '0');
-    final maxMm = (kMaxRecordingDurationSeconds ~/ 60).toString().padLeft(
-      2,
-      '0',
-    );
-    final maxSs = (kMaxRecordingDurationSeconds % 60).toString().padLeft(
-      2,
-      '0',
-    );
-
-    return [
-      Text(
-        '$mm:$ss / $maxMm:$maxSs',
-        style: tt.displaySmall?.copyWith(
-          color: cs.error,
-          fontWeight: FontWeight.bold,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
-      const SizedBox(height: 6),
-      Text(
-        'Recording voice… Tap mic button when finished to transcribe',
-        style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
-      ),
-    ];
+  /// State-dependent center stage: guidance + hero mic, recording
+  /// indicator, busy spinners, or the transcript card.
+  Widget _buildCenterStage() {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    switch (_state) {
+      case _RecordState.hasTranscript:
+        return _TranscriptEditor(
+          ctrl: _transcriptCtrl,
+          uncertainty: _uncertainty,
+          onReRecord: _reRecord,
+        );
+      case _RecordState.recording:
+        return Column(
+          children: [
+            const Spacer(flex: 2),
+            MicButton(
+              isRecording: true,
+              elapsedLabel: _elapsedLabel,
+              onTap: _stopRecording,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Recording… / रिकॉर्ड हो रहा…',
+                  style: tt.titleMedium,
+                ),
+              ],
+            ),
+            const Spacer(flex: 3),
+          ],
+        );
+      case _RecordState.transcribing:
+        return _busyStage(
+          'Transcribing with Whisper STT…',
+          'Turning audio into text. Takes ~2–4 seconds.',
+        );
+      case _RecordState.extracting:
+        return _busyStage(
+          _extractionStatusMessage,
+          'Matching catalog & applying saved rates. Your transcript is safe.',
+        );
+      case _RecordState.idle:
+        return Column(
+          children: [
+            const SizedBox(height: 8),
+            Text(
+              'Tell us the work and quantities',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.trade == Trade.tiling
+                  ? 'Example: “Kitchen wall tiles, 120 square feet.”'
+                  : 'Example: “Wall putty, 1200 square feet.”',
+              style: tt.bodyMedium?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.65),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const Spacer(flex: 2),
+            MicButton(onTap: _startRecording),
+            const SizedBox(height: 12),
+            Text(
+              'Tap to speak / बोलने के लिए टैप करें',
+              style: tt.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              'Hindi · Marathi · Hinglish',
+              style: tt.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const Spacer(flex: 3),
+          ],
+        );
+    }
   }
 
-  List<Widget> _transcribingHint(TextTheme tt, ColorScheme cs) => [
-    CircularProgressIndicator(color: cs.primary),
-    const SizedBox(height: 20),
-    Text(
-      'Transcribing with Whisper STT…',
-      style: tt.titleMedium,
-      textAlign: TextAlign.center,
-    ),
-    const SizedBox(height: 6),
-    Text(
-      'Turning audio into text. Takes ~2–4 seconds.',
-      style: tt.bodyMedium,
-      textAlign: TextAlign.center,
-    ),
-  ];
+  Widget _busyStage(String title, String sub) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        CircularProgressIndicator(color: cs.primary),
+        const SizedBox(height: 20),
+        Text(title, style: tt.titleMedium, textAlign: TextAlign.center),
+        const SizedBox(height: 6),
+        Text(sub, style: tt.bodyMedium, textAlign: TextAlign.center),
+      ],
+    );
+  }
 
-  List<Widget> _extractingHint(TextTheme tt, ColorScheme cs) => [
-    CircularProgressIndicator(color: cs.primary),
-    const SizedBox(height: 20),
-    Text(
-      _extractionStatusMessage,
-      style: tt.titleMedium,
-      textAlign: TextAlign.center,
-    ),
-    const SizedBox(height: 8),
-    Text(
-      'Matching catalog & applying saved rates. Your transcript is safe.',
-      style: tt.bodyMedium?.copyWith(
-        color: cs.onSurface.withValues(alpha: 0.7),
-      ),
-      textAlign: TextAlign.center,
-    ),
-  ];
+  /// One primary action per state — everything else is a quiet link.
+  /// (Demo entry stays for dev/testing, de-emphasized as plain text.)
+  Widget _buildBottomControls() {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    switch (_state) {
+      case _RecordState.recording:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton.icon(
+              onPressed: _stopRecording,
+              icon: const Icon(Icons.stop_rounded),
+              label: const Text('Stop & Process / रोकें और आगे बढ़ें'),
+            ),
+            TextButton(
+              onPressed: _cancelRecording,
+              child: const Text('Cancel / रद्द करें'),
+            ),
+          ],
+        );
+      case _RecordState.idle:
+        return Column(
+          children: [
+            TextButton.icon(
+              onPressed: _createManually,
+              icon: const Icon(Icons.edit_note_rounded, size: 18),
+              label: const Text('Type quote instead / लिखकर बनाएं'),
+            ),
+            TextButton(
+              onPressed: _useDemo,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: Text(
+                widget.trade == Trade.tiling
+                    ? 'Use Tiling Demo / टाइलिंग डेमो'
+                    : 'Use Painting Demo / पेंटिंग डेमो',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+            Text(
+              'Mic runs only while recording. Audio is deleted after transcription. / माइक सिर्फ रिकॉर्डिंग में चलता है।',
+              style: tt.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.5),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
+      case _RecordState.hasTranscript:
+        return const SizedBox(height: 8);
+      case _RecordState.transcribing:
+      case _RecordState.extracting:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // ── Busy states are rendered by _busyStage (see above). ──────────────
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -916,62 +893,9 @@ class _LanguagePicker extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _MicButton
+// Hero mic lives in widgets/common_widgets.dart (shared with Home) —
+// filled forest circle, idle pulse, haptics. No local mic widget here.
 // ─────────────────────────────────────────────────────────────────────────────
-class _MicButton extends StatelessWidget {
-  final _RecordState state;
-  final AnimationController pulse;
-  final VoidCallback onStart;
-  final VoidCallback onStop;
-
-  const _MicButton({
-    required this.state,
-    required this.pulse,
-    required this.onStart,
-    required this.onStop,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isRecording = state == _RecordState.recording;
-    final isTranscribing = state == _RecordState.transcribing;
-    final color = isRecording ? cs.error : cs.primary;
-
-    return AnimatedBuilder(
-      animation: pulse,
-      builder: (_, child) {
-        final scale = isRecording ? 1.0 + 0.08 * pulse.value : 1.0;
-        return Transform.scale(scale: scale, child: child);
-      },
-      child: GestureDetector(
-        onTap: isTranscribing ? null : (isRecording ? onStop : onStart),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: isRecording ? 0.2 : 0.15),
-            border: Border.all(color: color, width: isRecording ? 3 : 2),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.3),
-                blurRadius: isRecording ? 24 : 10,
-                spreadRadius: isRecording ? 4 : 0,
-              ),
-            ],
-          ),
-          child: Icon(
-            isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-            size: 54,
-            color: color,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _TranscriptEditor — editable text area shown after transcription
@@ -1053,16 +977,15 @@ class _TranscriptEditor extends StatelessWidget {
             style: tt.bodyLarge,
             decoration: InputDecoration(
               hintText: 'Edit the transcript if needed… / यहाँ सुधार करें',
-              hintStyle: const TextStyle(color: Color(0xFF9E9BA8)),
               filled: true,
-              fillColor: const Color(0xFF13131F),
+              fillColor: cs.surface,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF2E2E42)),
+                borderSide: BorderSide(color: cs.outlineVariant),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF2E2E42)),
+                borderSide: BorderSide(color: cs.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -1074,10 +997,23 @@ class _TranscriptEditor extends StatelessWidget {
         ),
         if (!keyboardOpen) ...[
           const SizedBox(height: 10),
-          Text(
-            'You can correct any mistakes before creating the quote. Draft is auto-saved.',
-            style: tt.bodySmall,
-            textAlign: TextAlign.center,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 16,
+                color: cs.primary,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Transcript ready — correct mistakes, then create the quote. Draft auto-saved.',
+                  style: tt.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
           ),
         ],
       ],
@@ -1221,21 +1157,5 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _DemoSection extends StatelessWidget {
-  const _DemoSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('or use a demo', style: tt.bodySmall),
-        ),
-        const Expanded(child: Divider()),
-      ],
-    );
-  }
-}
+// (Dev demo entry now lives inline in _buildBottomControls as a quiet link;
+// the old divider section was removed.)

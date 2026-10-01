@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 
 import '../catalog/catalog.dart';
 import '../models/quote.dart';
@@ -15,98 +13,21 @@ import '../storage/sync_outbox.dart';
 import '../theme.dart';
 import '../utils/error_report.dart';
 import '../utils/quote_ids.dart';
-import '../utils/rupee_format.dart';
 import '../widgets/totals_bar.dart';
+import 'review/attention_banner.dart';
+import 'review/customer_section.dart';
+import 'review/details_section.dart';
+import 'review/editable_item.dart';
+import 'review/item_sheet.dart';
+import 'review/line_item_card.dart';
+import 'review/small_widgets.dart';
+import 'review/voice_note.dart';
 import 'pdf_preview_screen.dart';
 import 'quote_flag_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mutable line-item data class used only within this screen.
-// The immutable QuoteLineItem model (used for calculations) is created on
-// demand from these fields.
-// ─────────────────────────────────────────────────────────────────────────────
-class _EditableItem {
-  TextEditingController description;
-  TextEditingController quantity;
-  TextEditingController unit;
-  TextEditingController rate;
-  final double? confidence;
-  final String? uncertaintyNote;
-  final String? sourceSpan;
-  final bool isUnknown;
-  bool requiresReview;
-  bool acknowledged;
-
-  /// Day 21: catalog id the model picked (if any), carried for feedback.
-  final String? catalogItemId;
-
-  _EditableItem({
-    String description = '',
-    String quantity = '',
-    String unit = 'sq ft',
-    String rate = '',
-    this.confidence,
-    this.uncertaintyNote,
-    this.sourceSpan,
-    this.isUnknown = false,
-    this.requiresReview = false,
-    this.acknowledged = false,
-    this.catalogItemId,
-  }) : description = TextEditingController(text: description),
-       quantity = TextEditingController(text: quantity),
-       unit = TextEditingController(text: unit),
-       rate = TextEditingController(text: rate);
-
-  void dispose() {
-    description.dispose();
-    quantity.dispose();
-    unit.dispose();
-    rate.dispose();
-  }
-
-  bool get hasValidEssentials {
-    final parsedQuantity = int.tryParse(quantity.text.trim()) ?? 0;
-    final parsedRate = int.tryParse(rate.text.trim()) ?? 0;
-    return description.text.trim().isNotEmpty &&
-        parsedQuantity > 0 &&
-        unit.text.trim().isNotEmpty &&
-        parsedRate > 0;
-  }
-
-  _EditableItem copy() {
-    return _EditableItem(
-      description: description.text,
-      quantity: quantity.text,
-      unit: unit.text,
-      rate: rate.text,
-      confidence: confidence,
-      uncertaintyNote: uncertaintyNote,
-      sourceSpan: sourceSpan,
-      isUnknown: isUnknown,
-      requiresReview: requiresReview,
-      acknowledged: acknowledged,
-      catalogItemId: catalogItemId,
-    );
-  }
-
-  QuoteLineItem toLineItem() => QuoteLineItem(
-    description: description.text.trim(),
-    quantity: int.tryParse(quantity.text.trim()) ?? 0,
-    unit: unit.text.trim(),
-
-    unitRatePaise: (int.tryParse(rate.text.trim()) ?? 0) * 100,
-    confidence: confidence,
-    uncertaintyNote: uncertaintyNote,
-    sourceSpan: sourceSpan,
-    isUnknown: isUnknown,
-    requiresReview: requiresReview,
-    acknowledged: acknowledged,
-    catalogItemId: catalogItemId,
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ReviewScreen — editable quotation review & customer details
+// (Editable line-item model lives in review/editable_item.dart.)
 // Accepts an optional initial list of line items (from voice/parse on Day 7),
 // an optional Trade, original voice transcript, and any parser warnings.
 // When called with no arguments it starts with the Day 2 demo fixture so
@@ -187,7 +108,7 @@ class ReviewScreen extends StatefulWidget {
 
 class _ReviewScreenState extends State<ReviewScreen> {
   // ── Line items ─────────────────────────────────────────────────────────────
-  late final List<_EditableItem> _items;
+  late final List<EditableItem> _items;
 
   /// Day 21: extraction snapshot taken once in initState. Used to diff what
   /// the model produced vs what the user finally kept, without storing audio.
@@ -295,7 +216,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     _items = seed
         .map(
-          (li) => _EditableItem(
+          (li) => EditableItem(
             description: li.description,
             quantity: li.quantity.toString(),
             unit: li.unit,
@@ -537,12 +458,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
     });
   }
 
-  void _addItem(_EditableItem item) {
+  void _addItem(EditableItem item) {
     _attachListeners(item);
     setState(() => _items.add(item));
   }
 
-  void _onFieldChanged(_EditableItem item) {
+  void _onFieldChanged(EditableItem item) {
     if (item.requiresReview &&
         !item.acknowledged &&
         item.hasValidEssentials) {
@@ -551,7 +472,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (mounted) setState(() {});
   }
 
-  void _acknowledgeItem(_EditableItem item) {
+  void _acknowledgeItem(EditableItem item) {
     setState(() => item.acknowledged = true);
   }
 
@@ -562,7 +483,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     });
   }
 
-  void _attachListeners(_EditableItem item) {
+  void _attachListeners(EditableItem item) {
     void listener() => _onFieldChanged(item);
     item.description.addListener(listener);
     item.quantity.addListener(listener);
@@ -588,7 +509,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     _addItemAt(index + 1, duplicate);
   }
 
-  void _addItemAt(int index, _EditableItem item) {
+  void _addItemAt(int index, EditableItem item) {
     _attachListeners(item);
     setState(() => _items.insert(index, item));
   }
@@ -782,7 +703,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   // ── Original Voice Note (Day 7) ───────────────────────────
                   if (widget.originalTranscript != null &&
                       widget.originalTranscript!.trim().isNotEmpty) ...[
-                    _VoiceNoteCard(
+                    VoiceNoteCard(
                       transcript: widget.originalTranscript!.trim(),
                       isExpanded: _transcriptExpanded,
                       onToggle: () => setState(
@@ -794,7 +715,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
                   // ── Parsing Warnings Banner (Day 7) ───────────────────────
                   if (_warnings.isNotEmpty) ...[
-                    _ParsingWarningsBanner(
+                    ParsingWarningsBanner(
                       warnings: _warnings,
                       onDismiss: _acknowledgeWarnings,
                     ),
@@ -802,7 +723,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ],
 
                   if (_attentionCount > 0) ...[
-                    _AttentionSummary(count: _attentionCount),
+                    AttentionSummary(count: _attentionCount),
                     const SizedBox(height: 14),
                   ],
 
@@ -831,7 +752,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ],
 
                   // ── Section: Line items ───────────────────────────────
-                  _SectionHeader(
+                  SectionHeader(
                     label: 'Items / मद',
                     trailing: TextButton.icon(
                       onPressed: _showAddItemSheet,
@@ -842,7 +763,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   const SizedBox(height: 8),
 
                   if (_items.isEmpty)
-                    _EmptyItemsHint(
+                    EmptyItemsHint(
                       onAdd: _showAddItemSheet,
                       hasVoiceTranscript:
                           widget.originalTranscript != null &&
@@ -854,7 +775,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     child: Column(
                       children: [
                         ..._items.asMap().entries.map(
-                          (entry) => _LineItemCard(
+                          (entry) => LineItemCard(
                             key: ObjectKey(entry.value),
                             item: entry.value,
                             index: entry.key,
@@ -886,9 +807,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   const SizedBox(height: 20),
 
                   // ── Section: Customer details ─────────────────────────
-                  _SectionHeader(label: 'Customer / ग्राहक'),
+                  SectionHeader(label: 'Customer / ग्राहक'),
                   const SizedBox(height: 12),
-                  _CustomerSection(
+                  CustomerSection(
                     nameCtrl: _customerNameCtrl,
                     phoneCtrl: _customerPhoneCtrl,
                     siteCtrl: _siteCtrl,
@@ -897,7 +818,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   const SizedBox(height: 16),
 
                   // ── Section: More quote details (progressive disclosure) ──
-                  _MoreDetailsSection(
+                  MoreDetailsSection(
                     isExpanded: _moreDetailsExpanded,
                     onToggle: () => setState(() => _moreDetailsExpanded = !_moreDetailsExpanded),
                     quoteId: _quoteId,
@@ -978,12 +899,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   // ── Add-item bottom sheet ─────────────────────────────────────────────────
   void _showAddItemSheet() {
-    showModalBottomSheet<_EditableItem>(
+    showModalBottomSheet<EditableItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       // Pass trade so the sheet can show catalog suggestions.
-      builder: (_) => _AddItemSheet(trade: widget.trade),
+      builder: (_) => AddItemSheet(trade: widget.trade),
     ).then((item) {
       if (item == null) return;
       _addItem(item);
@@ -995,12 +916,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final originalSnapshot = index < _extractionSnapshot.length
         ? _extractionSnapshot[index]
         : _items[index].toLineItem();
-    showModalBottomSheet<_EditableItem>(
+    showModalBottomSheet<EditableItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
-          _AddItemSheet(trade: widget.trade, initialItem: _items[index]),
+          AddItemSheet(trade: widget.trade, initialItem: _items[index]),
     ).then((item) async {
       if (item == null || !mounted) return;
       final oldItem = _items[index];
@@ -1026,1050 +947,27 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _LineItemCard — Day 14 large read-only card (design.md §4 Review quote).
-// Tapping the card or Edit/Fix now opens the bottom-sheet form; the card
-// itself never shows inline text fields so totals stay trustworthy and the
-// layout stays scannable with large touch targets.
-// ─────────────────────────────────────────────────────────────────────────────
-class _LineItemCard extends StatelessWidget {
-  final _EditableItem item;
-  final int index;
-  final int amountPaise;
-  final VoidCallback onEdit;
-  final VoidCallback onDuplicate;
-  final VoidCallback? onMoveUp;
-  final VoidCallback? onMoveDown;
-  final VoidCallback onDelete;
-  final VoidCallback onAcknowledge;
+// (LineItemCard lives in review/line_item_card.dart.)
 
-  const _LineItemCard({
-    super.key,
-    required this.item,
-    required this.index,
-    required this.amountPaise,
-    required this.onEdit,
-    required this.onDuplicate,
-    required this.onMoveUp,
-    required this.onMoveDown,
-    required this.onDelete,
-    required this.onAcknowledge,
-  });
+// (AttentionSummary lives in review/attention_banner.dart.)
 
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    final needsAttention = item.requiresReview && !item.acknowledged;
+// (UncertaintyNotice lives in review/line_item_card.dart.)
 
-    final description = item.description.text.trim().isEmpty
-        ? 'Unnamed item'
-        : item.description.text.trim();
-    final qtyText = item.quantity.text.trim().isEmpty
-        ? '—'
-        : item.quantity.text.trim();
-    final unitText =
-        item.unit.text.trim().isEmpty ? 'unit' : item.unit.text.trim();
-    final rateText =
-        item.rate.text.trim().isEmpty ? '—' : '₹${item.rate.text.trim()}';
+// (AddItemSheet lives in review/item_sheet.dart.)
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: InkWell(
-        onTap: onEdit,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Item ${index + 1} / मद ${index + 1}',
-                      style: tt.bodyMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (needsAttention)
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      color: Color(0xFFF59E0B),
-                      semanticLabel: 'Needs attention',
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              // Large scannable item name (min 16sp via titleMedium).
-              Text(
-                description,
-                style: tt.titleMedium?.copyWith(fontSize: 18),
-              ),
-              const SizedBox(height: 4),
-              // Quantity × unit × rate line + read-only amount.
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    '$qtyText $unitText × $rateText',
-                    style: tt.bodyLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: _AmountChip(
-                  label: 'Amount / राशि',
-                  value: formatRupeePaise(amountPaise),
-                ),
-              ),
-              if (needsAttention) ...[
-                const SizedBox(height: 10),
-                _UncertaintyNotice(item: item),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.build_outlined, size: 18),
-                      label: const Text('Fix now'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onAcknowledge,
-                      icon: const Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 18),
-                      label: Text(
-                        item.isUnknown
-                            ? 'I checked this / मैंने जांच ली'
-                            : 'Mark as checked / जांच ली',
-                      ),
-                    ),
-                  ],
-                ),
-              ] else if (item.requiresReview) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle_outline_rounded,
-                      size: 18,
-                      color: Color(0xFF4CAF50),
-                    ),
-                    const SizedBox(width: 6),
-                    Text('Checked / जांच ली गई', style: tt.bodySmall),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 2,
-                runSpacing: 2,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: onDuplicate,
-                    icon: const Icon(Icons.copy_outlined, size: 18),
-                    label: const Text('Duplicate'),
-                  ),
-                  IconButton(
-                    onPressed: onMoveUp,
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                    tooltip: 'Move item ${index + 1} up',
-                  ),
-                  IconButton(
-                    onPressed: onMoveDown,
-                    icon: const Icon(Icons.arrow_downward_rounded),
-                    tooltip: 'Move item ${index + 1} down',
-                  ),
-                  TextButton.icon(
-                    // Compact labelled delete with confirmation dialog —
-                    // never gesture-only deletion.
-                    onPressed: onDelete,
-                    style: TextButton.styleFrom(foregroundColor: cs.error),
-                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                    label: const Text('Delete'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AttentionSummary extends StatelessWidget {
-  final int count;
-
-  const _AttentionSummary({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A2A16),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF59E0B)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Needs attention ($count)',
-                  style: tt.titleMedium?.copyWith(
-                    color: const Color(0xFFFCD34D),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Check or acknowledge the highlighted items before creating the PDF.',
-                  style: tt.bodySmall?.copyWith(color: const Color(0xFFFDE68A)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UncertaintyNotice extends StatelessWidget {
-  final _EditableItem item;
-
-  const _UncertaintyNotice({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final note = item.uncertaintyNote?.trim();
-    final message = item.isUnknown
-        ? 'Unknown item: ${note == null || note.isEmpty ? 'check this work and add its details' : note}'
-        : note == null || note.isEmpty
-        ? 'Please check this item before creating the PDF.'
-        : 'Please check: $note';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A2A16),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF59E0B)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            size: 20,
-            color: Color(0xFFF59E0B),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: tt.bodySmall?.copyWith(color: const Color(0xFFFDE68A)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _AddItemSheet — bottom sheet with catalog picker + manual entry form.
-// The catalog section is shown only when [trade] is non-null.
-// Tapping a catalog chip pre-fills the description and unit; the form fields
-// remain editable so a custom name is always possible.
-// ─────────────────────────────────────────────────────────────────────────────
-class _AddItemSheet extends StatefulWidget {
-  /// When non-null, catalog suggestions for this trade are shown at the top.
-  final Trade? trade;
-  final _EditableItem? initialItem;
-
-  const _AddItemSheet({this.trade, this.initialItem});
-
-  @override
-  State<_AddItemSheet> createState() => _AddItemSheetState();
-}
-
-class _AddItemSheetState extends State<_AddItemSheet> {
-  final _descCtrl = TextEditingController();
-  final _qtyCtrl = TextEditingController();
-  final _unitCtrl = TextEditingController(text: 'sq ft');
-  final _rateCtrl = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-
-  // Which catalog item (if any) has been tapped — used for highlight only.
-  String? _selectedCatalogId;
-
-  @override
-  void initState() {
-    super.initState();
-    final initial = widget.initialItem;
-    if (initial != null) {
-      _descCtrl.text = initial.description.text;
-      _qtyCtrl.text = initial.quantity.text;
-      _unitCtrl.text = initial.unit.text;
-      _rateCtrl.text = initial.rate.text;
-    }
-    // Live amount preview — recalculated with the Day 5 engine on each keystroke.
-    _qtyCtrl.addListener(_refreshPreview);
-    _rateCtrl.addListener(_refreshPreview);
-  }
-
-  void _refreshPreview() {
-    if (mounted) setState(() {});
-  }
-
-  /// Day 5 engine for the sheet preview: qty × rate, in paise.
-  int get _previewAmountPaise {
-    final qty = int.tryParse(_qtyCtrl.text.trim()) ?? 0;
-    final rateRupees = int.tryParse(_rateCtrl.text.trim()) ?? 0;
-    return qty * rateRupees * 100;
-  }
-
-  @override
-  void dispose() {
-    _descCtrl.dispose();
-    _qtyCtrl.dispose();
-    _unitCtrl.dispose();
-    _rateCtrl.dispose();
-    super.dispose();
-  }
-
-  /// Pre-fills description and unit from a catalog chip tap.
-  void _applyCatalogItem(CatalogItem item) {
-    setState(() => _selectedCatalogId = item.id);
-    _descCtrl.text = item.displayName;
-    _unitCtrl.text = item.defaultUnit;
-    // Move focus to qty so the user can type immediately.
-    FocusScope.of(context).nextFocus();
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    final initial = widget.initialItem;
-    Navigator.pop(
-      context,
-      _EditableItem(
-        description: _descCtrl.text.trim(),
-        quantity: _qtyCtrl.text.trim(),
-        unit: _unitCtrl.text.trim().isEmpty ? 'sq ft' : _unitCtrl.text.trim(),
-        rate: _rateCtrl.text.trim(),
-        confidence: initial?.confidence,
-        uncertaintyNote: initial?.uncertaintyNote,
-        sourceSpan: initial?.sourceSpan,
-        isUnknown: initial?.isUnknown ?? false,
-        requiresReview: initial?.requiresReview ?? false,
-        acknowledged: initial?.acknowledged ?? false,
-        // Day 21: keep the model's catalog pick (or the chip the user tapped).
-        catalogItemId: _selectedCatalogId ?? initial?.catalogItemId,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    // Catalog items for the selected trade (empty list = no trade known).
-    final catalogItems = widget.trade == null
-        ? <CatalogItem>[]
-        : catalogForTrade(widget.trade!);
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E1E2C),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Sheet handle ────────────────────────────────────────────
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF9E9BA8),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                widget.initialItem == null
-                    ? 'Add Item / मद जोड़ें'
-                    : 'Edit Item / मद बदलें',
-                style: tt.titleLarge,
-              ),
-
-              // ── Catalog picker (only when trade is known) ──────────────
-              if (catalogItems.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text(
-                  'Choose from catalog / सूची में से चुनें',
-                  style: tt.bodyMedium,
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final ci in catalogItems)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _CatalogChip(
-                            item: ci,
-                            selected: _selectedCatalogId == ci.id,
-                            onTap: () => _applyCatalogItem(ci),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-              ],
-
-              const SizedBox(height: 16),
-
-              // ── Description ─────────────────────────────────────────────
-              _FieldLabel(
-                label: 'Item name / मद का नाम',
-                child: TextFormField(
-                  controller: _descCtrl,
-                  // Skip autofocus when catalog chips are present — keyboard
-                  // would hide them before the user can tap a chip.
-                  autofocus: catalogItems.isEmpty,
-                  style: tt.bodyLarge,
-                  decoration: _inputDecoration(context, hint: 'e.g. Skirting'),
-                  textCapitalization: TextCapitalization.words,
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ── Qty + Unit ───────────────────────────────────────────────
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _FieldLabel(
-                      label: 'Qty / मात्रा',
-                      child: TextFormField(
-                        controller: _qtyCtrl,
-                        style: tt.bodyLarge,
-                        decoration: _inputDecoration(context, hint: '0'),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
-                          if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
-                          return null;
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: _FieldLabel(
-                      label: 'Unit',
-                      child: TextFormField(
-                        controller: _unitCtrl,
-                        style: tt.bodyLarge,
-                        decoration: _inputDecoration(context, hint: 'sq ft'),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Required' : null,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // ── Rate ─────────────────────────────────────────────────────
-              _FieldLabel(
-                label: 'Rate (₹) / दर',
-                child: TextFormField(
-                  controller: _rateCtrl,
-                  style: tt.bodyLarge,
-                  decoration: _inputDecoration(context, hint: '0'),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Required';
-                    if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ── Live calculated amount (read-only, Day 5 engine) ─────────
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF13131F),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF2E2E42)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Amount / राशि', style: tt.bodyMedium),
-                    Text(
-                      formatRupeePaise(_previewAmountPaise),
-                      style: tt.titleMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── Actions: Cancel (secondary) + Save changes (sole primary) ─
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _submit,
-                      icon: const Icon(Icons.check_rounded),
-                      label: Text(widget.initialItem == null
-                          ? 'Add'
-                          : 'Save changes'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _CatalogChip — tappable chip for a catalog item; saffron-highlighted when
-// selected
-// ─────────────────────────────────────────────────────────────────────────────
-class _CatalogChip extends StatelessWidget {
-  final CatalogItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CatalogChip({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      decoration: BoxDecoration(
-        color: selected
-            ? cs.primary.withValues(alpha: 0.18)
-            : const Color(0xFF13131F),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selected ? cs.primary : const Color(0xFF2E2E42),
-          width: selected ? 1.5 : 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                // Show only the English part before " /" for compact chips.
-                item.displayName.split(' /').first,
-                style: tt.bodyLarge?.copyWith(
-                  color: selected ? cs.primary : null,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(item.defaultUnit, style: tt.bodyMedium),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// (CatalogChip lives in review/item_sheet.dart.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // _CustomerSection — client name, phone, site/address (design.md §5)
 // ─────────────────────────────────────────────────────────────────────────────
-class _CustomerSection extends StatelessWidget {
-  final TextEditingController nameCtrl;
-  final TextEditingController phoneCtrl;
-  final TextEditingController siteCtrl;
-
-  const _CustomerSection({
-    required this.nameCtrl,
-    required this.phoneCtrl,
-    required this.siteCtrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Client name ──────────────────────────────────────────────
-            _FieldLabel(
-              label: 'Client name / ग्राहक का नाम *',
-              child: TextField(
-                controller: nameCtrl,
-                style: tt.bodyLarge,
-                decoration: _inputDecoration(context, hint: 'e.g. Sharma Ji / शर्मा जी'),
-                textCapitalization: TextCapitalization.words,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Phone ────────────────────────────────────────────────────
-            _FieldLabel(
-              label: 'Phone / फ़ोन (optional)',
-              child: TextField(
-                controller: phoneCtrl,
-                style: tt.bodyLarge,
-                decoration: _inputDecoration(context, hint: '9XXXXXXXXX'),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Site / Address ───────────────────────────────────────────
-            _FieldLabel(
-              label: 'Site / Address / कार्यस्थल (optional)',
-              child: TextField(
-                controller: siteCtrl,
-                style: tt.bodyLarge,
-                decoration: _inputDecoration(
-                  context,
-                  hint: 'e.g. Flat 302, Green Acres / फ्लैट ३०२, मुंबई',
-                ),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// (CustomerSection lives in review/customer_section.dart.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _MoreDetailsSection — progressive disclosure for commercial details
 // (quote #, date, validity, GST, advance, notes, editable terms)
 // ─────────────────────────────────────────────────────────────────────────────
-class _MoreDetailsSection extends StatelessWidget {
-  final bool isExpanded;
-  final VoidCallback onToggle;
-  final String quoteId;
-  final String displayNumber;
-  final DateTime quoteDate;
-  final ValueChanged<DateTime> onDateChanged;
-  final int validityDays;
-  final List<int> validityOptions;
-  final ValueChanged<int> onValidityChanged;
-  final int? gstPercent;
-  final List<int> gstOptions;
-  final ValueChanged<int?> onGstChanged;
-  final TextEditingController advancePercentCtrl;
-  final TextEditingController advanceTextCtrl;
-  final ValueChanged<int?> onAdvancePercentSelected;
-  final TextEditingController notesCtrl;
-  final TextEditingController termsCtrl;
-  final VoidCallback onResetTerms;
-
-  const _MoreDetailsSection({
-    required this.isExpanded,
-    required this.onToggle,
-    required this.quoteId,
-    required this.displayNumber,
-    required this.quoteDate,
-    required this.onDateChanged,
-    required this.validityDays,
-    required this.validityOptions,
-    required this.onValidityChanged,
-    required this.gstPercent,
-    required this.gstOptions,
-    required this.onGstChanged,
-    required this.advancePercentCtrl,
-    required this.advanceTextCtrl,
-    required this.onAdvancePercentSelected,
-    required this.notesCtrl,
-    required this.termsCtrl,
-    required this.onResetTerms,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    final dateFormat = DateFormat('dd MMM yyyy');
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Header tile with expand/collapse trigger
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.tune_rounded,
-                    size: 20,
-                    color: cs.primary,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'More quote details / अतिरिक्त विवरण',
-                          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$displayNumber • ${validityDays}d validity • '
-                          '${gstPercent == null ? "No GST" : "GST $gstPercent%"}',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.65),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: onToggle,
-                    icon: Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      size: 20,
-                    ),
-                    label: Text(isExpanded ? 'Hide' : 'Expand'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (isExpanded) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── 1. Quote Number & Offline ID ──────────────────────────
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Quote Number / कोटेशन संख्या', style: tt.bodySmall),
-                            const SizedBox(height: 4),
-                            Text(
-                              displayNumber,
-                              style: tt.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: cs.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('Offline ID / पहचान', style: tt.labelSmall),
-                            Text(
-                              shortId(quoteId),
-                              style: tt.bodySmall?.copyWith(
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 2. Quotation Date ─────────────────────────────────────
-                  _FieldLabel(
-                    label: 'Quote Date / दिनांक',
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: quoteDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2035),
-                        );
-                        if (picked != null) onDateChanged(picked);
-                      },
-                      icon: const Icon(Icons.calendar_today_rounded, size: 18),
-                      label: Text(dateFormat.format(quoteDate)),
-                      style: OutlinedButton.styleFrom(
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 3. Validity ───────────────────────────────────────────
-                  _FieldLabel(
-                    label: 'Validity / मान्यता (दिन)',
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: validityOptions.map((days) {
-                          final selected = days == validityDays;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text('$days days'),
-                              selected: selected,
-                              onSelected: (_) => onValidityChanged(days),
-                              selectedColor: cs.primary,
-                              labelStyle: tt.bodyMedium?.copyWith(
-                                color: selected ? cs.onPrimary : null,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 4. GST Toggle / Rate ───────────────────────────────────
-                  _FieldLabel(
-                    label: 'GST / जीएसटी कर',
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: const Text('No GST (0%)'),
-                              selected: gstPercent == null,
-                              onSelected: (_) => onGstChanged(null),
-                              selectedColor: cs.primary,
-                              labelStyle: tt.bodyMedium?.copyWith(
-                                color: gstPercent == null ? cs.onPrimary : null,
-                                fontWeight: gstPercent == null
-                                    ? FontWeight.w700
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          ...gstOptions.map((rate) {
-                            final selected = gstPercent == rate;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text('$rate% GST'),
-                                selected: selected,
-                                onSelected: (_) => onGstChanged(rate),
-                                selectedColor: cs.primary,
-                                labelStyle: tt.bodyMedium?.copyWith(
-                                  color: selected ? cs.onPrimary : null,
-                                  fontWeight: selected
-                                      ? FontWeight.w700
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 5. Advance percentage & text ──────────────────────────
-                  _FieldLabel(
-                    label: 'Advance / अग्रिम भुगतान (optional)',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              ChoiceChip(
-                                label: const Text('None'),
-                                selected: advancePercentCtrl.text.trim().isEmpty,
-                                onSelected: (_) => onAdvancePercentSelected(null),
-                              ),
-                              const SizedBox(width: 8),
-                              for (final p in [10, 20, 30, 50]) ...[
-                                ChoiceChip(
-                                  label: Text('$p%'),
-                                  selected: advancePercentCtrl.text.trim() == '$p',
-                                  onSelected: (_) => onAdvancePercentSelected(p),
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: advanceTextCtrl,
-                          style: tt.bodyLarge,
-                          decoration: _inputDecoration(
-                            context,
-                            hint: 'e.g. 50% advance before tile delivery / ५०% अग्रिम',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 6. Notes ──────────────────────────────────────────────
-                  _FieldLabel(
-                    label: 'Notes / टिप्पणी (optional)',
-                    child: TextField(
-                      controller: notesCtrl,
-                      style: tt.bodyLarge,
-                      decoration: _inputDecoration(
-                        context,
-                        hint: 'Payment terms, special conditions…',
-                      ),
-                      maxLines: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 7. Editable Terms & Conditions ────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Terms & Conditions / नियम व शर्तें',
-                          style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: onResetTerms,
-                        child: const Text('Reset defaults / डिफ़ॉल्ट'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: termsCtrl,
-                    style: tt.bodyMedium,
-                    decoration: _inputDecoration(
-                      context,
-                      hint: 'Enter terms (one condition per line)',
-                    ),
-                    maxLines: 4,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
+// (MoreDetailsSection lives in review/details_section.dart.)
 
  // Phase 4: _TotalsSummary and _BottomActions now live in
 // widgets/totals_bar.dart as QuoteTotalsBar / ReviewBottomActions.
@@ -2080,371 +978,21 @@ class _MoreDetailsSection extends StatelessWidget {
 // Small shared widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  final Widget? trailing;
-  const _SectionHeader({required this.label, this.trailing});
+// (SectionHeader lives in review/small_widgets.dart.)
 
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Expanded(child: Text(label, style: tt.titleLarge)),
-        ?trailing,
-      ],
-    );
-  }
-}
+// (FieldLabel lives in review/small_widgets.dart.)
 
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  final Widget child;
-  const _FieldLabel({required this.label, required this.child});
+// (AmountChip lives in review/small_widgets.dart.)
 
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: tt.bodyMedium),
-        const SizedBox(height: 4),
-        child,
-      ],
-    );
-  }
-}
-
-class _AmountChip extends StatelessWidget {
-  final String label;
-  final String value;
-  const _AmountChip({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ', style: tt.bodyMedium),
-          Text(value, style: tt.titleMedium?.copyWith(color: cs.primary)),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyItemsHint extends StatelessWidget {
-  final VoidCallback onAdd;
-  final bool hasVoiceTranscript;
-
-  const _EmptyItemsHint({required this.onAdd, this.hasVoiceTranscript = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Card(
-      child: InkWell(
-        onTap: onAdd,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-          child: Center(
-            child: Column(
-              children: [
-                Icon(
-                  hasVoiceTranscript
-                      ? Icons.playlist_add_rounded
-                      : Icons.add_box_outlined,
-                  size: 38,
-                  color: cs.primary,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  hasVoiceTranscript
-                      ? 'No items auto-detected from voice'
-                      : 'No items yet — tap to add one',
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  hasVoiceTranscript
-                      ? 'Tap here or "+ Add item" to add manually'
-                      : 'Add materials, labour, or custom rates',
-                  style: tt.bodySmall,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// (EmptyItemsHint lives in review/small_widgets.dart.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Day 7 — Voice note card & parsing warnings banner
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _VoiceNoteCard extends StatelessWidget {
-  final String transcript;
-  final bool isExpanded;
-  final VoidCallback onToggle;
+// (VoiceNoteCard lives in review/voice_note.dart.)
 
-  const _VoiceNoteCard({
-    required this.transcript,
-    required this.isExpanded,
-    required this.onToggle,
-  });
+// (ParsingWarningsBanner lives in review/voice_note.dart.)
 
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1B2A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2E2E42)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.mic_rounded, color: cs.primary, size: 16),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Spoken Note / मूल आवाज़',
-                      style: tt.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'Voice Transcript',
-                      style: tt.bodySmall?.copyWith(
-                        fontSize: 10,
-                        color: cs.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    isExpanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: const Color(0xFF9E9BA8),
-                    size: 20,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (isExpanded) ...[
-            const Divider(height: 1, color: Color(0xFF2E2E42)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '“$transcript”',
-                    style: tt.bodyMedium?.copyWith(
-                      color: const Color(0xFFD0CFD6),
-                      fontStyle: FontStyle.italic,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle_outline_rounded,
-                        size: 14,
-                        color: Color(0xFF4CAF50),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Parsed into line items below',
-                        style: tt.bodySmall?.copyWith(
-                          fontSize: 11,
-                          color: const Color(0xFF9E9BA8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ParsingWarningsBanner extends StatelessWidget {
-  final List<String> warnings;
-  final VoidCallback onDismiss;
-
-  const _ParsingWarningsBanner({
-    required this.warnings,
-    required this.onDismiss,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2013),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                color: Color(0xFFF59E0B),
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Please Review / ध्यान दें',
-                  style: tt.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFFFCD34D),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: Color(0xFFF59E0B),
-                ),
-                onPressed: onDismiss,
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Dismiss warning',
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          for (final w in warnings)
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '• ',
-                    style: tt.bodySmall?.copyWith(
-                      color: const Color(0xFFFCD34D),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      w,
-                      style: tt.bodySmall?.copyWith(
-                        color: const Color(0xFFFDE68A),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 6),
-          Text(
-            'Check the items below or tap "Add item" to complete any missing details.',
-            style: tt.bodySmall?.copyWith(
-              fontSize: 11,
-              color: const Color(0xFFD1D5DB),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared input decoration — keeps all fields visually consistent
-// ─────────────────────────────────────────────────────────────────────────────
-InputDecoration _inputDecoration(BuildContext context, {required String hint}) {
-  final cs = Theme.of(context).colorScheme;
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: Color(0xFF9E9BA8), fontSize: 14),
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-    filled: true,
-    fillColor: const Color(0xFF13131F),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF2E2E42)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF2E2E42)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: cs.primary, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: cs.error),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: cs.error, width: 1.5),
-    ),
-  );
-}
+// (Shared input decoration lives in review/small_widgets.dart
+// as reviewInputDecoration.)
