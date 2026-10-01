@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 
 import '../catalog/catalog.dart';
+import '../l10n/app_strings.dart';
+import '../models/contractor_profile.dart';
 import '../models/rate_memory_item.dart';
+import '../storage/app_preferences.dart';
+import '../storage/auth_repository.dart';
 import '../storage/data_deletion_service.dart';
 import '../storage/diagnostic_consent.dart';
 import '../storage/pdf_backup_settings.dart';
 import '../storage/profile_repository.dart';
 import '../storage/rate_memory_repository.dart';
-import '../theme.dart';
+import '../theme/colors.dart';
+import '../theme/dimensions.dart';
 
-/// Day 12 — Profile & Rate Memory management screen.
+/// Phase 6 — clean grouped Settings (was tab-based Profile + Rate Card).
 ///
-/// Reachable from the Home screen top bar.
-/// Allows contractors to update their business branding and saved item rates anytime.
+/// Groups: Business · Rate card · Preferences (incl. Language) · Account.
+/// - Business rows open one edit page (same fields as before).
+/// - Rate card is a sub-page per trade, not a tab.
+/// - Language switches instantly via [appLanguage], no restart.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -20,581 +27,634 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  bool _isLoading = true;
-
-  // Profile controllers
-  final _nameCtrl = TextEditingController();
-  final _businessNameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _gstinCtrl = TextEditingController();
-  final _termsCtrl = TextEditingController();
-  Trade _selectedTrade = Trade.tiling;
-  String? _logoPath;
-  String? _logoSignedUrl;
-
-  // Rate controllers
-  final Map<String, TextEditingController> _rateControllers = {};
+class _ProfileScreenState extends State<ProfileScreen> {
+  ContractorProfile _profile = ContractorProfile.empty();
   List<RateMemoryItem> _rates = [];
-  Trade _rateViewTrade = Trade.tiling;
-
-  // Day 21: privacy toggles (both OFF by default).
+  bool _loading = true;
+  bool _signedIn = false;
+  String _language = 'hi';
+  bool _backupOptIn = false;
   bool _diagnosticOptIn = false;
-  bool _pdfBackupOptIn = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _loadData();
+    _load();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _load() async {
     final profile = await ProfileRepository.getProfile();
     final rates = await RateMemoryRepository.getAllRates();
-    final diagnosticOptIn = await DiagnosticConsent.isOptedIn();
-    final pdfOptIn = await PdfBackupSettings.isOptedIn();
-
+    final signedIn = await AuthRepository.isSignedIn();
+    final lang = await AppPreferences.getLanguage();
+    final backup = await PdfBackupSettings.isOptedIn();
+    final diag = await DiagnosticConsent.isOptedIn();
     if (!mounted) return;
-
     setState(() {
-      _nameCtrl.text = profile.name;
-      _businessNameCtrl.text = profile.businessName;
-      _phoneCtrl.text = profile.phone;
-      _cityCtrl.text = profile.city;
-      _gstinCtrl.text = profile.gstin ?? '';
-      _termsCtrl.text = profile.quoteTerms;
-      _selectedTrade = profile.trade;
-      _rateViewTrade = profile.trade;
-      _logoPath = profile.logoPath;
-      _logoSignedUrl = profile.logoSignedUrl;
-      _diagnosticOptIn = diagnosticOptIn;
-      _pdfBackupOptIn = pdfOptIn;
-
+      _profile = profile;
       _rates = rates;
-      for (final r in rates) {
-        _rateControllers[r.catalogItemId] =
-            TextEditingController(text: r.rateRupees > 0 ? '${r.rateRupees}' : '');
-      }
-
-      _isLoading = false;
+      _signedIn = signedIn;
+      _language = (lang == 'en' || lang == 'mr') ? lang : 'hi';
+      _backupOptIn = backup;
+      _diagnosticOptIn = diag;
+      _loading = false;
     });
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _nameCtrl.dispose();
-    _businessNameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _cityCtrl.dispose();
-    _gstinCtrl.dispose();
-    _termsCtrl.dispose();
-    for (final ctrl in _rateControllers.values) {
-      ctrl.dispose();
-    }
-    super.dispose();
-  }
+  int _setCount(Trade trade) => _rates
+      .where((r) => r.trade == trade && r.rateRupees > 0)
+      .length;
 
-  Future<void> _saveProfile() async {
-    final existing = await ProfileRepository.getProfile();
-    final updated = existing.copyWith(
-      name: _nameCtrl.text.trim(),
-      businessName: _businessNameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      city: _cityCtrl.text.trim(),
-      trade: _selectedTrade,
-      gstin: _gstinCtrl.text.trim().isNotEmpty ? _gstinCtrl.text.trim() : null,
-      logoPath: _logoPath,
-      logoSignedUrl: _logoSignedUrl,
-      quoteTerms: _termsCtrl.text.trim().isNotEmpty
-          ? _termsCtrl.text.trim()
-          : existing.quoteTerms,
-    );
-
-    await ProfileRepository.saveProfile(updated);
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile updated / प्रोफाइल सुरक्षित हो गया'),
-        behavior: SnackBarBehavior.floating,
+  Future<void> _pickLanguage() async {
+    final code = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: kSurfaceCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-    );
-  }
-
-  Future<void> _saveRates() async {
-    for (final rateItem in _rates) {
-      final ctrl = _rateControllers[rateItem.catalogItemId];
-      if (ctrl != null) {
-        final rupees = int.tryParse(ctrl.text.trim()) ?? 0;
-        final updated = rateItem.copyWith(
-          unitRatePaise: rupees * 100,
-          updatedAt: DateTime.now(),
-        );
-        await RateMemoryRepository.saveRate(updated);
-      }
-    }
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Rates updated / रेट सुरक्षित हो गए'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Future<void> _uploadLogo() async {
-    final res = await ProfileRepository.uploadLogo(
-      bytes: [0x89, 0x50, 0x4E, 0x47],
-      filename: 'contractor_logo_${DateTime.now().millisecondsSinceEpoch}.png',
-    );
-    setState(() {
-      _logoPath = res.logoPath;
-      _logoSignedUrl = res.signedUrl;
-    });
-    await _saveProfile();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile & Rates / प्रोफाइल'),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: forest,
-          unselectedLabelColor: ink.withValues(alpha: 0.6),
-          indicatorColor: forest,
-          indicatorWeight: 3,
-          tabs: const [
-            Tab(icon: Icon(Icons.business_rounded), text: 'Profile'),
-            Tab(icon: Icon(Icons.price_change_rounded), text: 'Rate Card'),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            for (final c in ['hi', 'en', 'mr'])
+              ListTile(
+                title: Text(
+                  c == 'hi'
+                      ? 'हिंदी'
+                      : c == 'en'
+                          ? 'English'
+                          : 'मराठी',
+                ),
+                trailing: _language == c
+                    ? const Icon(Icons.check_rounded, color: kForest)
+                    : null,
+                onTap: () => Navigator.pop(ctx, c),
+              ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildProfileTab(tt),
-          _buildRatesTab(tt),
-        ],
-      ),
     );
+    if (code == null || !mounted) return;
+    await AppPreferences.setLanguage(code);
+    appLanguage.value = code;
+    setState(() => _language = code);
   }
 
-  Widget _buildProfileTab(TextTheme tt) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(kPagePadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Logo card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: surfaceMuted),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: _logoPath != null ? sage.withValues(alpha: 0.4) : surfaceMuted,
-                  child: Icon(
-                    _logoPath != null ? Icons.verified_rounded : Icons.camera_alt_outlined,
-                    color: _logoPath != null ? forest : ink,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _businessNameCtrl.text.isNotEmpty
-                            ? _businessNameCtrl.text
-                            : 'Your Business Logo',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      Text(
-                        _logoPath != null ? 'Logo attached' : 'No logo uploaded',
-                        style: tt.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                OutlinedButton(
-                  onPressed: _uploadLogo,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 38),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                  ),
-                  child: Text(_logoPath != null ? 'Change' : 'Upload'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Name
-          TextFormField(
-            controller: _nameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Contractor Name / नाम',
-              prefixIcon: Icon(Icons.person_outline_rounded),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Business Name
-          TextFormField(
-            controller: _businessNameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Business Name / दुकान या फर्म का नाम',
-              prefixIcon: Icon(Icons.storefront_rounded),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Phone
-          TextFormField(
-            controller: _phoneCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Phone / मोबाइल नंबर',
-              prefixIcon: Icon(Icons.phone_outlined),
-            ),
-            keyboardType: TextInputType.phone,
-          ),
-          const SizedBox(height: 16),
-
-          // City
-          TextFormField(
-            controller: _cityCtrl,
-            decoration: const InputDecoration(
-              labelText: 'City or Site / शहर',
-              prefixIcon: Icon(Icons.location_on_outlined),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // GSTIN
-          TextFormField(
-            controller: _gstinCtrl,
-            decoration: const InputDecoration(
-              labelText: 'GSTIN (Optional)',
-              prefixIcon: Icon(Icons.badge_outlined),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Default Terms
-          TextFormField(
-            controller: _termsCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Default Terms / कोटेशन शर्तें',
-              prefixIcon: Icon(Icons.description_outlined),
-            ),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 24),
-
-          ElevatedButton(
-            onPressed: _saveProfile,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: forest,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(56),
-            ),
-            child: const Text('Save Profile Changes / सुरक्षित करें'),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Day 21: Privacy & diagnostics (both OFF by default) ──
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: surfaceMuted),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Privacy / गोपनीयता', style: tt.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  'Correction notes help improve item matching. '
-                  'They never include audio or customer details.',
-                  style: tt.bodySmall,
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Help improve with diagnostic notes',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Off by default. When on, we keep an extra copy of the typed transcript for troubleshooting. Audio is never kept.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  value: _diagnosticOptIn,
-                  onChanged: (v) async {
-                    await DiagnosticConsent.setOptedIn(v);
-                    if (!mounted) return;
-                    setState(() => _diagnosticOptIn = v);
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Back up PDFs to cloud',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Off by default. When on, PDFs are also saved to your private cloud folder.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  value: _pdfBackupOptIn,
-                  onChanged: (v) async {
-                    await PdfBackupSettings.setOptedIn(v);
-                    if (!mounted) return;
-                    setState(() => _pdfBackupOptIn = v);
-                  },
-                ),
-                const Divider(),
-                // ── Day 22: notice + export/delete request path ──
-                TextButton.icon(
-                  onPressed: () => Navigator.pushNamed(context, '/privacy'),
-                  icon: const Icon(Icons.privacy_tip_outlined, size: 18),
-                  label: const Text('Read privacy notice / गोपनीयता सूचना'),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _exportMyData(context),
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: const Text('Export my data'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _deleteMyData(context),
-                        icon: const Icon(Icons.delete_forever_outlined, size: 18),
-                        label: const Text('Delete my data'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  /// Day 22: export a JSON snapshot of on-device data (never audio).
-  Future<void> _exportMyData(BuildContext context) async {
-    try {
-      final snapshot = await DataDeletionService.exportAll();
-      final json = DataDeletionService.exportJson(snapshot);
-      if (!context.mounted) return;
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Your data / आपका डेटा'),
-          content: SingleChildScrollView(
-            child: SelectableText(
-              json.length > 4000 ? '${json.substring(0, 4000)}\n…(truncated)' : json,
-              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Export failed — try again.')),
-      );
-    }
-  }
-
-  /// Day 22: delete everything on this phone (confirm first).
-  /// Cloud copies are deleted per-quote via the API while signed in;
-  /// see docs/data-retention.md for the server path.
-  Future<void> _deleteMyData(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _deleteMyData() async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete all data on this phone?'),
+        title: const Text('Delete my data?'),
         content: const Text(
-          'This removes quotes, drafts, rates, settings and PDFs stored on '
-          'this phone. Cloud copies need per-quote delete while signed in. '
-          'This cannot be undone.',
+          'This removes all quotes, drafts and profile data on '
+          'this phone. Cloud copies need per-quote delete while signed in.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+          TextButton(
             onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: kError),
             child: const Text('Delete everything'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !context.mounted) return;
+    if (confirm != true || !mounted) return;
     final summary = await DataDeletionService.deleteAllLocal();
+    await PdfBackupSettings.setOptedIn(false);
     if (!mounted) return;
     setState(() {
-      _diagnosticOptIn = false;
-      _pdfBackupOptIn = false;
+      _backupOptIn = false;
+      _profile = ContractorProfile.empty();
     });
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Deleted $summary from this phone'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    _load();
   }
 
-  Widget _buildRatesTab(TextTheme tt) {    final tradeRates = _rates.where((r) => r.trade == _rateViewTrade).toList();
+  Future<void> _openBusinessEdit() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const _BusinessEditPage()),
+    );
+    _load();
+  }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(kPagePadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Future<void> _openRateCard(Trade trade) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => _RateCardPage(trade: trade)),
+    );
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String t(String k) => AppStrings.of(context, k);
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: kForest)),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(t('settings'))),
+      body: ListView(
+        padding: const EdgeInsets.all(AppDimensions.page),
         children: [
-          Row(
+          _GroupLabel(t('business').toUpperCase()),
+          _Group(
             children: [
-              Text('Trade: ', style: tt.titleSmall),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('Tiling / टाइल्स'),
-                selected: _rateViewTrade == Trade.tiling,
-                onSelected: (val) {
-                  if (val) setState(() => _rateViewTrade = Trade.tiling);
+              _Row(
+                label: t('client_name'),
+                value: _profile.name.isEmpty ? '—' : _profile.name,
+                onTap: _openBusinessEdit,
+              ),
+              _Row(
+                label: t('business'),
+                value: _profile.businessName.isEmpty
+                    ? '—'
+                    : _profile.businessName,
+                onTap: _openBusinessEdit,
+              ),
+              _Row(
+                label: 'Trade',
+                value: _profile.trade == Trade.painting
+                    ? t('painting')
+                    : t('tiling'),
+                onTap: _openBusinessEdit,
+              ),
+              _Row(
+                label: t('phone'),
+                value: _profile.phone.isEmpty ? '—' : _profile.phone,
+                onTap: _openBusinessEdit,
+              ),
+              _Row(
+                label: t('site'),
+                value: _profile.city.isEmpty ? '—' : _profile.city,
+                onTap: _openBusinessEdit,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _GroupLabel(t('rate_card').toUpperCase()),
+          _Group(
+            children: [
+              _Row(
+                label: '${t('tiling')} ${t('rate_card')}',
+                value: '${_setCount(Trade.tiling)} ✓',
+                onTap: () => _openRateCard(Trade.tiling),
+              ),
+              _Row(
+                label: '${t('painting')} ${t('rate_card')}',
+                value: '${_setCount(Trade.painting)} ✓',
+                onTap: () => _openRateCard(Trade.painting),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _GroupLabel(t('preferences').toUpperCase()),
+          _Group(
+            children: [
+              _Row(
+                label: t('language'),
+                value: _language == 'hi'
+                    ? 'हिंदी'
+                    : _language == 'en'
+                        ? 'English'
+                        : 'मराठी',
+                onTap: _pickLanguage,
+              ),
+              _SwitchRow(
+                label: 'PDF backup',
+                value: _backupOptIn,
+                onChanged: (v) async {
+                  await PdfBackupSettings.setOptedIn(v);
+                  if (mounted) setState(() => _backupOptIn = v);
                 },
               ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('Painting / पेंटिंग'),
-                selected: _rateViewTrade == Trade.painting,
-                onSelected: (val) {
-                  if (val) setState(() => _rateViewTrade = Trade.painting);
+              _SwitchRow(
+                label: 'Diagnostics',
+                value: _diagnosticOptIn,
+                onChanged: (v) async {
+                  await DiagnosticConsent.setOptedIn(v);
+                  if (mounted) setState(() => _diagnosticOptIn = v);
                 },
               ),
             ],
           ),
           const SizedBox(height: 16),
-
-          ...tradeRates.map((rateItem) {
-            final ctrl = _rateControllers[rateItem.catalogItemId] ??
-                TextEditingController(
-                  text: rateItem.rateRupees > 0 ? '${rateItem.rateRupees}' : '',
-                );
-            _rateControllers[rateItem.catalogItemId] = ctrl;
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: surfaceMuted.withValues(alpha: 0.6)),
+          _GroupLabel(t('account').toUpperCase()),
+          _Group(
+            children: [
+              _Row(
+                label: _signedIn ? 'Sign out' : 'Sign in',
+                value: '',
+                onTap: () async {
+                  if (_signedIn) {
+                    await AuthRepository.signOut();
+                  } else {
+                    await Navigator.pushNamed(context, '/sign-in');
+                  }
+                  _load();
+                },
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            rateItem.displayName,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: ink,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Unit: per ${rateItem.unit}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: ink.withValues(alpha: 0.7),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    SizedBox(
-                      width: 110,
-                      child: TextFormField(
-                        controller: ctrl,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.right,
-                        decoration: InputDecoration(
-                          prefixText: '₹ ',
-                          prefixStyle: const TextStyle(fontWeight: FontWeight.bold),
-                          hintText: '0',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              _Row(
+                label: 'Privacy notice',
+                value: '',
+                onTap: () => Navigator.pushNamed(context, '/privacy'),
+              ),
+              _Row(
+                label: 'Delete my data',
+                value: '',
+                destructive: true,
+                onTap: _deleteMyData,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupLabel extends StatelessWidget {
+  final String text;
+  const _GroupLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+          color: kInkMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _Group extends StatelessWidget {
+  final List<Widget> children;
+  const _Group({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: kSurfaceCard,
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+        border: Border.all(color: kSurfaceMuted),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  final bool destructive;
+  const _Row({
+    required this.label,
+    required this.value,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: destructive ? kError : kInk,
                 ),
               ),
-            );
-          }),
-
-          const SizedBox(height: 24),
-
-          ElevatedButton(
-            onPressed: _saveRates,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: forest,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(56),
             ),
-            child: const Text('Save Rates / रेट सुरक्षित करें'),
+            if (value.isNotEmpty)
+              Flexible(
+                child: Text(
+                  value,
+                  style: const TextStyle(fontSize: 14, color: kInkMuted),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: kInkMuted,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _SwitchRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: const TextStyle(fontSize: 15)),
           ),
+          Switch(value: value, onChanged: onChanged, activeThumbColor: kForest),
+        ],
+      ),
+    );
+  }
+}
+
+/// Business details edit sub-page (fields moved out of the old tab).
+class _BusinessEditPage extends StatefulWidget {
+  const _BusinessEditPage();
+
+  @override
+  State<_BusinessEditPage> createState() => _BusinessEditPageState();
+}
+
+class _BusinessEditPageState extends State<_BusinessEditPage> {
+  final _nameCtrl = TextEditingController();
+  final _businessCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _gstinCtrl = TextEditingController();
+  final _termsCtrl = TextEditingController();
+  Trade _trade = Trade.tiling;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _preload();
+  }
+
+  Future<void> _preload() async {
+    final p = await ProfileRepository.getProfile();
+    if (!mounted) return;
+    setState(() {
+      _nameCtrl.text = p.name;
+      _businessCtrl.text = p.businessName;
+      _phoneCtrl.text = p.phone;
+      _cityCtrl.text = p.city;
+      _gstinCtrl.text = p.gstin ?? '';
+      _termsCtrl.text = p.quoteTerms;
+      _trade = p.trade;
+      _loading = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _businessCtrl.dispose();
+    _phoneCtrl.dispose();
+    _cityCtrl.dispose();
+    _gstinCtrl.dispose();
+    _termsCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final existing = await ProfileRepository.getProfile();
+    await ProfileRepository.saveProfile(
+      existing.copyWith(
+        name: _nameCtrl.text.trim(),
+        businessName: _businessCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        city: _cityCtrl.text.trim(),
+        trade: _trade,
+        gstin:
+            _gstinCtrl.text.trim().isNotEmpty ? _gstinCtrl.text.trim() : null,
+        quoteTerms: _termsCtrl.text.trim().isNotEmpty
+            ? _termsCtrl.text.trim()
+            : existing.quoteTerms,
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved / सुरक्षित हो गया'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String t(String k) => AppStrings.of(context, k);
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: kForest)),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(t('business'))),
+      body: ListView(
+        padding: const EdgeInsets.all(AppDimensions.page),
+        children: [
+          _field(t('client_name'), _nameCtrl),
+          _field(t('business'), _businessCtrl),
+          _field(t('phone'), _phoneCtrl,
+              keyboard: TextInputType.phone),
+          _field(t('site'), _cityCtrl),
+          _field('GSTIN', _gstinCtrl),
+          _field('Terms', _termsCtrl, maxLines: 3),
           const SizedBox(height: 20),
+          ElevatedButton(onPressed: _save, child: Text(t('done'))),
+        ],
+      ),
+    );
+  }
+
+  Widget _field(String label, TextEditingController ctrl,
+      {int maxLines = 1, TextInputType? keyboard}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kInk,
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: ctrl,
+            maxLines: maxLines,
+            keyboardType: keyboard,
+            decoration: InputDecoration(hintText: label),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rate card sub-page for one trade.
+class _RateCardPage extends StatefulWidget {
+  final Trade trade;
+  const _RateCardPage({required this.trade});
+
+  @override
+  State<_RateCardPage> createState() => _RateCardPageState();
+}
+
+class _RateCardPageState extends State<_RateCardPage> {
+  final Map<String, TextEditingController> _ctrls = {};
+  List<RateMemoryItem> _rates = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _preload();
+  }
+
+  Future<void> _preload() async {
+    final all = await RateMemoryRepository.getAllRates();
+    if (!mounted) return;
+    setState(() {
+      _rates = all.where((r) => r.trade == widget.trade).toList();
+      for (final r in _rates) {
+        _ctrls[r.catalogItemId] = TextEditingController(
+          text: r.rateRupees > 0 ? '${r.rateRupees}' : '',
+        );
+      }
+      _loading = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final c in _ctrls.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    for (final r in _rates) {
+      final ctrl = _ctrls[r.catalogItemId];
+      if (ctrl == null) continue;
+      final rupees = int.tryParse(ctrl.text.trim()) ?? 0;
+      await RateMemoryRepository.saveRate(
+        r.copyWith(unitRatePaise: rupees * 100, updatedAt: DateTime.now()),
+      );
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Rates updated / रेट सुरक्षित हो गए'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String t(String k) => AppStrings.of(context, k);
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: kForest)),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(t('rate_card'))),
+      body: ListView(
+        padding: const EdgeInsets.all(AppDimensions.page),
+        children: [
+          for (final r in _rates)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          r.displayName,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          r.unit,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: kInkMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 110,
+                    child: TextField(
+                      controller: _ctrls[r.catalogItemId],
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        prefixText: '₹',
+                        hintText: '0',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: _save,
+            child: Text(t('save_changes')),
+          ),
         ],
       ),
     );

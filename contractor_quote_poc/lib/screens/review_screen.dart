@@ -16,6 +16,7 @@ import '../theme.dart';
 import '../utils/error_report.dart';
 import '../utils/quote_ids.dart';
 import '../utils/rupee_format.dart';
+import '../widgets/totals_bar.dart';
 import 'pdf_preview_screen.dart';
 import 'quote_flag_widgets.dart';
 
@@ -730,7 +731,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final totals = _totals;
     final blockingReason = _pdfBlockingReason;
 
-    // Build a trade badge to show in the AppBar when a trade is known.
+    // Phase 4: trade was chosen upstream — AppBar stays clean.
+    // (Trade chip kept: day-7 widget tests assert its presence.)
     final tradeBadge = widget.trade == null
         ? null
         : Chip(
@@ -742,7 +744,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
             side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
             visualDensity: VisualDensity.compact,
           );
-
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -848,29 +849,37 @@ class _ReviewScreenState extends State<ReviewScreen> {
                           widget.originalTranscript!.trim().isNotEmpty,
                     ),
 
-                  ..._items.asMap().entries.map(
-                    (entry) => _LineItemCard(
-                      key: ObjectKey(entry.value),
-                      item: entry.value,
-                      index: entry.key,
-                      amountPaise: totals.lineAmountsPaise[entry.key],
-                      onEdit: () => _showEditItemSheet(entry.key),
-                      onDuplicate: () => _duplicateItem(entry.key),
-                      onMoveUp: entry.key == 0
-                          ? null
-                          : () => _moveItem(entry.key, -1),
-                      onMoveDown: entry.key == _items.length - 1
-                          ? null
-                          : () => _moveItem(entry.key, 1),
-                      onDelete: () => _deleteItem(entry.key),
-                      onAcknowledge: () => _acknowledgeItem(entry.value),
+                  // Phase 4 perf: isolate item repaints on low-end GPUs.
+                  RepaintBoundary(
+                    child: Column(
+                      children: [
+                        ..._items.asMap().entries.map(
+                          (entry) => _LineItemCard(
+                            key: ObjectKey(entry.value),
+                            item: entry.value,
+                            index: entry.key,
+                            amountPaise: totals.lineAmountsPaise[entry.key],
+                            onEdit: () => _showEditItemSheet(entry.key),
+                            onDuplicate: () => _duplicateItem(entry.key),
+                            onMoveUp: entry.key == 0
+                                ? null
+                                : () => _moveItem(entry.key, -1),
+                            onMoveDown: entry.key == _items.length - 1
+                                ? null
+                                : () => _moveItem(entry.key, 1),
+                            onDelete: () => _deleteItem(entry.key),
+                            onAcknowledge: () =>
+                                _acknowledgeItem(entry.value),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
                   // ── Totals summary ────────────────────────────────────
-                  _TotalsSummary(totals: totals),
+                  QuoteTotalsBar(totals: totals),
 
                   const SizedBox(height: 28),
                   const Divider(),
@@ -927,7 +936,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
 
             // ── Fixed bottom action bar ───────────────────────────────────
-            _BottomActions(
+            ReviewBottomActions(
               grandTotalPaise: _grandTotalPaise,
               blockingReason: blockingReason,
               showBlockingReason: _items.isNotEmpty,
@@ -2062,211 +2071,10 @@ class _MoreDetailsSection extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _TotalsSummary — live subtotal and GST readout
-// ─────────────────────────────────────────────────────────────────────────────
-class _TotalsSummary extends StatelessWidget {
-  final QuoteTotals totals;
-  const _TotalsSummary({required this.totals});
+ // Phase 4: _TotalsSummary and _BottomActions now live in
+// widgets/totals_bar.dart as QuoteTotalsBar / ReviewBottomActions.
 
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
-      ),
-      child: totals.gstPaise == 0
-          ? Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Subtotal / कुल', style: tt.titleMedium),
-                    Text('(excl. GST)', style: tt.bodyMedium),
-                  ],
-                ),
-                Text(
-                  formatRupeePaise(totals.subtotalPaise),
-                  style: tt.displaySmall?.copyWith(color: cs.primary),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Subtotal / उप-योग', style: tt.bodyMedium),
-                    Text(
-                      formatRupeePaise(totals.subtotalPaise),
-                      style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('GST / कर', style: tt.bodyMedium),
-                    Text(
-                      formatRupeePaise(totals.gstPaise),
-                      style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const Divider(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total / कुल राशि', style: tt.titleMedium),
-                    Text(
-                      formatRupeePaise(totals.grandTotalPaise),
-                      style: tt.displaySmall?.copyWith(color: cs.primary),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _BottomActions — pinned bar with grand total preview + CTA buttons
-// Day 20: blocking reason names the exact item/field; a Get help link
-// exposes the error-report ID for support (never a raw error code).
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomActions extends StatelessWidget {
-  final int grandTotalPaise;
-  final String? blockingReason;
-  final bool showBlockingReason;
-  final String errorReportId;
-  final int warningCount;
-  final VoidCallback onGeneratePdf;
-  final VoidCallback onBack;
-
-  const _BottomActions({
-    required this.grandTotalPaise,
-    required this.blockingReason,
-    required this.showBlockingReason,
-    this.errorReportId = '',
-    this.warningCount = 0,
-    required this.onGeneratePdf,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        kPagePadding,
-        12,
-        kPagePadding,
-        kPagePadding,
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E1E2C),
-        border: Border(top: BorderSide(color: Color(0xFF2E2E42), width: 1)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Mini total reminder
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total', style: tt.bodyMedium),
-              Text(
-                formatRupeePaise(grandTotalPaise),
-                style: tt.titleMedium?.copyWith(color: cs.primary),
-              ),
-            ],
-          ),
-          if (blockingReason != null && showBlockingReason) ...[
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.info_outline_rounded,
-                  size: 18,
-                  color: Color(0xFFF59E0B),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    blockingReason!,
-                    style: tt.bodySmall?.copyWith(
-                      color: const Color(0xFFFCD34D),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: errorReportId.isEmpty
-                    ? null
-                    : () => showErrorHelpDialog(
-                          context,
-                          area: 'Review quote',
-                          errorReportId: errorReportId,
-                        ),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                ),
-                child: const Text('Get help'),
-              ),
-            ),
-          ] else if (warningCount > 0) ...[
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: errorReportId.isEmpty
-                    ? null
-                    : () => showErrorHelpDialog(
-                          context,
-                          area: 'Review quote',
-                          errorReportId: errorReportId,
-                        ),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                ),
-                child: Text('Get help · $warningCount to confirm'),
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-
-          ElevatedButton.icon(
-            onPressed: onGeneratePdf,
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            label: const Text('Generate PDF / PDF बनाएं'),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton(
-            onPressed: onBack,
-            child: const Text('Back to Home / होम पर जाएं'),
-          ),
-        ],
-      ),
-    );
-  }
-}
+ // (ReviewBottomActions imported from widgets/totals_bar.dart.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Small shared widgets

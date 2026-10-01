@@ -6,14 +6,19 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'app_language_v1': 'hi',
+      'app_language_chosen_v1': true,
+    });
   });
 
   testWidgets('App renders HomeScreen smoke test',
       (WidgetTester tester) async {
     await tester.pumpWidget(const ContractorQuoteApp());
-    await tester.pumpAndSettle();
-    // Home screen shows the Hindi greeting.
-    expect(find.text('नमस्ते 👷'), findsOneWidget);
+    // NB: no pumpAndSettle — the hero mic pulse animation never settles.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    // Phase 2 voice-first home: hero mic hint in Hindi (one language).
+    expect(find.text('बोलने के लिए दबाएं'), findsOneWidget);
   });
 }

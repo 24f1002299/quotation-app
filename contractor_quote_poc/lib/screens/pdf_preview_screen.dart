@@ -481,6 +481,26 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // ── Phase 5 celebration moment: success heading + summary ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  kPagePadding, 12, kPagePadding, 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      size: 20, color: Colors.green.shade700),
+                  const SizedBox(width: 6),
+                  const Text(
+                    '✓ Quotation Ready',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: PdfPreview(
                 build: _buildPdf,

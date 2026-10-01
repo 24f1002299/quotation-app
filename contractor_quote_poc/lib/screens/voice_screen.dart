@@ -15,6 +15,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
@@ -353,6 +354,8 @@ class _VoiceScreenState extends State<VoiceScreen>
         // language): show it prominently instead of silently accepting garbage.
         _errorMessage = result.uncertainty.reason;
       });
+      // Phase 7: confirm successful transcription with a medium haptic.
+      HapticFeedback.mediumImpact();
 
       // Overwrite the saved draft with THIS sample (not via listener ordering).
       final draft = TranscriptDraft(
@@ -568,29 +571,13 @@ class _VoiceScreenState extends State<VoiceScreen>
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    final tradeBadge = Chip(
-      label: Text(
-        widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
-        style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-      ),
-      backgroundColor: cs.primary.withValues(alpha: 0.15),
-      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
-      visualDensity: VisualDensity.compact,
-    );
+    // Phase 3: trade was already chosen on Home — no badge in the AppBar.
+    // Recording stays distraction-free: back + language only.
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Flexible(
-              child: Text('Speak Quote', overflow: TextOverflow.ellipsis),
-            ),
-            const SizedBox(width: 8),
-            tradeBadge,
-          ],
-        ),
+        title: const Text('Speak Quote', overflow: TextOverflow.ellipsis),
         actions: [
           // Language selector dropdown as per design.md
           _LanguagePicker(

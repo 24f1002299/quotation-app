@@ -57,23 +57,21 @@ void main() {
     });
 
     testWidgets('fresh tester reaches recording CTA from Home', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        'app_language_v1': 'hi',
+        'app_language_chosen_v1': true,
+      });
       await tester.pumpWidget(const ContractorQuoteApp());
       await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 1));
 
-      // Hindi greeting visible with limited English.
-      expect(find.text('नमस्ते 👷'), findsOneWidget);
-      // Primary CTA discoverable in one glance.
-      expect(find.text('New voice quote / नया वॉइस कोटेशन'), findsOneWidget);
-      // Resume sections exist.
-      expect(find.textContaining('Drafts'), findsAtLeastNWidgets(1));
-      expect(find.textContaining('Recent quotes'), findsAtLeastNWidgets(1));
-      // Language control always visible.
-      expect(find.byTooltip('Language / भाषा'), findsOneWidget);
-      // One-time tutorial card (not a multi-page tour).
-      expect(find.textContaining('60 seconds'), findsOneWidget);
-      expect(find.text('Got it / समझ गया ✓'), findsOneWidget);
+      // Phase 2 voice-first home: hero mic + one-language hint.
+      expect(find.text('बोलने के लिए दबाएं'), findsOneWidget);
+      // Inline trade chips (one language each).
+      expect(find.text('टाइल्स'), findsOneWidget);
+      expect(find.text('पेंटिंग'), findsOneWidget);
+      // Drafts section appears only when drafts exist (seeded demo drafts).
+      expect(find.textContaining('ड्राफ्ट'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('sign-in screen renders bilingual form', (tester) async {

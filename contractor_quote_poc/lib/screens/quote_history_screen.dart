@@ -78,6 +78,18 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
     });
   }
 
+  /// Phase 5: relative-date bucket for group headers in the list.
+  static String _dateGroupLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(day).inDays;
+    if (diff <= 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    if (diff < 7) return 'This week';
+    return 'Older';
+  }
+
   Future<void> _checkForConflictsAndSync() async {
     try {
       final detectedConflicts = await QuoteSyncService.syncPendingQuotes();
@@ -553,11 +565,38 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                                   ),
                                 );
                               }
-                              return _SavedQuoteCard(
-                                quote: _quotes[i],
-                                onTap: () => _openQuoteForEditing(_quotes[i]),
-                                onViewPdf: () => _viewPdf(_quotes[i]),
-                                onDelete: () => _deleteQuote(_quotes[i]),
+                              // Phase 5: relative-date group headers
+                              // (Today / Yesterday / This week / Older).
+                              final group =
+                                  _dateGroupLabel(_quotes[i].effectiveDate);
+                              final showHeader = i == 0 ||
+                                  _dateGroupLabel(
+                                          _quotes[i - 1].effectiveDate) !=
+                                      group;
+                              return Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
+                                children: [
+                                  if (showHeader)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          top: 8, bottom: 4),
+                                      child: Text(
+                                        group,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(fontSize: 14),
+                                      ),
+                                    ),
+                                  _SavedQuoteCard(
+                                    quote: _quotes[i],
+                                    onTap: () =>
+                                        _openQuoteForEditing(_quotes[i]),
+                                    onViewPdf: () => _viewPdf(_quotes[i]),
+                                    onDelete: () => _deleteQuote(_quotes[i]),
+                                  ),
+                                ],
                               );
                             },
                           ),
