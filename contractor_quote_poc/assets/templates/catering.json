@@ -1,0 +1,47 @@
+{
+  "business_type": "catering",
+  "label": { "en": "Catering", "hi": "कैटरिंग", "mr": "जेवण पुरवठा" },
+  "default_unit": "plate",
+  "services": [
+    {
+      "name": "Veg thali",
+      "name_hi": "वेज थाली",
+      "name_mr": "शाकाहारी ताट",
+      "unit": "plate",
+      "default_rate_paise": 25000,
+      "keywords": ["veg thali", "veg plate", "thali", "shakahari", "वेज थाली", "थाळी", "lunch plate", "dinner plate"]
+    },
+    {
+      "name": "Non-veg thali",
+      "name_hi": "नॉनवेज थाली",
+      "name_mr": "मांसाहारी ताट",
+      "unit": "plate",
+      "default_rate_paise": 35000,
+      "keywords": ["non veg thali", "nonveg plate", "chicken thali", "नॉनवेज", "मटण थाळी", "mansahari"]
+    },
+    {
+      "name": "Snacks counter",
+      "name_hi": "स्नैक्स काउंटर",
+      "name_mr": "अल्पोपहार",
+      "unit": "plate",
+      "default_rate_paise": 12000,
+      "keywords": ["snacks counter", "snacks", "starters", "स्नैक्स", "nashta", "nasta"]
+    },
+    {
+      "name": "Sweet counter",
+      "name_hi": "मिठाई काउंटर",
+      "name_mr": "गोडधोड",
+      "unit": "kg",
+      "default_rate_paise": 40000,
+      "keywords": ["sweet counter", "sweets", "mithai", "मिठाई", "dessert", "laddu"]
+    },
+    {
+      "name": "Serving staff",
+      "name_hi": "परोसने वाला स्टाफ",
+      "name_mr": "वाढप कर्मचारी",
+      "unit": "visit",
+      "default_rate_paise": 150000,
+      "keywords": ["serving staff", "waiter", "service staff", "वेटर", "वाढपी", "staff"]
+    }
+  ]
+}

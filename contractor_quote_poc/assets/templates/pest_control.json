@@ -1,0 +1,47 @@
+{
+  "business_type": "pest_control",
+  "label": { "en": "Pest control", "hi": "कीट नियंत्रण", "mr": "कीड नियंत्रण" },
+  "default_unit": "room",
+  "services": [
+    {
+      "name": "Cockroach treatment",
+      "name_hi": "कॉकरोच ट्रीटमेंट",
+      "name_mr": "झुरळ उपचार",
+      "unit": "room",
+      "default_rate_paise": 50000,
+      "keywords": ["cockroach treatment", "cockroach", "roach control", "kitchen pest", "कॉकरोच", "झुरळ", "cockroach spray"]
+    },
+    {
+      "name": "Termite treatment",
+      "name_hi": "दीमक ट्रीटमेंट",
+      "name_mr": "वाळवी उपचार",
+      "unit": "sq ft",
+      "default_rate_paise": 1500,
+      "keywords": ["termite treatment", "termite", "deemak", "दीमक", "वाळवी", "white ant"]
+    },
+    {
+      "name": "Mosquito fogging",
+      "name_hi": "मच्छर फॉगिंग",
+      "name_mr": "डास धुरीकरण",
+      "unit": "visit",
+      "default_rate_paise": 80000,
+      "keywords": ["mosquito fogging", "fogging", "mosquito", "मच्छर", "डास", "dhua"]
+    },
+    {
+      "name": "Bed bug treatment",
+      "name_hi": "खटमल ट्रीटमेंट",
+      "name_mr": "ढेकूण उपचार",
+      "unit": "room",
+      "default_rate_paise": 120000,
+      "keywords": ["bed bug treatment", "bed bug", "khatmal", "खटमल", "ढेकूण"]
+    },
+    {
+      "name": "Rodent control",
+      "name_hi": "चूहा नियंत्रण",
+      "name_mr": "उंदीर नियंत्रण",
+      "unit": "visit",
+      "default_rate_paise": 60000,
+      "keywords": ["rodent control", "rat control", "mouse", "चूहा", "उंदीर", "chuha"]
+    }
+  ]
+}

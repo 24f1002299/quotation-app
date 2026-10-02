@@ -24,10 +24,11 @@ class ExtractionService {
 
   /// Extracts structured quotation line items from [transcript].
   ///
-  /// The request carries the user's own service list and saved rates — there is
-  /// no bundled catalog. Note the wire keys still use the backend's original
-  /// `catalogEntries`/`rateMemory` vocabulary; renaming them needs the Spring
-  /// API migration, which is a separate step.
+  /// The request carries the user's own service list as the recognition
+  /// context for ANY business domain — there is no fixed catalog. New wire
+  /// keys (businessType/serviceItems/savedRates) are sent alongside the
+  /// legacy ones (trade/catalogEntries/rateMemory) so old and new backends
+  /// both bind the payload.
   static Future<ExtractionResult> extract({
     required String transcript,
     required BusinessType businessType,
@@ -50,6 +51,20 @@ class ExtractionService {
     final rateMap = await ServiceItemRepository.getRateMap(businessType);
 
     // 1. Prepare request payload for /api/extract
+    // New-shape service entries (id/name/unit/keywords/businessType).
+    final serviceItems = services
+        .map(
+          (s) => {
+            'id': s.id,
+            'name': s.name,
+            'unit': s.unit,
+            'keywords': s.matchTerms,
+            'businessType': businessTypeInfo(s.businessType).id,
+          },
+        )
+        .toList();
+
+    // Legacy-shape entries for backward compatibility.
     final serviceEntries = services
         .map(
           (s) => {
@@ -65,6 +80,7 @@ class ExtractionService {
         .map(
           (s) => {
             'catalogItemId': s.id,
+            'serviceItemId': s.id,
             'unit': s.unit,
             'unitRatePaise': s.ratePaise,
           },
@@ -72,11 +88,15 @@ class ExtractionService {
         .toList();
 
     final idempotencyKey = 'ext_${DateTime.now().millisecondsSinceEpoch}_${cleanText.hashCode.abs()}';
+    final businessTypeSlug = businessTypeInfo(businessType).id;
 
     final requestBody = json.encode({
       'transcript': cleanText,
-      'businessType': businessTypeInfo(businessType).id,
+      'businessType': businessTypeSlug,
+      'trade': businessTypeSlug,
+      'serviceItems': serviceItems,
       'catalogEntries': serviceEntries,
+      'savedRates': savedRateDtos,
       'rateMemory': savedRateDtos,
       'language': languageHint,
       'schemaVersion': '1.0',
@@ -121,12 +141,19 @@ class ExtractionService {
             .map((raw) => ExplicitUnknown.fromJson(raw as Map<String, dynamic>))
             .toList();
 
+        final rawSuggested =
+            data['suggestedItems'] as List<dynamic>? ?? const [];
+        final suggested = rawSuggested
+            .map((raw) => SuggestedItem.fromJson(raw as Map<String, dynamic>))
+            .toList();
+
         final reqReview = data['requiresReview'] as bool? ?? true;
 
         return ExtractionResult(
           businessType: businessType.name,
           lineItems: items,
           unknowns: unknowns,
+          suggestedItems: suggested,
           requiresReview: reqReview,
           isFromLocalFallback: false,
         );
@@ -167,6 +194,9 @@ class ExtractionService {
   }
 
   /// Resilient fallback to deterministic local parser so site work is NEVER lost.
+  /// Runs with the generic fallback enabled: number-bearing phrases outside
+  /// the user's service list become review-flagged provisional items, and
+  /// anything else becomes an explicit unknown carrying the warning text.
   static Future<ExtractionResult> _fallbackToLocalParser({
     required String transcript,
     required BusinessType businessType,
@@ -176,10 +206,14 @@ class ExtractionService {
     const parser = TranscriptParser();
     final services =
         await ServiceItemRepository.getActiveForBusinessType(businessType);
-    final parseResult =
-        parser.parse(transcript, services: services, savedRates: rateMap);
+    final parseResult = parser.parse(
+      transcript,
+      services: services,
+      savedRates: rateMap,
+      genericFallback: true,
+    );
 
-    final items = parseResult.items.map((pi) {
+    final items = parseResult.items.where((pi) => !pi.isUnknown).map((pi) {
       // Match back to the user's service id (the parser carries it when known).
       final serviceId = pi.serviceItemId ?? 'custom_item';
       final savedRate = rateMap[serviceId];
@@ -203,10 +237,25 @@ class ExtractionService {
       );
     }).toList();
 
+    // Provisional generic items surface as suggestions: one-tap review
+    // candidates, never silently priced.
+    final suggested = parseResult.items.where((pi) => pi.isUnknown).map((pi) {
+      return SuggestedItem(
+        proposedName: pi.description,
+        quantity: pi.quantity.toDouble() > 0 ? pi.quantity.toDouble() : 1.0,
+        unit: pi.unit,
+        rateHintPaise: pi.unitRatePaise,
+        sourceSpan: transcript.length > 60
+            ? '${transcript.substring(0, 57)}...'
+            : transcript,
+      );
+    }).toList();
+
     return ExtractionResult(
       businessType: businessType.name,
       lineItems: items,
       unknowns: unknowns,
+      suggestedItems: suggested,
       requiresReview: true,
       isFromLocalFallback: true,
       errorMessage: errorMessage,

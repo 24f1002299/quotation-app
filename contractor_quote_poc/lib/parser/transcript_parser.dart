@@ -30,12 +30,19 @@ class ParsedLineItem {
   /// Id of the matched [ServiceItem]; null when nothing matched.
   final String? serviceItemId;
 
+  /// True for generic-fallback items: numbers were heard but no service
+  /// matched, so the description is a best-effort snippet. Always reviewed.
+  final bool isUnknown;
+  final bool requiresReview;
+
   const ParsedLineItem({
     required this.description,
     required this.quantity,
     required this.unit,
     required this.unitRatePaise,
     this.serviceItemId,
+    this.isUnknown = false,
+    this.requiresReview = false,
   });
 
   /// Convert to the immutable model used by the calculation layer.
@@ -45,6 +52,8 @@ class ParsedLineItem {
         unit: unit,
         unitRatePaise: unitRatePaise,
         serviceItemId: serviceItemId,
+        isUnknown: isUnknown,
+        requiresReview: requiresReview,
       );
 }
 
@@ -74,6 +83,15 @@ class _ServiceMatch {
   });
 }
 
+/// A phrase-separated slice of normalized text that contains a digit.
+class _TextChunk {
+  final String text;
+  final int start;
+  final int end;
+
+  const _TextChunk(this.text, this.start, this.end);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Parser
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,16 +106,26 @@ class TranscriptParser {
   ///
   /// If [savedRates] (serviceItemId -> unitRatePaise) is provided and a rate is
   /// omitted from the transcript, the user's saved rate is applied.
+  ///
+  /// When [genericFallback] is true (offline path), number-bearing phrases
+  /// that match NO service still produce review-flagged provisional items
+  /// instead of being dropped: quantity, unit and rate are parsed generically
+  /// so site work is never lost. Defaults to false so callers that rely on
+  /// strict service-only matching are unaffected.
   ParseResult parse(
     String transcript, {
     List<ServiceItem> services = const [],
     Map<String, int>? savedRates,
+    bool genericFallback = false,
   }) {
     final text = _normalize(transcript);
     final matches = _findServiceMatches(text, services);
 
     // ── No service matched at all ──────────────────────────────────────────
     if (matches.isEmpty) {
+      if (genericFallback && RegExp(r'\d').hasMatch(text)) {
+        return _genericItems(text, const []);
+      }
       if (RegExp(r'\d').hasMatch(text)) {
         // Numbers present but nothing recognised → unrecognised item
         return const ParseResult(
@@ -169,7 +197,132 @@ class TranscriptParser {
       ));
     }
 
+    // ── Generic gap scan (offline fallback only) ───────────────────────────
+    // Number-bearing phrases outside every service match become provisional
+    // review items instead of being silently dropped.
+    if (genericFallback) {
+      final extra = _genericItems(text, matches);
+      items.addAll(extra.items);
+      warnings.addAll(extra.warnings);
+    }
+
     return ParseResult(items: items, warnings: warnings);
+  }
+
+  // ── Generic fallback: numbers without a service ─────────────────────────
+
+  /// Provisional items for number-bearing chunks of [text] that overlap no
+  /// entry of [claimed] service matches. Purely structural (quantity, unit,
+  /// rate); descriptions are best-effort snippets flagged for review.
+  ParseResult _genericItems(String text, List<_ServiceMatch> claimed) {
+    final items = <ParsedLineItem>[];
+    final warnings = <String>[];
+    var autoNumber = 0;
+
+    for (final chunk in _numberChunks(text)) {
+      if (_overlapsMatch(chunk.start, chunk.end, claimed)) continue;
+
+      final rate = _findRate(chunk.text);
+      final qty = _firstNonRateNumber(chunk.text);
+      if (qty == null && rate == null) continue;
+
+      final unit = _findUnit(chunk.text) ?? 'item';
+      final description = _describeChunk(chunk.text) ?? 'Service ${++autoNumber}';
+      if (qty == null || rate == null) {
+        final missingField = qty == null && rate == null
+            ? 'quantity and rate'
+            : (qty == null ? 'quantity' : 'rate');
+        warnings.add(
+          'Could not fully extract details for "$description" — '
+          'please fill in the $missingField manually.',
+        );
+      }
+      items.add(ParsedLineItem(
+        description: description,
+        quantity: qty ?? 0,
+        unit: unit,
+        unitRatePaise: rate != null ? rate * 100 : 0,
+        isUnknown: true,
+        requiresReview: true,
+      ));
+    }
+
+    if (items.isNotEmpty) {
+      warnings.insert(
+        0,
+        'Some work was not in your services — please check and fix it.',
+      );
+    }
+    return ParseResult(items: items, warnings: warnings);
+  }
+
+  /// Splits [text] on phrase separators and keeps chunks containing a digit,
+  /// with their offsets so service-claimed spans can be excluded.
+  List<_TextChunk> _numberChunks(String text) {
+    final chunks = <_TextChunk>[];
+    final sep = RegExp(r'\s+(?:and|aur|our|plus|तथा|और)\s+');
+    var start = 0;
+    for (final m in sep.allMatches(text)) {
+      _addChunkIfNumbered(text, start, m.start, chunks);
+      start = m.end;
+    }
+    _addChunkIfNumbered(text, start, text.length, chunks);
+    return chunks;
+  }
+
+  void _addChunkIfNumbered(
+      String text, int start, int end, List<_TextChunk> out) {
+    if (start >= end) return;
+    final chunk = text.substring(start, end).trim();
+    if (chunk.isEmpty || !RegExp(r'\d').hasMatch(chunk)) return;
+    final offset = text.indexOf(chunk, start);
+    out.add(_TextChunk(chunk, offset < 0 ? start : offset,
+        (offset < 0 ? start : offset) + chunk.length));
+  }
+
+  /// True when [start,end) overlaps any claimed service match by more than
+  /// half of the smaller span — those numbers belong to the matched item.
+  bool _overlapsMatch(int start, int end, List<_ServiceMatch> claimed) {
+    for (final m in claimed) {
+      final overlapStart = start > m.start ? start : m.start;
+      final overlapEnd = end < m.end ? end : m.end;
+      final overlap = overlapEnd - overlapStart;
+      if (overlap <= 0) continue;
+      final smaller =
+          (end - start) < (m.end - m.start) ? (end - start) : (m.end - m.start);
+      if (overlap * 2 >= smaller) return true;
+    }
+    return false;
+  }
+
+  // Words that carry no meaning for a provisional description.
+  static const _genericStopWords = {
+    'sq', 'ft', 'square', 'feet', 'rft', 'running', 'foot', 'meter', 'metre',
+    'nos', 'piece', 'pieces', 'point', 'points', 'lumpsum', 'lump', 'sum',
+    'bags', 'bag', 'brass', 'kg', 'kilo', 'litre', 'liter', 'hour', 'hours',
+    'hr', 'visit', 'visits', 'room', 'rooms', 'flat', 'plate', 'plates',
+    'rate', 'rates', 'rupaye', 'rupee', 'rupees', 'rupe', 'bhav', 'dar',
+    'per', 'prati', 'ka', 'ki', 'ke', 'ko', 'mein', 'me', 'aur', 'or',
+    'kaam', 'karo', 'karna', 'hai', 'hain', 'liye',
+  };
+
+  /// Best-effort description: content words of the chunk (numbers, units and
+  /// rate words stripped), up to 5 words. Null when nothing meaningful
+  /// remains so the caller can fall back to 'Service N'.
+  String? _describeChunk(String chunk) {
+    final words = chunk
+        .split(' ')
+        .where((w) =>
+            w.isNotEmpty &&
+            !RegExp(r'^\d+$').hasMatch(w) &&
+            w != '₹' &&
+            !_genericStopWords.contains(w))
+        .take(5)
+        .toList();
+    if (words.isEmpty) return null;
+    return words
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
   }
 
   // ── Text normalization ──────────────────────────────────────────────────
@@ -313,6 +466,21 @@ class TranscriptParser {
         RegExp(r'\bsqm\b').hasMatch(text)) {
       return 'sq m';
     }
+    // Generic count/visit/weight/time units (any domain) ————————————————
+    if (RegExp(r'\bplates?\b').hasMatch(text)) return 'plate';
+    if (RegExp(r'\bnos\b|\bpieces?\b').hasMatch(text)) return 'nos';
+    if (RegExp(r'\bpoints?\b').hasMatch(text)) return 'point';
+    if (text.contains('lump sum') || text.contains('lumpsum')) {
+      return 'lumpsum';
+    }
+    if (RegExp(r'\bbags?\b').hasMatch(text)) return 'bags';
+    if (RegExp(r'\bbrass\b').hasMatch(text)) return 'brass';
+    if (RegExp(r'\bkgs?\b|\bkilos?\b').hasMatch(text)) return 'kg';
+    if (RegExp(r'\blitres?\b').hasMatch(text)) return 'litre';
+    if (RegExp(r'\bhours?\b|\bhrs?\b').hasMatch(text)) return 'hour';
+    if (RegExp(r'\bvisits?\b|\btrips?\b').hasMatch(text)) return 'visit';
+    if (RegExp(r'\brooms?\b|\bflats?\b').hasMatch(text)) return 'room';
+    if (RegExp(r'\bmeters?\b|\bmetres?\b').hasMatch(text)) return 'meter';
     // Devanagari keywords (when the transcript returns Hindi script) ————————
     // रनिंग फुट / रनिंग फीट
     if (text.contains('\u0930\u0928\u093f\u0902\u0917 \u092b\u0941\u091f') ||
@@ -324,6 +492,16 @@ class TranscriptParser {
         text.contains('\u0935\u0930\u094d\u0917 \u092b\u0940\u091f')) {
       return 'sq ft';
     }
+    if (text.contains('नग')) return 'nos';
+    if (text.contains('पॉइंट')) return 'point';
+    if (text.contains('किलो')) return 'kg';
+    if (text.contains('लीटर')) return 'litre';
+    if (text.contains('घंटा') || text.contains('तास')) return 'hour';
+    if (text.contains('फेरा') || text.contains('भेट')) return 'visit';
+    if (text.contains('कमरा') || text.contains('खोली')) return 'room';
+    if (text.contains('थाली') || text.contains('थाळी')) return 'plate';
+    if (text.contains('बोरी')) return 'bags';
+    if (text.contains('ब्रास')) return 'brass';
     return null;
   }
 }

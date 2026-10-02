@@ -3,7 +3,6 @@ package com.quotapp.api.dto;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.Pattern;
 
 import java.time.Instant;
 
@@ -24,7 +23,13 @@ public record ProfileDto(
     @JsonAlias("businessName")
     String businessName,
 
-    @Pattern(regexp = "(?i)tiling|painting|^$", message = "Trade must be 'tiling' or 'painting'")
+    /**
+     * Free-form business slug ('tiling', 'pest_control', 'catering', ...).
+     * The old tiling|painting restriction was removed. Serialized as
+     * {@code trade} for backward compatibility; also accepts
+     * {@code businessType} on input.
+     */
+    @JsonAlias("businessType")
     String trade,
 
     String city,

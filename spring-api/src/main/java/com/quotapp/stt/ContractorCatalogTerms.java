@@ -3,13 +3,12 @@ package com.quotapp.stt;
 import java.util.List;
 
 /**
- * Domain-specific vocabulary from the Day 4 & Day 6 tiling and painting catalogues.
+ * Domain vocabulary for contractor speech across ALL business types.
  *
- * <p>Used for:
- * <ul>
- *   <li>Key-term biasing in Grok STT (up to 100 domain terms).</li>
- *   <li>Prompt hint in OpenAI Whisper-1 to bias token probabilities towards contractor terms.</li>
- * </ul>
+ * <p>The list seeds tiling/painting terms first (largest user base) then one
+ * or two anchor terms per other domain, so the STT prompt stays useful for
+ * pest control, catering, electrical, plumbing, cleaning and beyond without
+ * exceeding the Groq 896-byte prompt limit.
  *
  * <p>Never treat STT transcription results as trusted line-item data; all speech results
  * remain candidates requiring contractor review before saving a quote.
@@ -32,6 +31,10 @@ public final class ContractorCatalogTerms {
         "wall putty", "वॉल पुट्टी", "putty work", "पट्टी", "patti kaam", "white cement putty",
         "primer", "प्राइमर", "prime coat", "priming", "first coat",
         "painting", "पेंटिंग", "रंगाई", "rangai", "wall painting", "emulsion", "distemper",
+
+        // Other domains: one anchor term each so any business transcribes cleanly
+        "cockroach", "pest control", "pipe fitting", "switch board", "wiring",
+        "wooden door", "false ceiling", "sofa repair", "catering", "khana",
 
         // Units and measurements in contractor speech
         "sq ft", "square feet", "स्क्वेअर फूट", "चौरस फूट", "फूट",
@@ -59,12 +62,12 @@ public final class ContractorCatalogTerms {
     public static String asPromptString(String languageHint) {
         String lang = languageHint != null ? languageHint.trim().toLowerCase() : "auto";
         if ("hi".equals(lang)) {
-            return "Contractor quotation in Hinglish, Roman script only: kitchen deewar tiles 120 sq ft, bathroom farsh tiles 80 sq ft, wall putty 1200 sq ft, dar 35 rupaye prati sq ft, skirting 45 rft, waterproofing, primer, painting emulsion.";
+            return "Contractor quotation in Hinglish, Roman script only: kitchen deewar tiles 120 sq ft, wall putty 1200 sq ft, dar 35 rupaye prati sq ft, skirting 45 rft, cockroach treatment 2 room, switch board 4 point.";
         } else if ("mr".equals(lang)) {
-            return "Contractor quotation in Hinglish, Roman script only: kitchen bhint tiles 120 chauras ft, bathroom farshi 80 chauras ft, wall putty, dar 40 rupaye, skirting, waterproofing, terrace plaster, primer.";
+            return "Contractor quotation in Hinglish, Roman script only: kitchen bhint tiles 120 chauras ft, wall putty, dar 40 rupaye, skirting, pipe fitting 1 point, j1 khana 100 plate.";
         } else {
             // Auto / Hinglish mode — forces Whisper to transcribe speech in Hinglish (Roman script)
-            return "Contractor quotation in Hinglish (Roman script): kitchen wall tiles 120 sq ft, wall putty 1200 sq ft, floor tiles 80 sq ft, rate 35 rupees per sq ft, skirting 45 rft, waterproofing 60 sq ft, primer, painting emulsion.";
+            return "Contractor quotation in Hinglish (Roman script): kitchen wall tiles 120 sq ft, wall putty 1200 sq ft, rate 35 rupees per sq ft, skirting 45 rft, pest treatment 2 rooms, wiring 4 points.";
         }
     }
 

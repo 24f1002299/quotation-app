@@ -4,6 +4,7 @@ import com.quotapp.api.dto.*;
 import com.quotapp.api.llm.LlmExtractionClient;
 import com.quotapp.api.llm.LlmExtractionClient.RawExtractedItem;
 import com.quotapp.api.llm.LlmExtractionClient.RawExtractionResult;
+import com.quotapp.api.llm.LlmExtractionClient.RawSuggestedItem;
 import com.quotapp.api.llm.LlmExtractionClient.RawUnknownItem;
 import com.quotapp.api.repository.ExtractionJobRepository;
 import com.quotapp.security.RequestIdFilter;
@@ -93,6 +94,7 @@ public class ExtractionService {
     public ExtractResponse mapToExtractResponse(ExtractRequest request, RawExtractionResult rawResult) {
         List<ExtractedLineItemDto> lineItems = new ArrayList<>();
         List<ExplicitUnknownDto> unknowns = new ArrayList<>();
+        List<SuggestedItemDto> suggestedItems = new ArrayList<>();
 
         // Map rate memory by catalogItemId + ":" + normalizedUnit
         Map<String, Long> rateMemoryMap = new HashMap<>();
@@ -163,6 +165,24 @@ public class ExtractionService {
             }
         }
 
+        // Process raw suggestions: billable work outside the service list.
+        // They stay suggestions — never priced or totalled here.
+        if (rawResult.suggested() != null) {
+            for (RawSuggestedItem sug : rawResult.suggested()) {
+                String unit = sug.unit() != null && ContractorUnit.isRecognized(sug.unit())
+                    ? ContractorUnit.normalize(sug.unit())
+                    : "item";
+                suggestedItems.add(new SuggestedItemDto(
+                    sug.proposedName(),
+                    sug.quantity() != null && sug.quantity() > 0 ? sug.quantity() : 1.0,
+                    unit,
+                    sug.rateHintPaise(),
+                    sug.sourceSpan(),
+                    "Not in your service list — confirm to add it to the quote"
+                ));
+            }
+        }
+
         // Check if completely empty
         if (lineItems.isEmpty() && unknowns.isEmpty()) {
             unknowns.add(new ExplicitUnknownDto(
@@ -178,6 +198,7 @@ public class ExtractionService {
             "isUncertain", isUncertain,
             "lineItemCount", lineItems.size(),
             "unknownCount", unknowns.size(),
+            "suggestedCount", suggestedItems.size(),
             "requiresReview", true
         );
 
@@ -186,6 +207,7 @@ public class ExtractionService {
             request.trade(),
             lineItems,
             unknowns,
+            suggestedItems,
             uncertaintyMetadata,
             request.version() != null ? request.version() : 1,
             true,

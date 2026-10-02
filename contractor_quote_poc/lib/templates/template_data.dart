@@ -7,7 +7,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-/// The ten business types the app ships a starter template for.
+/// The business types the app ships a starter template for.
+/// Universal extraction works for any domain via the user's own service list;
+/// these are just the bundled seeds.
 enum BusinessType {
   tiling,
   painting,
@@ -19,6 +21,8 @@ enum BusinessType {
   furniture,
   applianceRepair,
   cleaning,
+  pestControl,
+  catering,
 }
 
 /// Static, non-user-editable metadata for one business type.
@@ -116,6 +120,18 @@ const List<BusinessTypeInfo> kBusinessTypes = [
     id: 'cleaning',
     labels: {'en': 'Cleaning', 'hi': 'सफ़ाई', 'mr': 'साफसफाई'},
     icon: Icons.cleaning_services_rounded,
+  ),
+  BusinessTypeInfo(
+    type: BusinessType.pestControl,
+    id: 'pest_control',
+    labels: {'en': 'Pest control', 'hi': 'कीट नियंत्रण', 'mr': 'कीड नियंत्रण'},
+    icon: Icons.bug_report_rounded,
+  ),
+  BusinessTypeInfo(
+    type: BusinessType.catering,
+    id: 'catering',
+    labels: {'en': 'Catering', 'hi': 'कैटरिंग', 'mr': 'जेवण पुरवठा'},
+    icon: Icons.restaurant_rounded,
   ),
 ];
 

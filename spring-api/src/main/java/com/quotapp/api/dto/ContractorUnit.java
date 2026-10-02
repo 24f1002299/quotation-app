@@ -16,7 +16,14 @@ public enum ContractorUnit {
     NOS("nos", Set.of("nos", "no", "nug", "piece", "pieces", "नग")),
     LUMPSUM("lumpsum", Set.of("lumpsum", "lump sum", "ls", "लम्पसम")),
     BAGS("bags", Set.of("bags", "bag", "बोरी", "बॅग")),
-    POINT("point", Set.of("point", "points", "पॉइंट"));
+    POINT("point", Set.of("point", "points", "पॉइंट")),
+    KG("kg", Set.of("kg", "kilo", "kilos", "kilogram", "किलो")),
+    LITRE("litre", Set.of("litre", "liter", "litres", "liters", "लीटर")),
+    HOUR("hour", Set.of("hour", "hours", "hr", "hrs", "घंटा", "तास")),
+    VISIT("visit", Set.of("visit", "visits", "trip", "trips", "फेरा", "भेट")),
+    ROOM("room", Set.of("room", "rooms", "flat", "flats", "कमरा", "खोली")),
+    PLATE("plate", Set.of("plate", "plates", "thali", "thalis", "थाली", "थाळी")),
+    ITEM("item", Set.of("item", "items", "unit", "units"));
 
     private final String canonical;
     private final Set<String> aliases;

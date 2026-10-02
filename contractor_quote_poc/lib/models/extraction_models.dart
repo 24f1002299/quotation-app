@@ -71,9 +71,16 @@ class ExtractedItem {
       ratePaise = int.tryParse(rawRate) ?? 0;
     }
 
+    // Server sends catalogItemId/description; legacy mocks use serviceItemId.
+    final id = json['serviceItemId'] as String? ??
+        json['catalogItemId'] as String? ??
+        'item';
+
     return ExtractedItem(
-      serviceItemId: json['serviceItemId'] as String? ?? 'item',
-      description: json['description'] as String? ?? 'Unnamed item',
+      serviceItemId: id,
+      description: json['description'] as String? ??
+          json['displayName'] as String? ??
+          'Unnamed item',
       quantity: qty > 0 ? qty : 1.0,
       unit: json['unit'] as String? ?? 'sq ft',
       unitRatePaise: ratePaise,
@@ -132,11 +139,75 @@ class ExplicitUnknown {
   }
 }
 
+/// Billable work the model heard clearly that matches none of the user's
+/// services. Shown on the review screen as a one-tap-add line item that
+/// always requires confirmation — never priced automatically.
+class SuggestedItem {
+  final String proposedName;
+  final double quantity;
+  final String unit;
+  final int rateHintPaise;
+  final String? sourceSpan;
+  final String reason;
+
+  const SuggestedItem({
+    required this.proposedName,
+    this.quantity = 1.0,
+    this.unit = 'item',
+    this.rateHintPaise = 0,
+    this.sourceSpan,
+    this.reason = 'Not in your service list — confirm to add it to the quote',
+  });
+
+  factory SuggestedItem.fromJson(Map<String, dynamic> json) {
+    final rawQty = json['quantity'];
+    double qty = 1.0;
+    if (rawQty is num) {
+      qty = rawQty.toDouble();
+    } else if (rawQty is String) {
+      qty = double.tryParse(rawQty) ?? 1.0;
+    }
+    final rawHint = json['rateHintPaise'] ?? json['unitRatePaise'];
+    int hint = 0;
+    if (rawHint is num) {
+      hint = rawHint.toInt();
+    } else if (rawHint is String) {
+      hint = int.tryParse(rawHint) ?? 0;
+    }
+    return SuggestedItem(
+      proposedName: json['proposedName'] as String? ??
+          json['name'] as String? ??
+          'Unnamed work',
+      quantity: qty > 0 ? qty : 1.0,
+      unit: json['unit'] as String? ?? 'item',
+      rateHintPaise: hint,
+      sourceSpan: json['sourceSpan']?.toString(),
+      reason: json['reason'] as String? ??
+          'Not in your service list — confirm to add it to the quote',
+    );
+  }
+
+  QuoteLineItem toQuoteLineItem() {
+    return QuoteLineItem(
+      description: proposedName,
+      quantity: quantity.round(),
+      unit: unit,
+      unitRatePaise: rateHintPaise,
+      confidence: 0.5,
+      uncertaintyNote: reason,
+      sourceSpan: sourceSpan,
+      isUnknown: true,
+      requiresReview: true,
+    );
+  }
+}
+
 /// Complete response produced by extraction service.
 class ExtractionResult {
   final String businessType;
   final List<ExtractedItem> lineItems;
   final List<ExplicitUnknown> unknowns;
+  final List<SuggestedItem> suggestedItems;
   final bool requiresReview;
   final bool isFromLocalFallback;
   final String? errorMessage;
@@ -145,6 +216,7 @@ class ExtractionResult {
     required this.businessType,
     required this.lineItems,
     this.unknowns = const [],
+    this.suggestedItems = const [],
     this.requiresReview = true,
     this.isFromLocalFallback = false,
     this.errorMessage,
@@ -152,4 +224,5 @@ class ExtractionResult {
 
   bool get hasItems => lineItems.isNotEmpty;
   bool get hasUnknowns => unknowns.isNotEmpty;
+  bool get hasSuggestions => suggestedItems.isNotEmpty;
 }

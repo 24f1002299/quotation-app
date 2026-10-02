@@ -19,6 +19,7 @@ public record ExtractResponse(
     String trade,
     List<ExtractedLineItemDto> lineItems,
     List<ExplicitUnknownDto> unknowns,
+    List<SuggestedItemDto> suggestedItems,
     Map<String, Object> uncertaintyMetadata,
     Integer version,
     boolean requiresReview,
@@ -30,6 +31,9 @@ public record ExtractResponse(
         }
         if (unknowns == null) {
             unknowns = Collections.emptyList();
+        }
+        if (suggestedItems == null) {
+            suggestedItems = Collections.emptyList();
         }
         if (uncertaintyMetadata == null) {
             uncertaintyMetadata = Collections.emptyMap();

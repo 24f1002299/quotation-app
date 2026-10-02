@@ -21,9 +21,13 @@ import java.util.*;
 /**
  * Constrained LLM client interacting with xAI Grok (or OpenAI) chat completions.
  *
+ * <p>Works for ANY contractor business domain (tiling, painting, pest control,
+ * catering, electrical, ...). The contractor's own service list is the entire
+ * recognition context — there is no built-in catalog.
+ *
  * <p>Enforces:
  * <ul>
- *   <li>Strict trade catalog boundaries in prompt.</li>
+ *   <li>Strict service-list boundaries in prompt.</li>
  *   <li>Strict JSON output format with zero model-computed arithmetic totals.</li>
  *   <li>Circuit breaker and bounded retries for transient failure.</li>
  *   <li>Redacted structured logs (never logs full transcripts or API secrets).</li>
@@ -92,10 +96,23 @@ public class LlmExtractionClient {
         String reason
     ) {}
 
+    public record RawSuggestedItem(
+        String proposedName,
+        Double quantity,
+        String unit,
+        Long rateHintPaise,
+        String sourceSpan
+    ) {}
+
     public record RawExtractionResult(
         List<RawExtractedItem> items,
-        List<RawUnknownItem> unknowns
-    ) {}
+        List<RawUnknownItem> unknowns,
+        List<RawSuggestedItem> suggested
+    ) {
+        public RawExtractionResult(List<RawExtractedItem> items, List<RawUnknownItem> unknowns) {
+            this(items, unknowns, List.of());
+        }
+    }
 
     /**
      * Executes constrained extraction against the upstream LLM with retries and circuit breaker protection.
@@ -177,18 +194,29 @@ public class LlmExtractionClient {
 
     private String buildSystemPrompt(String trade, List<CatalogItemDto> catalogEntries, List<RateMemoryItemDto> rateMemory) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are an expert quotation extraction engine for Indian contractors (tiling, painting).\n");
-        sb.append("Your task is to parse spoken transcripts in Hindi, Marathi, Hinglish, or English into structured line items.\n\n");
+        sb.append("You are a quotation extraction engine for Indian contractors in ANY business ")
+          .append("(tiling, painting, pest control, catering, electrical, plumbing, cleaning, ...).\n");
+        sb.append("The contractor's own service list below is the ENTIRE recognition context. ")
+          .append("There is no other catalog. Transcripts may be Hindi, Marathi, Hinglish, or English.\n\n");
         sb.append("### STRICT RULES:\n");
-        sb.append("1. Extract ONLY items from the allowed catalog below for trade: '").append(trade).append("'.\n");
-        sb.append("2. Match every item strictly to one of the catalog item IDs.\n");
-        sb.append("3. DO NOT calculate amounts, subtotals, grand totals, or GST under any circumstances. Never output 'amount' or 'total'.\n");
-        sb.append("4. If the transcript mentions work, trades, or materials outside this catalog, or ambiguous requests, put them in 'unknowns'. DO NOT guess or hallucinate.\n");
+        sb.append("1. 'items': ONLY work that clearly matches one service below (name or synonyms). ")
+          .append("Use its exact service id. Business type '").append(trade).append("' is context only — ")
+          .append("never reject a listed service because of it.\n");
+        sb.append("2. 'suggestedItems': clearly billable work with a quantity that matches NO listed service. ")
+          .append("Propose a short name, quantity, unit, and rateHintPaise ONLY when the transcript states a rate; ")
+          .append("otherwise omit rateHintPaise.\n");
+        sb.append("3. 'unknowns': fragments you cannot structure (no quantity, ambiguous, greetings, noise). ")
+          .append("DO NOT guess or hallucinate.\n");
+        sb.append("4. DO NOT calculate amounts, subtotals, grand totals, or GST. Never output 'amount' or 'total'.\n");
         sb.append("5. Output ONLY valid JSON matching this schema:\n");
-        sb.append("{\n  \"items\": [\n    {\"catalogItemId\": \"id_from_catalog\", \"quantity\": 120.0, \"unit\": \"sq ft\", \"sourceSpan\": \"exact words\"}\n  ],\n");
+        sb.append("{\n  \"items\": [\n    {\"catalogItemId\": \"id_from_services\", \"quantity\": 120.0, \"unit\": \"sq ft\", \"sourceSpan\": \"exact words\"}\n  ],\n");
+        sb.append("  \"suggestedItems\": [\n    {\"proposedName\": \"short name\", \"quantity\": 2.0, \"unit\": \"room\", \"rateHintPaise\": 50000, \"sourceSpan\": \"exact words\"}\n  ],\n");
         sb.append("  \"unknowns\": [\n    {\"sourceSpan\": \"exact words\", \"suspectedTerm\": \"optional guess\", \"reason\": \"explanation\"}\n  ]\n}\n\n");
 
-        sb.append("### ALLOWED CATALOG ITEMS FOR ").append(trade.toUpperCase(Locale.ROOT)).append(":\n");
+        sb.append("### CONTRACTOR SERVICES (any business):\n");
+        if (catalogEntries == null || catalogEntries.isEmpty()) {
+            sb.append("(no saved services — put every billable phrase in suggestedItems, noise in unknowns)\n");
+        }
         for (CatalogItemDto item : catalogEntries) {
             sb.append("- ID: ").append(item.id())
               .append(", Name: ").append(item.displayName())
@@ -205,6 +233,7 @@ public class LlmExtractionClient {
     private RawExtractionResult parseLlmResponse(String rawJson, List<CatalogItemDto> catalogEntries) {
         List<RawExtractedItem> items = new ArrayList<>();
         List<RawUnknownItem> unknowns = new ArrayList<>();
+        List<RawSuggestedItem> suggested = new ArrayList<>();
 
         try {
             JsonNode root = objectMapper.readTree(rawJson);
@@ -221,7 +250,11 @@ public class LlmExtractionClient {
             // Extract items
             if (contentNode.has("items") && contentNode.get("items").isArray()) {
                 for (JsonNode itemNode : contentNode.get("items")) {
-                    String catalogId = itemNode.has("catalogItemId") ? itemNode.get("catalogItemId").asText() : "";
+                    String rawId = itemNode.has("catalogItemId") ? itemNode.get("catalogItemId").asText() : "";
+                    if (rawId.isBlank() && itemNode.has("serviceItemId")) {
+                        rawId = itemNode.get("serviceItemId").asText();
+                    }
+                    final String catalogId = rawId;
                     double qty = itemNode.has("quantity") ? itemNode.get("quantity").asDouble() : 1.0;
                     String unit = itemNode.has("unit") ? itemNode.get("unit").asText() : "sq ft";
                     String span = itemNode.has("sourceSpan") ? itemNode.get("sourceSpan").asText() : "";
@@ -232,6 +265,34 @@ public class LlmExtractionClient {
                         items.add(new RawExtractedItem(catalogId, qty, unit, span));
                     } else if (!catalogId.isBlank()) {
                         unknowns.add(new RawUnknownItem(span.isEmpty() ? catalogId : span, catalogId, "Item not in allowed catalog"));
+                    }
+                }
+            }
+
+            // Extract suggested items (billable work outside the service list)
+            if (contentNode.has("suggestedItems") && contentNode.get("suggestedItems").isArray()) {
+                for (JsonNode sugNode : contentNode.get("suggestedItems")) {
+                    String name = sugNode.has("proposedName") ? sugNode.get("proposedName").asText("")
+                        : sugNode.has("name") ? sugNode.get("name").asText("") : "";
+                    if (name.isBlank()) continue;
+                    double qty = sugNode.has("quantity") ? sugNode.get("quantity").asDouble() : 1.0;
+                    String unit = sugNode.has("unit") ? sugNode.get("unit").asText("item") : "item";
+                    Long rateHint = (sugNode.has("rateHintPaise") && sugNode.get("rateHintPaise").isNumber())
+                        ? sugNode.get("rateHintPaise").asLong() : null;
+                    String span = sugNode.has("sourceSpan") ? sugNode.get("sourceSpan").asText("") : "";
+                    // Never let a suggestion shadow a listed service: the
+                    // service list wins, so re-route exact matches to items.
+                    String shadowed = null;
+                    for (CatalogItemDto c : catalogEntries) {
+                        if (c.id().equalsIgnoreCase(name) || c.displayName().equalsIgnoreCase(name)) {
+                            shadowed = c.id();
+                            break;
+                        }
+                    }
+                    if (shadowed != null) {
+                        items.add(new RawExtractedItem(shadowed, qty, unit, span));
+                    } else {
+                        suggested.add(new RawSuggestedItem(name, qty, unit, rateHint, span));
                     }
                 }
             }
@@ -251,7 +312,7 @@ public class LlmExtractionClient {
             unknowns.add(new RawUnknownItem("transcript", null, "Could not parse model output: " + e.getMessage()));
         }
 
-        return new RawExtractionResult(items, unknowns);
+        return new RawExtractionResult(items, unknowns, suggested);
     }
 
     /**

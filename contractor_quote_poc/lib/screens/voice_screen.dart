@@ -493,6 +493,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
       final lineItems = <QuoteLineItem>[
         ...result.lineItems.map((item) => item.toQuoteLineItem()),
         ...result.unknowns.map((unknown) => unknown.toQuoteLineItem()),
+        // Suggested items (new billable work outside the service list, or
+        // offline generic-fallback numbers): review-flagged by construction.
+        ...result.suggestedItems.map((s) => s.toQuoteLineItem()),
       ];
 
       if (warnings.isNotEmpty) {
