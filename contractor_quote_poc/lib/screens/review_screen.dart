@@ -653,12 +653,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final blockingReason = _pdfBlockingReason;
 
     // Phase 4: businessType was chosen upstream — AppBar stays clean.
-    // (BusinessType chip kept: day-7 widget tests assert its presence.)
+    // Badge uses the business-type metadata so all 10 types render
+    // correctly (the old tiling/painting ternary only covered two).
     final businessTypeBadge = widget.businessType == null
         ? null
         : Chip(
             label: Text(
-              widget.businessType == BusinessType.tiling ? '🪣 Tiling' : '🖌️ Painting',
+              businessTypeInfo(widget.businessType!).labels['en'] ??
+                  widget.businessType!.name,
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),

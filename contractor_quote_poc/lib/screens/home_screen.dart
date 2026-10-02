@@ -9,12 +9,14 @@ import '../storage/auth_repository.dart';
 import '../storage/profile_repository.dart';
 import '../storage/quote_repository.dart';
 import '../storage/saved_quote.dart';
+import '../storage/service_item_repository.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
 import '../utils/rupee_format.dart';
 import '../widgets/business_type_chips.dart';
 import '../widgets/common_widgets.dart';
 import 'pdf_preview_screen.dart';
+import 'my_services_screen.dart';
 import 'review_screen.dart';
 import 'voice_screen.dart';
 
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _tutorialSeen = true;
   List<SavedQuote> _drafts = [];
   bool _loading = true;
+  int _servicesCount = 0;
 
   @override
   void initState() {
@@ -57,9 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
     ]);
     if (!mounted) return;
     final quotes = results[4] as List<SavedQuote>;
+    final businessType =
+        (results[1] as BusinessType?) ?? (results[0] as BusinessProfile).businessType;
     setState(() {
       _profile = results[0] as BusinessProfile;
-      _businessType = (results[1] as BusinessType?) ?? (results[0] as BusinessProfile).businessType;
+      _businessType = businessType;
       _signedIn = results[2] as bool;
       _tutorialSeen = results[3] as bool;
       _drafts = quotes
@@ -68,6 +73,10 @@ class _HomeScreenState extends State<HomeScreen> {
           .toList();
       _loading = false;
     });
+    final services =
+        await ServiceItemRepository.getActiveForBusinessType(businessType);
+    if (!mounted) return;
+    setState(() => _servicesCount = services.length);
   }
 
   Future<void> _dismissHint() async {
@@ -246,6 +255,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   onChanged: (type) {
                     setState(() => _businessType = type);
                     AppPreferences.setLastBusinessType(type);
+                    ServiceItemRepository.getActiveForBusinessType(type).then(
+                      (services) {
+                        if (mounted) {
+                          setState(() => _servicesCount = services.length);
+                        }
+                      },
+                    );
                   },
                 ),
                 const SizedBox(height: 12),
@@ -262,6 +278,54 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.w600,
                           decoration: TextDecoration.underline,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // ── My services entry (count persists via repository) ──
+                Card(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MyServicesScreen(
+                            businessType: _businessType,
+                          ),
+                        ),
+                      ).then((_) => _loadAll());
+                    },
+                    borderRadius: BorderRadius.circular(
+                      AppDimensions.cardRadius,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.handyman_outlined,
+                            color: kForest,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '${t('my_services')} · $_servicesCount',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: kInk,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: kInkMuted,
+                          ),
+                        ],
                       ),
                     ),
                   ),

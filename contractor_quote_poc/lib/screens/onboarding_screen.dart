@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../templates/template_data.dart';
+import '../templates/template_loader.dart';
 import '../l10n/app_strings.dart';
 import '../storage/profile_repository.dart';
 import '../storage/service_item_repository.dart';
@@ -8,11 +9,11 @@ import '../theme/colors.dart';
 import '../theme/dimensions.dart';
 import '../widgets/business_type_chips.dart';
 
-/// Phase 6 — single-page progressive setup.
-///
-/// Only what the first quote needs: name + business name + businessType.
+/// Onboarding: language (separate picker screen) → business details →
+/// starter-template preview. Step 1 collects only what the first quote
+/// needs; step 2 previews the common services for the chosen work with an
+/// opt-out, so the first quote is usable without typing a service list.
 /// Phone, GSTIN, logo, city and rates live in Profile — never front-loaded.
-/// Rates setup is deferred: a "set your rates" nudge appears in Profile.
 class OnboardingScreen extends StatefulWidget {
   final bool isEditMode;
   const OnboardingScreen({super.key, this.isEditMode = false});
@@ -27,6 +28,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   BusinessType _businessType = BusinessType.tiling;
   bool _loading = true;
   bool _saving = false;
+  int _step = 0;
+  List<StarterService> _preview = [];
+  bool _addTemplate = true;
 
   @override
   void initState() {
@@ -63,6 +67,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
       return;
     }
+    // Step 0 → step 1: preview the starter template for the chosen work.
+    if (_step == 0 && !widget.isEditMode) {
+      setState(() => _saving = true);
+      try {
+        final template = await TemplateLoader.load(_businessType);
+        if (!mounted) return;
+        setState(() {
+          _preview = template.services;
+          _step = 1;
+          _saving = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _preview = [];
+          _step = 1;
+          _saving = false;
+        });
+      }
+      return;
+    }
     setState(() => _saving = true);
     final existing = await ProfileRepository.getProfile();
     await ProfileRepository.saveProfile(
@@ -73,9 +98,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
     await ProfileRepository.setOnboardingCompleted(true);
-    // Seed the starter service list for the chosen work so the first quote is
-    // usable without the user typing a catalog.
-    await ServiceItemRepository.seedFromTemplate(_businessType);
+    // Seed the starter service list only when the user kept the opt-in:
+    // the preview step lets them skip it and start from an empty list.
+    if (_addTemplate) {
+      await ServiceItemRepository.seedFromTemplate(_businessType);
+    }
     if (!mounted) return;
     if (widget.isEditMode) {
       Navigator.pop(context, true);
@@ -150,6 +177,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 selected: _businessType,
                 onChanged: (type) => setState(() => _businessType = type),
               ),
+              if (_step == 1) ...[
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        t('use_template'),
+                        style: _labelStyle,
+                      ),
+                    ),
+                    Switch(
+                      value: _addTemplate,
+                      onChanged: (v) => setState(() => _addTemplate = v),
+                      activeThumbColor: kForest,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_addTemplate)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: kSurfaceCard,
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.cardRadius,
+                      ),
+                      border: Border.all(color: kSurfaceMuted),
+                    ),
+                    child: Column(
+                      children: [
+                        for (final s in _preview)
+                          ListTile(
+                            dense: true,
+                            title: Text(
+                              s.name,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            trailing: Text(
+                              s.defaultRatePaise > 0
+                                  ? '₹${s.defaultRatePaise ~/ 100} / ${s.unit}'
+                                  : s.unit,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: kInkMuted,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() => _step = 0),
+                  child: Text(t('change_business_type')),
+                ),
+              ],
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _saving ? null : _getStarted,
@@ -162,7 +246,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           strokeWidth: 2.5,
                         ),
                       )
-                    : Text(t('get_started')),
+                    : Text(_step == 1 ? t('continue') : t('get_started')),
               ),
               const SizedBox(height: 12),
               Center(
