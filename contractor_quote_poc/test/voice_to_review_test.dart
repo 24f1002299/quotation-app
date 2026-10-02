@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/parser/demo_transcripts.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';
@@ -26,7 +26,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ReviewScreen(
-          trade: Trade.tiling,
+          businessType: BusinessType.tiling,
           originalTranscript: kTilingDemoTranscript,
           parsingWarnings: result.warnings,
           initialLineItems:
@@ -35,7 +35,7 @@ void main() {
       ),
     );
 
-    // Verify Trade chip in app bar
+    // Verify BusinessType chip in app bar
     expect(find.text('🪣 Tiling'), findsOneWidget);
 
     // Verify Spoken Note card is present and displays the transcript
@@ -69,7 +69,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ReviewScreen(
-          trade: Trade.painting,
+          businessType: BusinessType.painting,
           originalTranscript: kPaintingDemoTranscript,
           parsingWarnings: result.warnings,
           initialLineItems:
@@ -78,7 +78,7 @@ void main() {
       ),
     );
 
-    // Verify Trade chip in app bar
+    // Verify BusinessType chip in app bar
     expect(find.text('🖌️ Painting'), findsOneWidget);
 
     // Verify Spoken Note card
@@ -106,7 +106,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ReviewScreen(
-          trade: Trade.tiling,
+          businessType: BusinessType.tiling,
           originalTranscript: rawText,
           parsingWarnings: result.warnings,
           initialLineItems:
@@ -139,7 +139,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: ReviewScreen(
-          trade: Trade.tiling,
+          businessType: BusinessType.tiling,
           originalTranscript: kTilingDemoTranscript,
           initialLineItems: [],
         ),

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'colors.dart';
 
-// Noto Sans covers Devanagari (Hindi/Marathi) + Latin. Falls back to
-// system sans where the bundled font is unavailable.
+// Noto Sans covers Devanagari (Hindi/Marathi) + Latin. Falls back to the
+// platform sans-serif where the bundled font is unavailable.
 const String kFontFamily = 'Noto Sans';
 
+/// Type scale for outdoor, low-literacy-friendly reading:
+/// body text never drops below 14sp and totals stay large.
 class AppTypography {
   static const TextStyle display = TextStyle(
     fontFamily: kFontFamily,
@@ -15,6 +17,7 @@ class AppTypography {
     letterSpacing: -0.5,
     height: 1.2,
   );
+
   static const TextStyle title = TextStyle(
     fontFamily: kFontFamily,
     fontSize: 20,
@@ -22,6 +25,7 @@ class AppTypography {
     color: kInk,
     height: 1.3,
   );
+
   static const TextStyle titleSmall = TextStyle(
     fontFamily: kFontFamily,
     fontSize: 16,
@@ -29,6 +33,7 @@ class AppTypography {
     color: kInk,
     height: 1.35,
   );
+
   static const TextStyle body = TextStyle(
     fontFamily: kFontFamily,
     fontSize: 16,
@@ -36,6 +41,7 @@ class AppTypography {
     color: kInk,
     height: 1.5,
   );
+
   static const TextStyle bodySmall = TextStyle(
     fontFamily: kFontFamily,
     fontSize: 14,
@@ -43,6 +49,8 @@ class AppTypography {
     color: kInkMuted,
     height: 1.45,
   );
+
+  /// Money values: 28sp so a total is readable at arm's length.
   static const TextStyle total = TextStyle(
     fontFamily: kFontFamily,
     fontSize: 28,
@@ -50,11 +58,21 @@ class AppTypography {
     color: kForest,
     height: 1.2,
   );
+
   static const TextStyle button = TextStyle(
     fontFamily: kFontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.2,
+    height: 1.3,
+  );
+
+  /// Monospaced-feeling numerals for line-item amounts and rates.
+  static const TextStyle amount = TextStyle(
+    fontFamily: kFontFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: kInk,
     height: 1.3,
   );
 

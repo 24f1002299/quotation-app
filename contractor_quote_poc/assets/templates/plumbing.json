@@ -1,0 +1,55 @@
+{
+  "business_type": "plumbing",
+  "label": { "en": "Plumbing", "hi": "प्लंबिंग", "mr": "प्लंबिंग" },
+  "default_unit": "point",
+  "services": [
+    {
+      "name": "Tap or mixer installation",
+      "name_hi": "टैप या मिक्सर लगाना",
+      "name_mr": "नळ बसवणे",
+      "unit": "point",
+      "default_rate_paise": 60000,
+      "keywords": ["tap installation", "mixer installation", "tap fitting", "faucet", "टैप लगाना", "नळ", "मिक्सर", "टॉप"]
+    },
+    {
+      "name": "Water line repair",
+      "name_hi": "पाइप लाइन मरम्मत",
+      "name_mr": "पाइलाइन दुरुस्ती",
+      "unit": "point",
+      "default_rate_paise": 45000,
+      "keywords": ["pipe repair", "water line repair", "leak repair", "pipe leakage", "पाइप मरम्मत", "लीक", "पाइप", "रिसाव"]
+    },
+    {
+      "name": "Bathroom fitting work",
+      "name_hi": "बाथरुम फिटिंग",
+      "name_mr": "बाथरुम फिटिंग",
+      "unit": "point",
+      "default_rate_paise": 90000,
+      "keywords": ["bathroom fitting", "bathroom fitting work", "bathroom accessories", "बाथरुम", "फिटिंग"]
+    },
+    {
+      "name": "Water tank installation",
+      "name_hi": "पानी की टंकी लगाना",
+      "name_mr": "पाण्याची टाकी बसवणे",
+      "unit": "item",
+      "default_rate_paise": 150000,
+      "keywords": ["water tank", "water tank installation", "overhead tank", "पानी की टंकी", "टंकी", "टाकी"]
+    },
+    {
+      "name": "Block drain cleaning",
+      "name_hi": "ब्लॉक ड्रेन सफाई",
+      "name_mr": "ड्रेन साफ करणे",
+      "unit": "point",
+      "default_rate_paise": 120000,
+      "keywords": ["drain cleaning", "block drain", "sewer cleaning", "ड्रेन सफाई", "नाली सफाई", "ब्लॉक"]
+    },
+    {
+      "name": "Sanitary fitting work",
+      "name_hi": "सैनिटरी फिटिंग",
+      "name_mr": "सॅनिटरी बसवणे",
+      "unit": "point",
+      "default_rate_paise": 110000,
+      "keywords": ["sanitary fitting", "toilet fitting", "wash basin fitting", "सैनिटरी", "कमोड", "बेसिन"]
+    }
+  ]
+}

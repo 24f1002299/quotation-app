@@ -8,8 +8,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-import '../catalog/catalog.dart';
-import '../models/contractor_profile.dart';
+import '../templates/template_data.dart';
+import '../models/business_profile.dart';
 import '../models/quote.dart';
 import '../utils/quote_ids.dart';
 import '../utils/rupee_format.dart';
@@ -205,9 +205,9 @@ class PdfService {
   /// Set [showFreeTierFooter] to true to render a small attribution line.
   static Future<Uint8List> generateQuotationPdf({
     required Quote quote,
-    ContractorProfile? profile,
+    BusinessProfile? profile,
     PdfPageFormat format = PdfPageFormat.a4,
-    Trade? trade,
+    BusinessType? businessType,
     // Legacy override params used when profile is null
     String contractorName = '',
     String contractorPhone = '',
@@ -238,11 +238,11 @@ class PdfService {
         : contractorAddress.trim();
 
     final gstin = profile?.gstin?.trim();
-    final effectiveTrade = trade ?? profile?.trade;
+    final effectiveBusinessType = businessType ?? profile?.businessType;
 
-    final tradeLabel = effectiveTrade == Trade.tiling
+    final businessTypeLabel = effectiveBusinessType == BusinessType.tiling
         ? 'Tiling & Flooring Contractor'
-        : effectiveTrade == Trade.painting
+        : effectiveBusinessType == BusinessType.painting
             ? 'Painting & Surface Finishing'
             : 'Civil & Interior Contractor';
 
@@ -301,7 +301,7 @@ class PdfService {
             bizName: bizName,
             bizPhone: bizPhone,
             bizCity: bizCity,
-            tradeLabel: tradeLabel,
+            businessTypeLabel: businessTypeLabel,
             gstin: gstin,
             logoImage: logoImage,
             hasLogo: hasLogo,
@@ -320,7 +320,7 @@ class PdfService {
           // 2. Customer / site box
           _buildCustomerBox(
             quote: quote,
-            effectiveTrade: effectiveTrade,
+            effectiveBusinessType: effectiveBusinessType,
           ),
 
           pw.SizedBox(height: 12),
@@ -357,7 +357,7 @@ class PdfService {
     required String bizName,
     required String bizPhone,
     required String bizCity,
-    required String tradeLabel,
+    required String businessTypeLabel,
     required String? gstin,
     required pw.MemoryImage? logoImage,
     required bool hasLogo,
@@ -427,7 +427,7 @@ class PdfService {
                     ),
                     pw.SizedBox(height: 2),
                     pw.Text(
-                      tradeLabel,
+                      businessTypeLabel,
                       style: pw.TextStyle(fontSize: 8.5, color: _pInk),
                     ),
                     if (bizPhone.isNotEmpty || bizCity.isNotEmpty) ...
@@ -498,7 +498,7 @@ class PdfService {
 
   static pw.Widget _buildCustomerBox({
     required Quote quote,
-    required Trade? effectiveTrade,
+    required BusinessType? effectiveBusinessType,
   }) {
     final clientName = quote.customer.name.trim().isEmpty
         ? 'Valued Client'
@@ -572,9 +572,9 @@ class PdfService {
               ),
               pw.SizedBox(height: 3),
               pw.Text(
-                effectiveTrade == Trade.tiling
+                effectiveBusinessType == BusinessType.tiling
                     ? 'Tiling & Flooring'
-                    : effectiveTrade == Trade.painting
+                    : effectiveBusinessType == BusinessType.painting
                         ? 'Painting & Surface Finish'
                         : 'Labour & Materials',
                 style: pw.TextStyle(

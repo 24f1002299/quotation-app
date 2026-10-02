@@ -1,0 +1,55 @@
+{
+  "business_type": "tiling",
+  "label": { "en": "Tiling", "hi": "टाइलिंग", "mr": "टाइलिंग" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Tile fixing",
+      "name_hi": "टाइल लगाना",
+      "name_mr": "टाइल लावणे",
+      "unit": "sq ft",
+      "default_rate_paise": 4500,
+      "keywords": ["tile fixing", "tile installation", "tiles lagana", "tile labour", "tile labor", "tiles labour", "floor tile", "wall tile", "टाइल मजदूरी", "टाइल लगाना", "फरशी लगाना", "टाइल", "फरशी"]
+    },
+    {
+      "name": "Tile supply",
+      "name_hi": "टाइल सप्लाई",
+      "name_mr": "टाइल पुरवठा",
+      "unit": "sq ft",
+      "default_rate_paise": 32000,
+      "keywords": ["tile supply", "tiles material", "tile material", "टाइल सामान", "टाइल देना", "material"]
+    },
+    {
+      "name": "Skirting tiles",
+      "name_hi": "स्कर्टिंग टाइल",
+      "name_mr": "स्कर्टिंग",
+      "unit": "rft",
+      "default_rate_paise": 6000,
+      "keywords": ["skirting", "skirting tile", "skirting tiles", "border tile", "स्कर्टिंग", "बॉर्डर"]
+    },
+    {
+      "name": "Tile removal and demolition",
+      "name_hi": "पुरानी टाइल हटाना",
+      "name_mr": "जुनी टाइल काढणे",
+      "unit": "sq ft",
+      "default_rate_paise": 2000,
+      "keywords": ["tile removal", "tile breaking", "demolition", "old tile removal", "टाइल तोड़ना", "पुरानी टाइल हटाना", "तोड़ना"]
+    },
+    {
+      "name": "Grout filling",
+      "name_hi": "ग्राउट भरना",
+      "name_mr": "ग्राउट भरणे",
+      "unit": "sq ft",
+      "default_rate_paise": 1200,
+      "keywords": ["grout", "grout filling", "epoxy grout", "ग्राउट", "ग्राउट भरना"]
+    },
+    {
+      "name": "Tile leveling and base work",
+      "name_hi": "टाइल बेस लेवलिंग",
+      "name_mr": "टाइल बेस तयारी",
+      "unit": "sq ft",
+      "default_rate_paise": 2200,
+      "keywords": ["tile leveling", "base work", "bed preparation", "लेवलिंग", "बेस वर्क", "तैयारी"]
+    }
+  ]
+}

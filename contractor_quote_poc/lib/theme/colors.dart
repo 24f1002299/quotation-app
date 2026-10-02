@@ -1,23 +1,18 @@
 import 'package:flutter/material.dart';
 
-// ── Primary palette (design.md light system, warm-tinted surface) ──
+// ── Light palette ───────────────────────────────────────────────────────────
+// Warm off-white canvas (less glare outdoors) with one deep green accent used
+// only for the primary action, selected state, and key totals.
 const Color kSurface = Color(0xFFF7F7F5); // warm off-white page background
-const Color kSurfaceCard = Color(0xFFFFFFFF); // card backgrounds
-const Color kSurfaceMuted = Color(0xFFE8E8E6); // dividers, disabled fills
-const Color kForest = Color(0xFF16A34A); // primary CTA, headings, totals
-const Color kForestLight = Color(0xFF15803D); // pressed state
-const Color kSage = Color(0xFF86EFAC); // info highlights, selected states
-const Color kInk = Color(0xFF2D2D2D); // primary body text
-const Color kInkMuted = Color(0xFF737373); // secondary / hint text
+const Color kSurfaceCard = Color(0xFFFFFFFF); // cards, sheets, inputs
+const Color kSurfaceMuted = Color(0xFFE4E3DE); // dividers, disabled fills
+const Color kForest = Color(0xFF475841); // primary action, headings, totals
+const Color kForestLight = Color(0xFF39432F); // pressed / selected dark state
+const Color kSage = Color(0xFF9FB8AD); // informational highlights, chips
+const Color kInk = Color(0xFF3F403F); // primary body text
+const Color kInkMuted = Color(0xFF6E6F6E); // secondary / hint text
 
-// ── Semantic colors ──
-const Color kAttention = Color(0xFFE8890B); // warnings (saffron kept here)
-const Color kError = Color(0xFFD93025); // destructive actions
-const Color kSuccess = Color(0xFF1B8A4B); // confirmations
-
-// ── Legacy design.md aliases (kept so old imports keep compiling) ──
-const Color appBackground = kSurface;
-const Color surfaceMuted = kSurfaceMuted;
-const Color sage = kSage;
-const Color forest = kForest;
-const Color ink = kInk;
+// ── Semantic colours (never the only signal — always pair with an icon) ────
+const Color kAttention = Color(0xFFC77700); // warnings
+const Color kError = Color(0xFFC0392B); // destructive actions
+const Color kSuccess = Color(0xFF2F6B3C); // confirmations

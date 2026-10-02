@@ -1,25 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../catalog/catalog.dart';
+import '../../models/service_item.dart';
+import '../../storage/service_item_repository.dart';
+import '../../templates/template_data.dart';
 import '../../utils/rupee_format.dart';
 import 'editable_item.dart';
 import 'small_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AddItemSheet — bottom sheet with catalog picker + manual entry form.
+// AddItemSheet — bottom sheet with the user's services + manual entry form.
 // Used for both adding and editing (via [initialItem]).
-// The catalog section is shown only when [trade] is non-null.
-// Tapping a catalog chip pre-fills the description and unit; the form fields
+// The service list is shown only when [businessType] is non-null.
+// Tapping a service chip pre-fills description, unit and rate; the form fields
 // remain editable so a custom name is always possible.
 // Field order is contractual: description, quantity, unit, rate.
 // ─────────────────────────────────────────────────────────────────────────────
 class AddItemSheet extends StatefulWidget {
-  /// When non-null, catalog suggestions for this trade are shown at the top.
-  final Trade? trade;
+  /// When non-null, the user's services for this business type are offered.
+  final BusinessType? businessType;
   final EditableItem? initialItem;
 
-  const AddItemSheet({super.key, this.trade, this.initialItem});
+  const AddItemSheet({super.key, this.businessType, this.initialItem});
 
   @override
   State<AddItemSheet> createState() => _AddItemSheetState();
@@ -32,8 +34,8 @@ class _AddItemSheetState extends State<AddItemSheet> {
   final _rateCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // Which catalog item (if any) has been tapped — used for highlight only.
-  String? _selectedCatalogId;
+  // Which of the user's services (if any) has been tapped.
+  String? _selectedServiceId;
 
   @override
   void initState() {
@@ -70,11 +72,12 @@ class _AddItemSheetState extends State<AddItemSheet> {
     super.dispose();
   }
 
-  /// Pre-fills description and unit from a catalog chip tap.
-  void _applyCatalogItem(CatalogItem item) {
-    setState(() => _selectedCatalogId = item.id);
-    _descCtrl.text = item.displayName;
-    _unitCtrl.text = item.defaultUnit;
+  /// Pre-fills description and unit from a service chip tap.
+  void _applyServiceItem(ServiceItem item) {
+    setState(() => _selectedServiceId = item.id);
+    _descCtrl.text = item.name;
+    _unitCtrl.text = item.unit;
+    if (item.ratePaise > 0) _rateCtrl.text = '';
     // Move focus to qty so the user can type immediately.
     FocusScope.of(context).nextFocus();
   }
@@ -95,8 +98,8 @@ class _AddItemSheetState extends State<AddItemSheet> {
         isUnknown: initial?.isUnknown ?? false,
         requiresReview: initial?.requiresReview ?? false,
         acknowledged: initial?.acknowledged ?? false,
-        // Day 21: keep the model's catalog pick (or the chip the user tapped).
-        catalogItemId: _selectedCatalogId ?? initial?.catalogItemId,
+        // Keep the matched service (or the chip the user tapped).
+        serviceItemId: _selectedServiceId ?? initial?.serviceItemId,
       ),
     );
   }
@@ -108,10 +111,6 @@ class _AddItemSheetState extends State<AddItemSheet> {
     final theme = Theme.of(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // Catalog items for the selected trade (empty list = no trade known).
-    final catalogItems = widget.trade == null
-        ? <CatalogItem>[]
-        : catalogForTrade(widget.trade!);
 
     return Container(
       decoration: BoxDecoration(
@@ -146,29 +145,39 @@ class _AddItemSheetState extends State<AddItemSheet> {
                 style: tt.titleLarge,
               ),
 
-              // ── Catalog picker (only when trade is known) ──────────────
-              if (catalogItems.isNotEmpty) ...[
+              // ── The user's own service list (only when type is known) ─────
+              if (widget.businessType != null) ...[
                 const SizedBox(height: 14),
-                Text(
-                  'Choose from catalog / सूची में से चुनें',
-                  style: tt.bodyMedium,
-                ),
+                Text('My services / मेरी सेवाएं', style: tt.bodyMedium),
                 const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final ci in catalogItems)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: CatalogChip(
-                            item: ci,
-                            selected: _selectedCatalogId == ci.id,
-                            onTap: () => _applyCatalogItem(ci),
-                          ),
-                        ),
-                    ],
-                  ),
+                FutureBuilder<List<ServiceItem>>(
+                  future: ServiceItemRepository
+                      .getActiveForBusinessType(widget.businessType!),
+                  builder: (context, snap) {
+                    final services = snap.data ?? const <ServiceItem>[];
+                    if (services.isEmpty) {
+                      return Text(
+                        'No services yet — type the item below.',
+                        style: tt.bodyMedium,
+                      );
+                    }
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final service in services)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ServiceChip(
+                                service: service,
+                                selected: _selectedServiceId == service.id,
+                                onTap: () => _applyServiceItem(service),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 const Divider(),
@@ -183,7 +192,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                   controller: _descCtrl,
                   // Skip autofocus when catalog chips are present — keyboard
                   // would hide them before the user can tap a chip.
-                  autofocus: catalogItems.isEmpty,
+                  autofocus: widget.businessType == null,
                   style: tt.bodyLarge,
                   decoration:
                       reviewInputDecoration(context, hint: 'e.g. Skirting'),
@@ -311,16 +320,16 @@ class _AddItemSheetState extends State<AddItemSheet> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CatalogChip — tappable chip for a catalog item; highlighted when selected
+// ServiceChip — tappable chip for one of the user's services
 // ─────────────────────────────────────────────────────────────────────────────
-class CatalogChip extends StatelessWidget {
-  final CatalogItem item;
+class ServiceChip extends StatelessWidget {
+  final ServiceItem service;
   final bool selected;
   final VoidCallback onTap;
 
-  const CatalogChip({
+  const ServiceChip({
     super.key,
-    required this.item,
+    required this.service,
     required this.selected,
     required this.onTap,
   });
@@ -353,14 +362,14 @@ class CatalogChip extends StatelessWidget {
             children: [
               Text(
                 // Show only the English part before " /" for compact chips.
-                item.displayName.split(' /').first,
+                service.name,
                 style: tt.bodyLarge?.copyWith(
                   color: selected ? cs.primary : null,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(item.defaultUnit, style: tt.bodyMedium),
+              Text(service.unit, style: tt.bodyMedium),
             ],
           ),
         ),

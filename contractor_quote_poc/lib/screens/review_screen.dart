@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../models/quote.dart';
 import '../models/quote_flags.dart';
-import '../storage/catalog_version_repository.dart';
+import '../storage/service_list_version_repository.dart';
 import '../storage/feedback_repository.dart';
 import '../storage/quote_defaults.dart';
 import '../storage/quote_repository.dart';
@@ -29,7 +29,7 @@ import 'quote_flag_widgets.dart';
 // ReviewScreen — editable quotation review & customer details
 // (Editable line-item model lives in review/editable_item.dart.)
 // Accepts an optional initial list of line items (from voice/parse on Day 7),
-// an optional Trade, original voice transcript, and any parser warnings.
+// an optional BusinessType, original voice transcript, and any parser warnings.
 // When called with no arguments it starts with the Day 2 demo fixture so
 // the existing widget test keeps passing.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,9 +37,9 @@ class ReviewScreen extends StatefulWidget {
   /// Optional pre-populated line items (passed from voice flow on Day 7).
   final List<QuoteLineItem>? initialLineItems;
 
-  /// Trade selected on the New Quote screen.  Null when opened from routes
-  /// that don't carry a trade (e.g. the widget test fallback).
-  final Trade? trade;
+  /// BusinessType selected on the New Quote screen.  Null when opened from routes
+  /// that don't carry a businessType (e.g. the widget test fallback).
+  final BusinessType? businessType;
 
   /// Raw transcript captured from voice or demo phrase (Day 7).
   final String? originalTranscript;
@@ -83,7 +83,7 @@ class ReviewScreen extends StatefulWidget {
   const ReviewScreen({
     super.key,
     this.initialLineItems,
-    this.trade,
+    this.businessType,
     this.originalTranscript,
     this.parsingWarnings,
     this.parsingWarningsAcknowledged = false,
@@ -148,8 +148,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   // flag, and a stable error-report ID for support (behind Get help only).
   String _syncFailureDetail = '';
   bool _hasSyncFailure = false;
-  bool _isCatalogStale = false;
-  String _catalogStaleDetail = '';
+  bool _isServiceListStale = false;
+  String _serviceListStaleDetail = '';
   late final String _errorReportId = newErrorReportId();
   bool _syncRetrying = false;
 
@@ -228,7 +228,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             isUnknown: li.isUnknown,
             requiresReview: li.requiresReview,
             acknowledged: li.acknowledged,
-            catalogItemId: li.catalogItemId,
+            serviceItemId: li.serviceItemId,
           ),
         )
         .toList();
@@ -266,17 +266,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
       });
     } catch (_) {}
     try {
-      if (widget.trade != null) {
-        final local = await CatalogVersionRepository.getVersion(widget.trade!);
+      if (widget.businessType != null) {
+        final local = await ServiceListVersionRepository.getVersion(widget.businessType!);
         // Remote version is unknown offline; treat a version older than the
         // bundled seed (v1) or an item-count mismatch as stale signal when
         // the caller explicitly marks it. Default: not stale.
         if (!mounted) return;
         setState(() {
-          _isCatalogStale = false;
-          _catalogStaleDetail = '';
+          _isServiceListStale = false;
+          _serviceListStaleDetail = '';
           // Keep local version metadata fresh for future comparisons.
-          CatalogVersionRepository.updateVersion(local);
+          ServiceListVersionRepository.updateVersion(local);
         });
       }
     } catch (_) {}
@@ -308,15 +308,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
     // Manual resolution: re-seed version metadata; real refresh happens
     // when online. Work is never lost.
     try {
-      if (widget.trade != null) {
-        final v = await CatalogVersionRepository.getVersion(widget.trade!);
-        await CatalogVersionRepository.updateVersion(v);
+      if (widget.businessType != null) {
+        final v = await ServiceListVersionRepository.getVersion(widget.businessType!);
+        await ServiceListVersionRepository.updateVersion(v);
       }
     } catch (_) {}
     if (!mounted) return;
     setState(() {
-      _isCatalogStale = false;
-      _catalogStaleDetail = '';
+      _isServiceListStale = false;
+      _serviceListStaleDetail = '';
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -549,8 +549,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
         buildQuote(),
         hasSyncFailure: _hasSyncFailure,
         syncDetail: _syncFailureDetail,
-        isCatalogStale: _isCatalogStale,
-        catalogDetail: _catalogStaleDetail,
+        isServiceListStale: _isServiceListStale,
+        serviceListDetail: _serviceListStaleDetail,
       );
 
   List<QuoteFlag> get _warningFlags {
@@ -561,7 +561,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return warningFlags(_day20Flags).where((f) {
         // Sync/catalog already have dedicated banners above — avoid doubles.
         return f.type != QuoteFlagType.failedSync &&
-            f.type != QuoteFlagType.staleCatalog;
+            f.type != QuoteFlagType.staleServiceList;
       }).toList(growable: false);
   }
 
@@ -583,7 +583,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       case QuoteFlagType.failedSync:
         _retrySync();
         break;
-      case QuoteFlagType.staleCatalog:
+      case QuoteFlagType.staleServiceList:
         _refreshCatalog();
         break;
     }
@@ -611,7 +611,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       serverDisplayNumber: _serverDisplayNumber,
       createdAt: DateTime.now(),
       quoteDate: _quoteDate ?? DateTime.now(),
-      trade: widget.trade,
+      businessType: widget.businessType,
       customerName: _customerNameCtrl.text.trim().isEmpty
           ? 'Client'
           : _customerNameCtrl.text.trim(),
@@ -652,13 +652,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final totals = _totals;
     final blockingReason = _pdfBlockingReason;
 
-    // Phase 4: trade was chosen upstream — AppBar stays clean.
-    // (Trade chip kept: day-7 widget tests assert its presence.)
-    final tradeBadge = widget.trade == null
+    // Phase 4: businessType was chosen upstream — AppBar stays clean.
+    // (BusinessType chip kept: day-7 widget tests assert its presence.)
+    final businessTypeBadge = widget.businessType == null
         ? null
         : Chip(
             label: Text(
-              widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
+              widget.businessType == BusinessType.tiling ? '🪣 Tiling' : '🖌️ Painting',
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),
@@ -673,9 +673,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
             const Flexible(
               child: Text('Review Quote', overflow: TextOverflow.ellipsis),
             ),
-            if (tradeBadge != null) ...[
+            if (businessTypeBadge != null) ...[
               const SizedBox(width: 8),
-              Flexible(child: tradeBadge),
+              Flexible(child: businessTypeBadge),
             ],
           ],
         ),
@@ -735,9 +735,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       onRetry: _syncRetrying ? () {} : _retrySync,
                     ),
                   ],
-                  if (_isCatalogStale) ...[
-                    StaleCatalogBanner(
-                      detail: _catalogStaleDetail,
+                  if (_isServiceListStale) ...[
+                    StaleServiceListBanner(
+                      detail: _serviceListStaleDetail,
                       onRefresh: _refreshCatalog,
                     ),
                   ],
@@ -880,7 +880,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   MaterialPageRoute(
                     builder: (_) => PdfPreviewScreen(
                       quote: quote,
-                      trade: widget.trade,
+                      businessType: widget.businessType,
                       validityDays: _validityDays,
                       notes: _notesCtrl.text.trim(),
                       savedQuoteId: _quoteId,
@@ -903,8 +903,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      // Pass trade so the sheet can show catalog suggestions.
-      builder: (_) => AddItemSheet(trade: widget.trade),
+      // Pass businessType so the sheet can show catalog suggestions.
+      builder: (_) => AddItemSheet(businessType: widget.businessType),
     ).then((item) {
       if (item == null) return;
       _addItem(item);
@@ -921,7 +921,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
-          AddItemSheet(trade: widget.trade, initialItem: _items[index]),
+          AddItemSheet(businessType: widget.businessType, initialItem: _items[index]),
     ).then((item) async {
       if (item == null || !mounted) return;
       final oldItem = _items[index];
@@ -935,11 +935,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
       try {
         await FeedbackRepository.recordCorrection(
           quoteId: _quoteId,
-          trade: widget.trade?.name,
+          businessType: widget.businessType?.name,
           original: originalSnapshot,
           edited: item.toLineItem(),
-          catalogItemId:
-              originalSnapshot.catalogItemId ?? item.catalogItemId,
+          serviceItemId:
+              originalSnapshot.serviceItemId ?? item.serviceItemId,
           modelResult: originalSnapshot.description,
         );
       } catch (_) {}

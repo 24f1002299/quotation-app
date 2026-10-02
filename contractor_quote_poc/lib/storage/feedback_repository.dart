@@ -9,7 +9,7 @@ import 'sync_outbox.dart';
 /// Day 21 — Privacy-conscious correction feedback store.
 ///
 /// Records ONE minimal record per corrected field when a user alters an
-/// extracted line: trade, catalogItemId, modelResult, finalValue,
+/// extracted line: businessType, serviceItemId, modelResult, finalValue,
 /// changedField, quoteIdHash.
 ///
 /// - No raw audio, no full transcript, no customer PII is ever stored here.
@@ -22,17 +22,17 @@ class FeedbackRepository {
   /// [edited] (user's final values). Creates one [EditFeedback] per changed
   /// field among description/quantity/unit/rate. Returns created records.
   ///
-  /// No-ops (returns []) when nothing changed or [trade] is null.
+  /// No-ops (returns []) when nothing changed or [businessType] is null.
   static Future<List<EditFeedback>> recordCorrection({
     required String quoteId,
-    required String? trade,
+    required String? businessType,
     required QuoteLineItem original,
     required QuoteLineItem edited,
-    String? catalogItemId,
+    String? serviceItemId,
     String? modelResult,
   }) async {
-    if (trade == null || trade.trim().isEmpty) return [];
-    final t = trade.trim().toLowerCase();
+    if (businessType == null || businessType.trim().isEmpty) return [];
+    final t = businessType.trim().toLowerCase();
     if (!kFeedbackTrades.contains(t)) return [];
 
     final hash = hashQuoteId(quoteId);
@@ -43,8 +43,8 @@ class FeedbackRepository {
       out.add(EditFeedback(
         id: 'fb_${now.microsecondsSinceEpoch}_${out.length}',
         quoteIdHash: hash,
-        trade: t,
-        catalogItemId: catalogItemId ?? original.catalogItemId,
+        businessType: t,
+        serviceItemId: serviceItemId ?? original.serviceItemId,
         modelResult: model ?? modelResult,
         finalValue: finalV,
         changedField: field,

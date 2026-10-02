@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../l10n/app_strings.dart';
-import '../models/contractor_profile.dart';
+import '../models/business_profile.dart';
 import '../storage/app_preferences.dart';
 import '../storage/auth_repository.dart';
 import '../storage/profile_repository.dart';
@@ -12,6 +12,7 @@ import '../storage/saved_quote.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
 import '../utils/rupee_format.dart';
+import '../widgets/business_type_chips.dart';
 import '../widgets/common_widgets.dart';
 import 'pdf_preview_screen.dart';
 import 'review_screen.dart';
@@ -20,8 +21,8 @@ import 'voice_screen.dart';
 /// Phase 2 — Voice-first dashboard.
 ///
 /// - Mic is the hero (96dp, centre of screen, one tap starts recording
-///   with the last-used trade pre-selected).
-/// - Trade selection is inline chips, not a separate screen.
+///   with the last-used business type pre-selected).
+/// - Business type selection is inline chips, not a separate screen.
 /// - Drafts appear only when they exist, as compact cards.
 /// - No tutorial card: a one-line hint under the mic, auto-dismissed.
 /// - Offline status is a slim bar; sign-in nudge is a dot on the avatar.
@@ -33,8 +34,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  ContractorProfile _profile = ContractorProfile.empty();
-  Trade _trade = Trade.tiling;
+  BusinessProfile _profile = BusinessProfile.empty();
+  BusinessType _businessType = BusinessType.tiling;
   bool _signedIn = false;
   bool _tutorialSeen = true;
   List<SavedQuote> _drafts = [];
@@ -49,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadAll() async {
     final results = await Future.wait([
       ProfileRepository.getProfile(),
-      AppPreferences.getLastTrade(),
+      AppPreferences.getLastBusinessType(),
       AuthRepository.isSignedIn(),
       AppPreferences.hasSeenTutorial(),
       QuoteRepository.getQuotes(),
@@ -57,8 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     final quotes = results[4] as List<SavedQuote>;
     setState(() {
-      _profile = results[0] as ContractorProfile;
-      _trade = (results[1] as Trade?) ?? (results[0] as ContractorProfile).trade;
+      _profile = results[0] as BusinessProfile;
+      _businessType = (results[1] as BusinessType?) ?? (results[0] as BusinessProfile).businessType;
       _signedIn = results[2] as bool;
       _tutorialSeen = results[3] as bool;
       _drafts = quotes
@@ -75,20 +76,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startVoice() {
-    AppPreferences.setLastTrade(_trade);
+    AppPreferences.setLastBusinessType(_businessType);
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => VoiceScreen(trade: _trade)),
+      MaterialPageRoute(builder: (_) => VoiceScreen(businessType: _businessType)),
     ).then((_) => _loadAll());
   }
 
   void _typeManually() {
-    AppPreferences.setLastTrade(_trade);
+    AppPreferences.setLastBusinessType(_businessType);
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) =>
-            ReviewScreen(trade: _trade, initialLineItems: const []),
+            ReviewScreen(businessType: _businessType, initialLineItems: const []),
       ),
     ).then((_) => _loadAll());
   }
@@ -99,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
           savedQuoteId: quote.id,
-          trade: quote.trade,
+          businessType: quote.businessType,
           customerName: quote.customerName,
           customerPhone: quote.customerPhone,
           customerAddress: quote.customerAddress,
@@ -127,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(
         builder: (_) => PdfPreviewScreen(
           quote: quote.toQuote(),
-          trade: quote.trade,
+          businessType: quote.businessType,
           validityDays: quote.validityDays,
           notes: quote.notes,
           savedQuoteId: quote.id,
@@ -140,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     String t(String k) => AppStrings.of(context, k);
     final initial =
-        _profile.name.isNotEmpty ? _profile.name.characters.first : null;
+        _profile.ownerName.isNotEmpty ? _profile.ownerName.characters.first : null;
 
     return Scaffold(
       body: SafeArea(
@@ -239,29 +240,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
                 const SizedBox(height: 24),
-                // ── Inline trade chips ───────────────────────────
-                Row(
-                  children: [
-                    _HomeTradeChip(
-                      label: t('tiling'),
-                      icon: Icons.grid_4x4_rounded,
-                      selected: _trade == Trade.tiling,
-                      onTap: () {
-                        setState(() => _trade = Trade.tiling);
-                        AppPreferences.setLastTrade(Trade.tiling);
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _HomeTradeChip(
-                      label: t('painting'),
-                      icon: Icons.format_paint_rounded,
-                      selected: _trade == Trade.painting,
-                      onTap: () {
-                        setState(() => _trade = Trade.painting);
-                        AppPreferences.setLastTrade(Trade.painting);
-                      },
-                    ),
-                  ],
+                // ── Business type + services the user sells ────────────
+                BusinessTypeChips(
+                  selected: _businessType,
+                  onChanged: (type) {
+                    setState(() => _businessType = type);
+                    AppPreferences.setLastBusinessType(type);
+                  },
                 ),
                 const SizedBox(height: 12),
                 Center(
@@ -339,63 +324,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 24),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeTradeChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _HomeTradeChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: selected
-                ? kSage.withValues(alpha: 0.3)
-                : kSurfaceCard,
-            borderRadius:
-                BorderRadius.circular(AppDimensions.cardRadius),
-            border: Border.all(
-              color: selected ? kForest : kSurfaceMuted,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: selected ? kForest : kInkMuted,
-                size: 22,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? kForest : kInk,
-                ),
-              ),
-            ],
           ),
         ),
       ),

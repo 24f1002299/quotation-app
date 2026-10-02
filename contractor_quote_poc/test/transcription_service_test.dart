@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/transcript_draft.dart';
 import 'package:contractor_quote_poc/storage/transcript_draft_repository.dart';
 import 'package:contractor_quote_poc/voice/transcription_service.dart';
@@ -141,12 +141,12 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('Saves, retrieves, and clears draft for selected trade', () async {
-      expect(await TranscriptDraftRepository.getDraft(Trade.tiling), isNull);
+    test('Saves, retrieves, and clears draft for selected businessType', () async {
+      expect(await TranscriptDraftRepository.getDraft(BusinessType.tiling), isNull);
 
       final draft = TranscriptDraft(
         id: 'draft_1',
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         transcript: 'Kitchen wall tiles 120 sq ft',
         language: 'hi',
         provider: 'grok',
@@ -156,15 +156,15 @@ void main() {
 
       await TranscriptDraftRepository.saveDraft(draft);
 
-      final loaded = await TranscriptDraftRepository.getDraft(Trade.tiling);
+      final loaded = await TranscriptDraftRepository.getDraft(BusinessType.tiling);
       expect(loaded, isNotNull);
       expect(loaded!.transcript, equals('Kitchen wall tiles 120 sq ft'));
-      expect(loaded.trade, equals(Trade.tiling));
+      expect(loaded.businessType, equals(BusinessType.tiling));
       expect(loaded.language, equals('hi'));
       expect(loaded.provider, equals('grok'));
 
-      await TranscriptDraftRepository.clearDraft(Trade.tiling);
-      expect(await TranscriptDraftRepository.getDraft(Trade.tiling), isNull);
+      await TranscriptDraftRepository.clearDraft(BusinessType.tiling);
+      expect(await TranscriptDraftRepository.getDraft(BusinessType.tiling), isNull);
     });
   });
 }

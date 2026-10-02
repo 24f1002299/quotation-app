@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../l10n/app_strings.dart';
-import '../models/contractor_profile.dart';
-import '../models/rate_memory_item.dart';
+import '../models/business_profile.dart';
+import '../models/service_item.dart';
 import '../storage/app_preferences.dart';
 import '../storage/auth_repository.dart';
 import '../storage/data_deletion_service.dart';
 import '../storage/diagnostic_consent.dart';
 import '../storage/pdf_backup_settings.dart';
 import '../storage/profile_repository.dart';
-import '../storage/rate_memory_repository.dart';
+import '../storage/service_item_repository.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
+import '../widgets/business_type_chips.dart';
 
 /// Phase 6 — clean grouped Settings (was tab-based Profile + Rate Card).
 ///
-/// Groups: Business · Rate card · Preferences (incl. Language) · Account.
-/// - Business rows open one edit page (same fields as before).
-/// - Rate card is a sub-page per trade, not a tab.
+/// Groups: Business · My services · Preferences (incl. Language) · Account.
+/// - Business rows open one edit page (name, business, type, contact, terms).
+/// - My services is a sub-page for the user's own service list.
 /// - Language switches instantly via [appLanguage], no restart.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -28,8 +29,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  ContractorProfile _profile = ContractorProfile.empty();
-  List<RateMemoryItem> _rates = [];
+  BusinessProfile _profile = BusinessProfile.empty();
+  List<ServiceItem> _services = [];
   bool _loading = true;
   bool _signedIn = false;
   String _language = 'hi';
@@ -44,7 +45,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _load() async {
     final profile = await ProfileRepository.getProfile();
-    final rates = await RateMemoryRepository.getAllRates();
+    final services =
+        await ServiceItemRepository.getActiveForBusinessType(profile.businessType);
     final signedIn = await AuthRepository.isSignedIn();
     final lang = await AppPreferences.getLanguage();
     final backup = await PdfBackupSettings.isOptedIn();
@@ -52,7 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     setState(() {
       _profile = profile;
-      _rates = rates;
+      _services = services;
       _signedIn = signedIn;
       _language = (lang == 'en' || lang == 'mr') ? lang : 'hi';
       _backupOptIn = backup;
@@ -61,9 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  int _setCount(Trade trade) => _rates
-      .where((r) => r.trade == trade && r.rateRupees > 0)
-      .length;
+  int get _ratedCount => _services.where((s) => s.ratePaise > 0).length;
 
   Future<void> _pickLanguage() async {
     final code = await showModalBottomSheet<String>(
@@ -130,7 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     setState(() {
       _backupOptIn = false;
-      _profile = ContractorProfile.empty();
+      _profile = BusinessProfile.empty();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -149,10 +149,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _load();
   }
 
-  Future<void> _openRateCard(Trade trade) async {
+  Future<void> _openServices() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => _RateCardPage(trade: trade)),
+      MaterialPageRoute(
+        builder: (_) => _ServicesPage(businessType: _profile.businessType),
+      ),
     );
     _load();
   }
@@ -175,7 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               _Row(
                 label: t('client_name'),
-                value: _profile.name.isEmpty ? '—' : _profile.name,
+                value: _profile.ownerName.isEmpty ? '—' : _profile.ownerName,
                 onTap: _openBusinessEdit,
               ),
               _Row(
@@ -186,10 +188,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: _openBusinessEdit,
               ),
               _Row(
-                label: 'Trade',
-                value: _profile.trade == Trade.painting
-                    ? t('painting')
-                    : t('tiling'),
+                label: t('business_type'),
+                value: businessTypeInfo(_profile.businessType).label(_language),
                 onTap: _openBusinessEdit,
               ),
               _Row(
@@ -205,18 +205,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _GroupLabel(t('rate_card').toUpperCase()),
+          _GroupLabel(t('my_services').toUpperCase()),
           _Group(
             children: [
               _Row(
-                label: '${t('tiling')} ${t('rate_card')}',
-                value: '${_setCount(Trade.tiling)} ✓',
-                onTap: () => _openRateCard(Trade.tiling),
-              ),
-              _Row(
-                label: '${t('painting')} ${t('rate_card')}',
-                value: '${_setCount(Trade.painting)} ✓',
-                onTap: () => _openRateCard(Trade.painting),
+                label: t('my_services'),
+                value: '${_services.length} · $_ratedCount ✓',
+                onTap: _openServices,
               ),
             ],
           ),
@@ -419,7 +414,7 @@ class _BusinessEditPageState extends State<_BusinessEditPage> {
   final _cityCtrl = TextEditingController();
   final _gstinCtrl = TextEditingController();
   final _termsCtrl = TextEditingController();
-  Trade _trade = Trade.tiling;
+  BusinessType _businessType = BusinessType.tiling;
   bool _loading = true;
 
   @override
@@ -432,13 +427,13 @@ class _BusinessEditPageState extends State<_BusinessEditPage> {
     final p = await ProfileRepository.getProfile();
     if (!mounted) return;
     setState(() {
-      _nameCtrl.text = p.name;
+      _nameCtrl.text = p.ownerName;
       _businessCtrl.text = p.businessName;
       _phoneCtrl.text = p.phone;
       _cityCtrl.text = p.city;
       _gstinCtrl.text = p.gstin ?? '';
       _termsCtrl.text = p.quoteTerms;
-      _trade = p.trade;
+      _businessType = p.businessType;
       _loading = false;
     });
   }
@@ -458,11 +453,11 @@ class _BusinessEditPageState extends State<_BusinessEditPage> {
     final existing = await ProfileRepository.getProfile();
     await ProfileRepository.saveProfile(
       existing.copyWith(
-        name: _nameCtrl.text.trim(),
+        ownerName: _nameCtrl.text.trim(),
         businessName: _businessCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
         city: _cityCtrl.text.trim(),
-        trade: _trade,
+        businessType: _businessType,
         gstin:
             _gstinCtrl.text.trim().isNotEmpty ? _gstinCtrl.text.trim() : null,
         quoteTerms: _termsCtrl.text.trim().isNotEmpty
@@ -500,6 +495,20 @@ class _BusinessEditPageState extends State<_BusinessEditPage> {
           _field(t('site'), _cityCtrl),
           _field('GSTIN', _gstinCtrl),
           _field('Terms', _termsCtrl, maxLines: 3),
+          const SizedBox(height: 8),
+          Text(
+            t('business_type'),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kInk,
+            ),
+          ),
+          const SizedBox(height: 8),
+          BusinessTypeChips(
+            selected: _businessType,
+            onChanged: (type) => setState(() => _businessType = type),
+          ),
           const SizedBox(height: 20),
           ElevatedButton(onPressed: _save, child: Text(t('done'))),
         ],
@@ -534,127 +543,280 @@ class _BusinessEditPageState extends State<_BusinessEditPage> {
     );
   }
 }
-
-/// Rate card sub-page for one trade.
-class _RateCardPage extends StatefulWidget {
-  final Trade trade;
-  const _RateCardPage({required this.trade});
+/// The user's own service list for one business type: add, rename, re-rate,
+/// delete, and seed from the bundled starter template.
+class _ServicesPage extends StatefulWidget {
+  final BusinessType businessType;
+  const _ServicesPage({required this.businessType});
 
   @override
-  State<_RateCardPage> createState() => _RateCardPageState();
+  State<_ServicesPage> createState() => _ServicesPageState();
 }
 
-class _RateCardPageState extends State<_RateCardPage> {
-  final Map<String, TextEditingController> _ctrls = {};
-  List<RateMemoryItem> _rates = [];
+class _ServicesPageState extends State<_ServicesPage> {
+  List<ServiceItem> _services = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _preload();
+    _load();
   }
 
-  Future<void> _preload() async {
-    final all = await RateMemoryRepository.getAllRates();
+  Future<void> _load() async {
+    final services =
+        await ServiceItemRepository.getActiveForBusinessType(widget.businessType);
     if (!mounted) return;
     setState(() {
-      _rates = all.where((r) => r.trade == widget.trade).toList();
-      for (final r in _rates) {
-        _ctrls[r.catalogItemId] = TextEditingController(
-          text: r.rateRupees > 0 ? '${r.rateRupees}' : '',
-        );
-      }
+      _services = services;
       _loading = false;
     });
   }
 
-  @override
-  void dispose() {
-    for (final c in _ctrls.values) {
-      c.dispose();
-    }
-    super.dispose();
+  Future<void> _addService() async {
+    final saved = await _showServiceForm(null);
+    if (saved == null) return;
+    await ServiceItemRepository.upsert(
+      name: saved.name,
+      unit: saved.unit,
+      ratePaise: saved.ratePaise,
+      businessType: widget.businessType,
+      keywords: saved.keywords,
+      sortOrder: _services.length,
+    );
+    await _load();
   }
 
-  Future<void> _save() async {
-    for (final r in _rates) {
-      final ctrl = _ctrls[r.catalogItemId];
-      if (ctrl == null) continue;
-      final rupees = int.tryParse(ctrl.text.trim()) ?? 0;
-      await RateMemoryRepository.saveRate(
-        r.copyWith(unitRatePaise: rupees * 100, updatedAt: DateTime.now()),
-      );
-    }
+  Future<void> _editService(ServiceItem service) async {
+    final saved = await _showServiceForm(service);
+    if (saved == null) return;
+    await ServiceItemRepository.upsert(
+      id: service.id,
+      name: saved.name,
+      nameHi: saved.nameHi,
+      nameMr: saved.nameMr,
+      unit: saved.unit,
+      ratePaise: saved.ratePaise,
+      businessType: widget.businessType,
+      keywords: saved.keywords,
+      sortOrder: service.sortOrder,
+      notes: saved.notes,
+    );
+    await _load();
+  }
+
+  Future<void> _deleteService(ServiceItem service) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${AppStrings.of(ctx, 'delete_service')}?'),
+        content: Text(service.name),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: kError),
+            child: Text(AppStrings.of(ctx, 'delete_service')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ServiceItemRepository.delete(service.id);
+    await _load();
+  }
+
+  Future<void> _useTemplate() async {
+    await ServiceItemRepository.seedFromTemplate(widget.businessType);
+    if (!mounted) return;
+    await _load();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Rates updated / रेट सुरक्षित हो गए'),
+      SnackBar(
+        content: Text(AppStrings.of(context, 'template_added')),
         behavior: SnackBarBehavior.floating,
       ),
     );
-    Navigator.pop(context);
+  }
+
+  /// Returns an edited copy of [service] (or a blank one), or null if cancelled.
+  Future<ServiceItem?> _showServiceForm(ServiceItem? service) async {
+    final nameCtrl = TextEditingController(text: service?.name ?? '');
+    final unitCtrl =
+        TextEditingController(text: service?.unit ?? 'item');
+    final rateCtrl = TextEditingController(
+      text: (service?.rateRupees ?? 0) > 0 ? '${service!.rateRupees}' : '',
+    );
+    final keywordsCtrl =
+        TextEditingController(text: (service?.keywords ?? const []).join(', '));
+
+    final saved = await showModalBottomSheet<ServiceItem>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppDimensions.page,
+          AppDimensions.page,
+          AppDimensions.page,
+          MediaQuery.of(ctx).viewInsets.bottom + AppDimensions.page,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              service == null
+                  ? AppStrings.of(ctx, 'add_service')
+                  : AppStrings.of(ctx, 'edit_service'),
+              style: Theme.of(ctx).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: nameCtrl,
+              textCapitalization: TextCapitalization.sentences,
+              decoration:
+                  InputDecoration(labelText: AppStrings.of(ctx, 'service_name')),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: unitCtrl,
+                    decoration:
+                        InputDecoration(labelText: AppStrings.of(ctx, 'unit')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: rateCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: AppStrings.of(ctx, 'rate'),
+                      prefixText: '₹ ',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: keywordsCtrl,
+              decoration: InputDecoration(
+                labelText: AppStrings.of(ctx, 'keywords'),
+                helperText: AppStrings.of(ctx, 'keywords_note'),
+                helperMaxLines: 2,
+              ),
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) return;
+                Navigator.pop(
+                  ctx,
+                  (service ?? ServiceItem.draft(name: name)).copyWith(
+                    name: name,
+                    unit: unitCtrl.text.trim().isEmpty
+                        ? 'item'
+                        : unitCtrl.text.trim(),
+                    ratePaise: (int.tryParse(rateCtrl.text.trim()) ?? 0) * 100,
+                    keywords: [
+                      for (final k in keywordsCtrl.text.split(','))
+                        if (k.trim().isNotEmpty) k.trim(),
+                    ],
+                  ),
+                );
+              },
+              child: Text(AppStrings.of(ctx, 'save_changes')),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    nameCtrl.dispose();
+    unitCtrl.dispose();
+    rateCtrl.dispose();
+    keywordsCtrl.dispose();
+    return saved;
   }
 
   @override
   Widget build(BuildContext context) {
     String t(String k) => AppStrings.of(context, k);
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: kForest)),
+      return Scaffold(
+        appBar: AppBar(title: Text(t('my_services'))),
+        body: const Center(child: CircularProgressIndicator(color: kForest)),
       );
     }
     return Scaffold(
-      appBar: AppBar(title: Text(t('rate_card'))),
+      appBar: AppBar(
+        title: Text(t('my_services')),
+        actions: [
+          IconButton(
+            tooltip: t('use_template'),
+            onPressed: _useTemplate,
+            icon: const Icon(Icons.auto_awesome_motion_rounded),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addService,
+        icon: const Icon(Icons.add_rounded),
+        label: Text(t('add_service')),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppDimensions.page),
         children: [
-          for (final r in _rates)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.displayName,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          r.unit,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: kInkMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 110,
-                    child: TextField(
-                      controller: _ctrls[r.catalogItemId],
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        prefixText: '₹',
-                        hintText: '0',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _save,
-            child: Text(t('save_changes')),
+          Text(
+            t('my_services_note'),
+            style: const TextStyle(fontSize: 13, color: kInkMuted),
           ),
+          const SizedBox(height: 12),
+          if (_services.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                t('services_empty'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15, color: kInkMuted),
+              ),
+            )
+          else
+            for (final service in _services)
+              Card(
+                child: ListTile(
+                  title: Text(service.name),
+                  subtitle: Text(
+                    service.ratePaise > 0
+                        ? '${service.unit} · ₹${service.rateRupees}'
+                        : '${service.unit} · ${t('rate_not_set')}',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: t('edit_service'),
+                        onPressed: () => _editService(service),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: t('delete_service'),
+                        onPressed: () => _deleteService(service),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ],
+                  ),
+                  onTap: () => _editService(service),
+                ),
+              ),
+          const SizedBox(height: 80),
         ],
       ),
     );

@@ -5,7 +5,7 @@ enum ExtractedRateSource { rateMemory, suggested, unknown }
 
 /// Extracted candidate line item returned from extraction API or local fallback.
 class ExtractedItem {
-  final String catalogItemId;
+  final String serviceItemId;
   final String description;
   final double quantity;
   final String unit;
@@ -16,7 +16,7 @@ class ExtractedItem {
   final String? uncertaintyNote;
 
   const ExtractedItem({
-    required this.catalogItemId,
+    required this.serviceItemId,
     required this.description,
     required this.quantity,
     required this.unit,
@@ -42,7 +42,7 @@ class ExtractedItem {
           unitRatePaise <= 0 ||
           rateSource == ExtractedRateSource.suggested ||
           uncertaintyNote != null,
-      catalogItemId: catalogItemId,
+      serviceItemId: serviceItemId,
     );
   }
 
@@ -72,7 +72,7 @@ class ExtractedItem {
     }
 
     return ExtractedItem(
-      catalogItemId: json['catalogItemId'] as String? ?? 'item',
+      serviceItemId: json['serviceItemId'] as String? ?? 'item',
       description: json['description'] as String? ?? 'Unnamed item',
       quantity: qty > 0 ? qty : 1.0,
       unit: json['unit'] as String? ?? 'sq ft',
@@ -111,7 +111,7 @@ class ExplicitUnknown {
           'Unknown work',
       suspectedTerm: json['suspectedTerm'] as String?,
       reason:
-          json['reason'] as String? ?? 'Item not recognized in trade catalog',
+          json['reason'] as String? ?? 'Item not recognized in businessType catalog',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.5,
     );
   }
@@ -134,7 +134,7 @@ class ExplicitUnknown {
 
 /// Complete response produced by extraction service.
 class ExtractionResult {
-  final String trade;
+  final String businessType;
   final List<ExtractedItem> lineItems;
   final List<ExplicitUnknown> unknowns;
   final bool requiresReview;
@@ -142,7 +142,7 @@ class ExtractionResult {
   final String? errorMessage;
 
   const ExtractionResult({
-    required this.trade,
+    required this.businessType,
     required this.lineItems,
     this.unknowns = const [],
     this.requiresReview = true,

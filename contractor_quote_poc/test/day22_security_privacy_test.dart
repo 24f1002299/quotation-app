@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/storage/data_deletion_service.dart';
 import 'package:contractor_quote_poc/storage/diagnostic_consent.dart';
@@ -28,7 +28,7 @@ void main() {
       const edited = QuoteLineItem(
         description: 'Floor tiles', quantity: 11, unit: 'sq ft', unitRatePaise: 8500);
       final rows = await FeedbackRepository.recordCorrection(
-        quoteId: 'q-22', trade: 'tiling', original: original, edited: edited);
+        quoteId: 'q-22', businessType: 'tiling', original: original, edited: edited);
       expect(rows, hasLength(1));
       final json = rows.first.toJson();
       for (final banned in ['audio', 'transcript', 'customer', 'phone', 'address']) {
@@ -49,7 +49,7 @@ void main() {
         id: 'exp-1',
         quoteNumber: 'Q-2026-0001',
         createdAt: DateTime.now(),
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         customerName: 'Sharma Ji',
         lineItems: const [
           QuoteLineItem(description: 'Tiles', quantity: 5, unit: 'sq ft', unitRatePaise: 5000),
@@ -77,7 +77,7 @@ void main() {
         lineItems: const [item],
       ));
       await FeedbackRepository.recordCorrection(
-        quoteId: 'del-1', trade: 'tiling', original: item, edited: editedItem);
+        quoteId: 'del-1', businessType: 'tiling', original: item, edited: editedItem);
       await DiagnosticConsent.setOptedIn(true);
       expect((await FeedbackRepository.getAll()), isNotEmpty);
 

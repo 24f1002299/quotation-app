@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
 
@@ -26,7 +26,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ReviewScreen(
-          trade: Trade.tiling,
+          businessType: BusinessType.tiling,
           initialLineItems: const [
             // Wrong qty: 10 instead of 100 → ₹450 instead of ₹4,500.
             QuoteLineItem(

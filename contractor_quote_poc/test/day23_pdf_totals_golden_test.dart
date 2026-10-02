@@ -15,7 +15,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/pdf/pdf_service.dart';
 import 'package:contractor_quote_poc/screens/pdf_preview_screen.dart';
@@ -61,7 +61,7 @@ void main() {
 
     final pdfBytes = await PdfService.generateQuotationPdf(
       quote: quote,
-      trade: Trade.tiling,
+      businessType: BusinessType.tiling,
       quoteNumber: quote.quoteNumber!,
     );
     expect(ascii.decode(pdfBytes.sublist(0, 5)), '%PDF-');
@@ -89,7 +89,7 @@ void main() {
 
     final pdfBytes = await PdfService.generateQuotationPdf(
       quote: quote,
-      trade: Trade.painting,
+      businessType: BusinessType.painting,
       quoteNumber: 'Q-2026-0043',
     );
     expect(ascii.decode(pdfBytes.sublist(0, 5)), '%PDF-');
@@ -100,7 +100,7 @@ void main() {
     final quote = _canonicalTilingQuote();
     await tester.pumpWidget(
       MaterialApp(
-        home: PdfPreviewScreen(quote: quote, trade: Trade.tiling),
+        home: PdfPreviewScreen(quote: quote, businessType: BusinessType.tiling),
       ),
     );
 

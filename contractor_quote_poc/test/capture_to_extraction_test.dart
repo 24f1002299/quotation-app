@@ -6,14 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/extraction_models.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
-import 'package:contractor_quote_poc/models/rate_memory_item.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
 import 'package:contractor_quote_poc/screens/voice_screen.dart';
-import 'package:contractor_quote_poc/storage/rate_memory_repository.dart';
+import 'package:contractor_quote_poc/storage/service_item_repository.dart';
 import 'package:contractor_quote_poc/storage/saved_quote.dart';
+import 'package:contractor_quote_poc/templates/template_loader.dart';
 import 'package:contractor_quote_poc/voice/extraction_service.dart';
 
 void main() {
@@ -21,6 +21,7 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    TemplateLoader.clearCache();
   });
 
   group('Day 13 — Capture-to-Extraction: 10 Representative Voice Samples', () {
@@ -31,15 +32,15 @@ void main() {
       final mockClient = MockClient((request) async {
         expect(request.url.path, endsWith('/extract'));
         final body = json.decode(request.body) as Map<String, dynamic>;
-        expect(body['trade'], equals('tiling'));
+        expect(body['businessType'], equals('tiling'));
         expect(body['transcript'], equals(transcript));
 
         return http.Response(
           json.encode({
-            'trade': 'tiling',
+            'business_type': 'tiling',
             'lineItems': [
               {
-                'catalogItemId': 'tile_labour',
+                'serviceItemId': 'tile_labour',
                 'description': 'Tile Labour / टाइल मजदूरी',
                 'quantity': 850,
                 'unit': 'sq ft',
@@ -48,7 +49,7 @@ void main() {
                 'confidence': 0.98,
               },
               {
-                'catalogItemId': 'skirting',
+                'serviceItemId': 'skirting',
                 'description': 'Skirting / स्कर्टिंग',
                 'quantity': 120,
                 'unit': 'rft',
@@ -67,7 +68,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         client: mockClient,
       );
 
@@ -94,10 +95,10 @@ void main() {
       final mockClient = MockClient((request) async {
         return http.Response(
           json.encode({
-            'trade': 'painting',
+            'business_type': 'painting',
             'lineItems': [
               {
-                'catalogItemId': 'wall_putty',
+                'serviceItemId': 'wall_putty',
                 'description': 'Wall Putty / पुट्टी',
                 'quantity': 1200,
                 'unit': 'sq ft',
@@ -106,7 +107,7 @@ void main() {
                 'confidence': 0.95,
               },
               {
-                'catalogItemId': 'interior_painting',
+                'serviceItemId': 'interior_painting',
                 'description': 'Interior Painting / पेंटिंग',
                 'quantity': 1200,
                 'unit': 'sq ft',
@@ -125,7 +126,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.painting,
+        businessType: BusinessType.painting,
         client: mockClient,
       );
 
@@ -139,18 +140,15 @@ void main() {
       expect(calculateTotals(quote).subtotalPaise, equals(3600000)); // ₹36,000
     });
 
-    // ── Sample 3: Marathi quantity-only note with contractor rate memory ────
-    test('Sample 3: Marathi quantity-only note applies saved rate from rate memory', () async {
-      // Seed rate memory for tiling labour at ₹45/sq ft
-      await RateMemoryRepository.saveRate(
-        RateMemoryItem(
-          id: 'rm_tile_labour',
-          catalogItemId: 'tile_labour',
-          trade: Trade.tiling,
-          unit: 'sq ft',
-          unitRatePaise: 4500,
-          updatedAt: DateTime(2026, 9, 22),
-        ),
+    // ── Sample 3: Marathi quantity-only note with the user's saved rate ───────
+    test('Sample 3: Marathi quantity-only note applies the saved service rate', () async {
+      // The user's own service list holds tiling labour at ₹45/sq ft.
+      await ServiceItemRepository.upsert(
+        name: 'Tile fixing',
+        unit: 'sq ft',
+        ratePaise: 4500,
+        businessType: BusinessType.tiling,
+        keywords: ['tile labour', 'टाईल लेबर'],
       );
 
       const transcript = 'टाईल लेबर 500 स्क्वेअर फूट';
@@ -159,14 +157,16 @@ void main() {
         final body = json.decode(request.body) as Map<String, dynamic>;
         final rateMem = body['rateMemory'] as List<dynamic>;
         expect(rateMem, isNotEmpty);
-        expect(rateMem.any((r) => r['catalogItemId'] == 'tile_labour' && r['unitRatePaise'] == 4500), isTrue);
+        // The Spring API still reads the legacy `catalogItemId` key for the
+        // saved-rate DTO — see extraction_service.dart.
+        expect(rateMem.any((r) => r['unitRatePaise'] == 4500), isTrue);
 
         return http.Response(
           json.encode({
-            'trade': 'tiling',
+            'business_type': 'tiling',
             'lineItems': [
               {
-                'catalogItemId': 'tile_labour',
+                'serviceItemId': 'tile_labour',
                 'description': 'Tile Labour / टाइल मजदूरी',
                 'quantity': 500,
                 'unit': 'sq ft',
@@ -185,7 +185,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         client: mockClient,
       );
 
@@ -207,10 +207,10 @@ void main() {
       final mockClient = MockClient((request) async {
         return http.Response(
           json.encode({
-            'trade': 'tiling',
+            'business_type': 'tiling',
             'lineItems': [
               {
-                'catalogItemId': 'tile_labour',
+                'serviceItemId': 'tile_labour',
                 'description': 'Tile Labour / टाइल मजदूरी',
                 'quantity': 300,
                 'unit': 'sq ft',
@@ -219,7 +219,7 @@ void main() {
                 'confidence': 0.95,
               },
               {
-                'catalogItemId': 'skirting',
+                'serviceItemId': 'skirting',
                 'description': 'Skirting / स्कर्टिंग',
                 'quantity': 40,
                 'unit': 'rft',
@@ -238,7 +238,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         client: mockClient,
       );
 
@@ -258,10 +258,10 @@ void main() {
       final mockClient = MockClient((request) async {
         return http.Response(
           json.encode({
-            'trade': 'tiling',
+            'business_type': 'tiling',
             'lineItems': [
               {
-                'catalogItemId': 'tile_labour',
+                'serviceItemId': 'tile_labour',
                 'description': 'Tile Labour / टाइल मजदूरी',
                 'quantity': 200,
                 'unit': 'sq ft',
@@ -273,7 +273,7 @@ void main() {
               {
                 'text': 'sofa repair 1 piece',
                 'suspectedTerm': 'sofa repair',
-                'reason': 'Item is not a tiling trade service',
+                'reason': 'Item is not a tiling businessType service',
                 'confidence': 0.85,
               },
             ],
@@ -286,7 +286,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         client: mockClient,
       );
 
@@ -298,6 +298,7 @@ void main() {
 
     // ── Sample 6: Server timeout simulation ─────────────────────────────────
     test('Sample 6: Server timeout automatically falls back to local parser without data loss', () async {
+      await ServiceItemRepository.seedFromTemplate(BusinessType.tiling);
       const transcript = 'टाइल लगाना 100 स्क्वायर फीट 50 रुपये';
 
       final mockClient = MockClient((request) async {
@@ -306,7 +307,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         client: mockClient,
       );
 
@@ -320,6 +321,7 @@ void main() {
 
     // ── Sample 7: Server 503 / Unavailable simulation ───────────────────────
     test('Sample 7: Server 503 unavailable gracefully falls back to local parser', () async {
+      await ServiceItemRepository.seedFromTemplate(BusinessType.painting);
       const transcript = 'wall putty 500 sq ft 20 rupaye';
 
       final mockClient = MockClient((request) async {
@@ -328,7 +330,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.painting,
+        businessType: BusinessType.painting,
         client: mockClient,
       );
 
@@ -341,6 +343,7 @@ void main() {
 
     // ── Sample 8: Malformed JSON response simulation ────────────────────────
     test('Sample 8: Malformed JSON response gracefully falls back to local parser', () async {
+      await ServiceItemRepository.seedFromTemplate(BusinessType.painting);
       const transcript = 'painting 800 sq ft 15 rupaye';
 
       final mockClient = MockClient((request) async {
@@ -349,7 +352,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.painting,
+        businessType: BusinessType.painting,
         client: mockClient,
       );
 
@@ -366,7 +369,7 @@ void main() {
       final mockClient = MockClient((request) async {
         return http.Response(
           json.encode({
-            'trade': 'tiling',
+            'business_type': 'tiling',
             'lineItems': [],
             'unknowns': [
               {
@@ -383,7 +386,7 @@ void main() {
 
       final result = await ExtractionService.extract(
         transcript: transcript,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         client: mockClient,
       );
 
@@ -398,7 +401,7 @@ void main() {
         id: 'quote_manual_101',
         quoteNumber: 'Q-2026-0101',
         createdAt: DateTime(2026, 9, 22),
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         customerName: 'Vinod Mehra',
         customerPhone: '+91 99887 76655',
         lineItems: const [
@@ -434,7 +437,7 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
-          home: VoiceScreen(trade: Trade.tiling),
+          home: VoiceScreen(businessType: BusinessType.tiling),
         ),
       );
 
@@ -449,7 +452,7 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
-          home: VoiceScreen(trade: Trade.tiling),
+          home: VoiceScreen(businessType: BusinessType.tiling),
         ),
       );
 
@@ -471,7 +474,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ReviewScreen(
-            trade: Trade.tiling,
+            businessType: BusinessType.tiling,
             originalTranscript: 'टाइल लगाना 100 स्क्वायर फीट 50 रुपये',
             parsingWarnings: const ['Check rate with customer'],
             initialLineItems: const [

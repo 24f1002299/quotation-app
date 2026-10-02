@@ -1,0 +1,55 @@
+{
+  "business_type": "masonry",
+  "label": { "en": "Masonry", "hi": "गवंडी का काम", "mr": "गवंडीकाम" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Brick wall construction",
+      "name_hi": "ईंट की दीवार",
+      "name_mr": "विटा भिंती",
+      "unit": "sq ft",
+      "default_rate_paise": 11000,
+      "keywords": ["brick wall", "wall construction", "masonry work", "ईंट की दीवार", "दीवार बनाना", "गवंडी"]
+    },
+    {
+      "name": "Brick masonry supply",
+      "name_hi": "ईंट सप्लाई",
+      "name_mr": "विटा पुरवठा",
+      "unit": "point",
+      "default_rate_paise": 350000,
+      "keywords": ["brick supply", "bricks", "brick material", "ईंट सप्लाई", "ईंट देना", "ईंट"]
+    },
+    {
+      "name": "Plastering",
+      "name_hi": "प्लास्टर",
+      "name_mr": "प्लास्टर",
+      "unit": "sq ft",
+      "default_rate_paise": 16000,
+      "keywords": ["plastering", "wall plaster", "cement plaster", "प्लास्टर", "प्लास्टर करना"]
+    },
+    {
+      "name": "Cement and sand supply",
+      "name_hi": "सीमेंट और रेत सप्लाई",
+      "name_mr": "सिमेंट व वाळू पुरवठा",
+      "unit": "point",
+      "default_rate_paise": 18000,
+      "keywords": ["cement supply", "sand supply", "sand", "cement", "सीमेंट", "रेत", "बालू"]
+    },
+    {
+      "name": "Slab and lintel work",
+      "name_hi": "स्लैब और लिंटल का काम",
+      "name_mr": "स्लॅब व लिंटेल काम",
+      "unit": "sq ft",
+      "default_rate_paise": 45000,
+      "keywords": ["slab", "lintel", "lintel work", "slab work", "स्लैब", "लिंटल"]
+    },
+    {
+      "name": "Compound wall",
+      "name_hi": "कंपाउंड वॉल",
+      "name_mr": "कंपाउंड भिंत",
+      "unit": "rft",
+      "default_rate_paise": 22000,
+      "keywords": ["compound wall", "boundary wall", "compound", "कंपाउंड वॉल", "बाउंड्री वॉल"]
+    }
+  ]
+}

@@ -40,27 +40,27 @@ void main() {
         quantity: 120,
         unit: 'sq ft',
         unitRatePaise: 8500,
-        catalogItemId: 'tiling_floor_tile',
+        serviceItemId: 'tiling_floor_tile',
       );
       const edited = QuoteLineItem(
         description: 'Floor tiles',
         quantity: 150,
         unit: 'sq ft',
         unitRatePaise: 8500,
-        catalogItemId: 'tiling_floor_tile',
+        serviceItemId: 'tiling_floor_tile',
       );
 
       final created = await FeedbackRepository.recordCorrection(
         quoteId: 'quote-uuid-1',
-        trade: 'tiling',
+        businessType: 'tiling',
         original: original,
         edited: edited,
       );
 
       expect(created.length, equals(1));
       expect(created.first.changedField, equals('quantity'));
-      expect(created.first.trade, equals('tiling'));
-      expect(created.first.catalogItemId, equals('tiling_floor_tile'));
+      expect(created.first.businessType, equals('tiling'));
+      expect(created.first.serviceItemId, equals('tiling_floor_tile'));
       expect(created.first.modelResult, equals('120'));
       expect(created.first.finalValue, equals('150'));
       expect(created.first.quoteIdHash, equals(hashQuoteId('quote-uuid-1')));
@@ -81,7 +81,7 @@ void main() {
       );
       final created = await FeedbackRepository.recordCorrection(
         quoteId: 'q2',
-        trade: 'painting',
+        businessType: 'painting',
         original: item,
         edited: item,
       );
@@ -96,7 +96,7 @@ void main() {
       );
       final multi = await FeedbackRepository.recordCorrection(
         quoteId: 'q2',
-        trade: 'painting',
+        businessType: 'painting',
         original: item,
         edited: edited,
       );
@@ -123,9 +123,9 @@ void main() {
         description: 'Tiles', quantity: 6, unit: 'sq ft', unitRatePaise: 5000);
 
       await FeedbackRepository.recordCorrection(
-        quoteId: 'quote-A', trade: 'tiling', original: item, edited: edited);
+        quoteId: 'quote-A', businessType: 'tiling', original: item, edited: edited);
       await FeedbackRepository.recordCorrection(
-        quoteId: 'quote-B', trade: 'tiling', original: item, edited: edited);
+        quoteId: 'quote-B', businessType: 'tiling', original: item, edited: edited);
       expect((await FeedbackRepository.getAll()).length, equals(2));
 
       // Simulate Day 21 policy path: QuoteRepository.deleteQuote cleans up.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/extraction_models.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
@@ -106,7 +106,7 @@ void main() {
 
   test('converts uncertain extraction results into reviewable line items', () {
     const extracted = ExtractedItem(
-      catalogItemId: 'wall_putty',
+      serviceItemId: 'wall_putty',
       description: 'Wall Putty',
       quantity: 1200,
       unit: 'sq ft',
@@ -116,7 +116,7 @@ void main() {
     );
     const unknown = ExplicitUnknown(
       text: 'sofa repair 1 piece',
-      reason: 'Not in trade catalog',
+      reason: 'Not in businessType catalog',
     );
 
     final extractedLine = extracted.toQuoteLineItem();
@@ -221,7 +221,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ReviewScreen(
-            trade: Trade.tiling,
+            businessType: BusinessType.tiling,
             initialLineItems: const [
               QuoteLineItem(
                 description: 'A',

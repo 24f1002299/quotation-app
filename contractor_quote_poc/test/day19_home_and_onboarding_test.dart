@@ -67,7 +67,7 @@ void main() {
 
       // Phase 2 voice-first home: hero mic + one-language hint.
       expect(find.text('बोलने के लिए दबाएं'), findsOneWidget);
-      // Inline trade chips (one language each).
+      // Inline businessType chips (one language each).
       expect(find.text('टाइल्स'), findsOneWidget);
       expect(find.text('पेंटिंग'), findsOneWidget);
       // Drafts section appears only when drafts exist (seeded demo drafts).

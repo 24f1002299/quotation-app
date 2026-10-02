@@ -21,7 +21,7 @@ class QuoteLineItem {
   /// Day 21: catalog id the extraction model picked (if any). Carried so
   /// correction feedback can record catalog item / model result without
   /// re-running extraction. Null for manually typed items.
-  final String? catalogItemId;
+  final String? serviceItemId;
 
   const QuoteLineItem({
     required this.description,
@@ -34,7 +34,7 @@ class QuoteLineItem {
     this.isUnknown = false,
     this.requiresReview = false,
     this.acknowledged = false,
-    this.catalogItemId,
+    this.serviceItemId,
   }) : assert(quantity >= 0),
        assert(unitRatePaise >= 0);
 }

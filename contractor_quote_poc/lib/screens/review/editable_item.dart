@@ -19,7 +19,7 @@ class EditableItem {
   bool acknowledged;
 
   /// Day 21: catalog id the model picked (if any), carried for feedback.
-  final String? catalogItemId;
+  final String? serviceItemId;
 
   EditableItem({
     String description = '',
@@ -32,7 +32,7 @@ class EditableItem {
     this.isUnknown = false,
     this.requiresReview = false,
     this.acknowledged = false,
-    this.catalogItemId,
+    this.serviceItemId,
   })  : description = TextEditingController(text: description),
         quantity = TextEditingController(text: quantity),
         unit = TextEditingController(text: unit),
@@ -66,7 +66,7 @@ class EditableItem {
       isUnknown: isUnknown,
       requiresReview: requiresReview,
       acknowledged: acknowledged,
-      catalogItemId: catalogItemId,
+      serviceItemId: serviceItemId,
     );
   }
 
@@ -81,6 +81,6 @@ class EditableItem {
         isUnknown: isUnknown,
         requiresReview: requiresReview,
         acknowledged: acknowledged,
-        catalogItemId: catalogItemId,
+        serviceItemId: serviceItemId,
       );
 }

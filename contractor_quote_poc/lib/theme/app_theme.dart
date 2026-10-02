@@ -4,14 +4,16 @@ import 'colors.dart';
 import 'dimensions.dart';
 import 'typography.dart';
 
-/// Light-first, outdoor-readable theme (design.md palette).
-/// No shadows — hierarchy comes from borders + background colour,
-/// which is cheaper to render on low-end GPUs.
+/// Light theme for outdoor, glare-prone use: one warm off-white canvas, one
+/// deep green accent, and hierarchy carried by borders and spacing instead of
+/// shadows (cheaper to render on low-end GPUs).
 ThemeData buildLightAppTheme() {
   final colorScheme = const ColorScheme(
     brightness: Brightness.light,
     primary: kForest,
     onPrimary: Colors.white,
+    primaryContainer: kSage,
+    onPrimaryContainer: kInk,
     secondary: kSage,
     onSecondary: kInk,
     error: kError,
@@ -20,7 +22,14 @@ ThemeData buildLightAppTheme() {
     onSurface: kInk,
   );
 
-  final textTheme = AppTypography.textTheme();
+  const fieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(AppDimensions.buttonRadius)),
+    borderSide: BorderSide(color: kSurfaceMuted),
+  );
+  const focusedFieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(AppDimensions.buttonRadius)),
+    borderSide: BorderSide(color: kForest, width: AppDimensions.focusBorderWidth),
+  );
 
   return ThemeData(
     useMaterial3: true,
@@ -28,7 +37,7 @@ ThemeData buildLightAppTheme() {
     scaffoldBackgroundColor: kSurface,
     dividerColor: kSurfaceMuted,
     fontFamily: kFontFamily,
-    textTheme: textTheme,
+    textTheme: AppTypography.textTheme(),
     appBarTheme: const AppBarTheme(
       backgroundColor: kSurface,
       foregroundColor: kInk,
@@ -45,16 +54,34 @@ ThemeData buildLightAppTheme() {
     cardTheme: CardThemeData(
       color: kSurfaceCard,
       elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: AppDimensions.gapSm),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
-        side: const BorderSide(color: kSurfaceMuted, width: 1),
+        side: const BorderSide(
+          color: kSurfaceMuted,
+          width: AppDimensions.borderWidth,
+        ),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: kSurfaceCard,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+      ),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: kSurfaceCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: kForest,
         foregroundColor: Colors.white,
+        disabledBackgroundColor: kSurfaceMuted,
+        disabledForegroundColor: kInkMuted,
         minimumSize: const Size(64, AppDimensions.buttonHeight),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
@@ -70,7 +97,10 @@ ThemeData buildLightAppTheme() {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: kForest,
-        side: const BorderSide(color: kForest, width: 1.5),
+        side: const BorderSide(
+          color: kForest,
+          width: AppDimensions.focusBorderWidth,
+        ),
         minimumSize: const Size(64, AppDimensions.buttonHeight),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
@@ -112,18 +142,11 @@ ThemeData buildLightAppTheme() {
       filled: true,
       fillColor: kSurfaceCard,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kSurfaceMuted),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kSurfaceMuted),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kForest, width: 1.5),
-      ),
+      border: fieldBorder,
+      enabledBorder: fieldBorder,
+      focusedBorder: focusedFieldBorder,
+      labelStyle: const TextStyle(color: kInkMuted),
+      hintStyle: const TextStyle(color: kInkMuted),
     ),
     chipTheme: ChipThemeData(
       backgroundColor: kSurfaceCard,
@@ -139,11 +162,30 @@ ThemeData buildLightAppTheme() {
       ),
       side: const BorderSide(color: kSurfaceMuted),
     ),
+    listTileTheme: const ListTileThemeData(
+      iconColor: kForest,
+      textColor: kInk,
+    ),
+    dividerTheme: const DividerThemeData(
+      color: kSurfaceMuted,
+      thickness: AppDimensions.borderWidth,
+      space: AppDimensions.gapMd,
+    ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: kInk,
       contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? Colors.white : kInkMuted,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? kForest : kSurfaceMuted,
+      ),
     ),
   );
 }

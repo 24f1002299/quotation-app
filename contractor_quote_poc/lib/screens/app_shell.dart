@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../l10n/app_strings.dart';
 import '../storage/app_preferences.dart';
 import '../theme/colors.dart';
@@ -9,10 +9,11 @@ import '../theme/dimensions.dart';
 import 'home_screen.dart';
 import 'quote_history_screen.dart';
 import 'review_screen.dart';
+import '../widgets/business_type_chips.dart';
 import 'voice_screen.dart';
 
 /// Bottom-navigation shell: Home · New Quote (centre action) · Quotes.
-/// The centre tab opens a trade sheet (Speak first, Type second) per design.md.
+/// The centre tab opens a businessType sheet (Speak first, Type second) per design.md.
 class AppShell extends StatefulWidget {
   final String languageCode;
   final ValueChanged<String> onLanguageChanged;
@@ -39,19 +40,19 @@ class _AppShellState extends State<AppShell> {
       backgroundColor: kSurfaceCard,
       builder: (sheetCtx) => _NewQuoteSheet(
         languageCode: widget.languageCode,
-        onSpeak: (trade) {
+        onSpeak: (businessType) {
           Navigator.pop(sheetCtx);
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => VoiceScreen(trade: trade)),
+            MaterialPageRoute(builder: (_) => VoiceScreen(businessType: businessType)),
           );
         },
-        onType: (trade) {
+        onType: (businessType) {
           Navigator.pop(sheetCtx);
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ReviewScreen(trade: trade, initialLineItems: const []),
+              builder: (_) => ReviewScreen(businessType: businessType, initialLineItems: const []),
             ),
           );
         },
@@ -110,11 +111,11 @@ class _AppShellState extends State<AppShell> {
 }
 
 /// Bottom sheet content for the centre New action.
-/// Speak first (primary), Type second — trade chips remember last use.
+/// Speak first (primary), Type second — businessType chips remember last use.
 class _NewQuoteSheet extends StatefulWidget {
   final String languageCode;
-  final ValueChanged<Trade> onSpeak;
-  final ValueChanged<Trade> onType;
+  final ValueChanged<BusinessType> onSpeak;
+  final ValueChanged<BusinessType> onType;
   const _NewQuoteSheet({
     required this.languageCode,
     required this.onSpeak,
@@ -126,19 +127,21 @@ class _NewQuoteSheet extends StatefulWidget {
 }
 
 class _NewQuoteSheetState extends State<_NewQuoteSheet> {
-  Trade _trade = Trade.tiling;
+  BusinessType _businessType = BusinessType.tiling;
+  bool _showTypes = false;
 
   @override
   void initState() {
     super.initState();
-    AppPreferences.getLastTrade().then((t) {
-      if (mounted && t != null) setState(() => _trade = t);
+    AppPreferences.getLastBusinessType().then((t) {
+      if (mounted && t != null) setState(() => _businessType = t);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     String t(String k) => AppStrings.text(widget.languageCode, k);
+    final info = businessTypeInfo(_businessType);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -147,100 +150,86 @@ class _NewQuoteSheetState extends State<_NewQuoteSheet> {
           AppDimensions.page,
           24,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: kSurfaceMuted,
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: kSurfaceMuted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _TradeChip(
-                  label: t('tiling'),
-                  icon: Icons.grid_4x4_rounded,
-                  selected: _trade == Trade.tiling,
-                  onTap: () => setState(() => _trade = Trade.tiling),
+              const SizedBox(height: 16),
+              // Current work type; tap to change it.
+              InkWell(
+                onTap: () => setState(() => _showTypes = !_showTypes),
+                borderRadius:
+                    BorderRadius.circular(AppDimensions.buttonRadius),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kSage.withValues(alpha: 0.3),
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.buttonRadius),
+                    border: Border.all(color: kForest, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(info.icon, color: kForest, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${t('business_type')}: '
+                          '${info.label(widget.languageCode)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: kForest,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        _showTypes
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: kForest,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 12),
-                _TradeChip(
-                  label: t('painting'),
-                  icon: Icons.format_paint_rounded,
-                  selected: _trade == Trade.painting,
-                  onTap: () => setState(() => _trade = Trade.painting),
+              ),
+              if (_showTypes) ...[
+                const SizedBox(height: 12),
+                BusinessTypeChips(
+                  selected: _businessType,
+                  languageCode: widget.languageCode,
+                  onChanged: (type) => setState(() => _businessType = type),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                AppPreferences.setLastTrade(_trade);
-                widget.onSpeak(_trade);
-              },
-              icon: const Icon(Icons.mic_rounded),
-              label: Text(t('new_voice_quote')),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () {
-                AppPreferences.setLastTrade(_trade);
-                widget.onType(_trade);
-              },
-              child: Text(t('type_manually')),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TradeChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _TradeChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: selected ? kSage.withValues(alpha: 0.3) : kSurface,
-            borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
-            border: Border.all(
-              color: selected ? kForest : kSurfaceMuted,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: selected ? kForest : kInkMuted, size: 28),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: selected ? kForest : kInk,
-                ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  AppPreferences.setLastBusinessType(_businessType);
+                  widget.onSpeak(_businessType);
+                },
+                icon: const Icon(Icons.mic_rounded),
+                label: Text(t('new_voice_quote')),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () {
+                  AppPreferences.setLastBusinessType(_businessType);
+                  widget.onType(_businessType);
+                },
+                child: Text(t('type_manually')),
               ),
             ],
           ),

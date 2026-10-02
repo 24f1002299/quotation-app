@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../models/quote.dart';
 import '../parser/demo_transcripts.dart';
 import 'saved_quote.dart';
@@ -128,7 +128,7 @@ class QuoteRepository {
         id: 'seed_tiling_1',
         quoteNumber: 'Q-2026-0042',
         createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         customerName: 'Sharma Ji / शर्मा जी',
         customerPhone: '+91 98765 43210',
         customerAddress: 'Flat 302, Green Acres, Mumbai',
@@ -154,7 +154,7 @@ class QuoteRepository {
         id: 'seed_painting_2',
         quoteNumber: 'Q-2026-0041',
         createdAt: DateTime.now().subtract(const Duration(days: 5)),
-        trade: Trade.painting,
+        businessType: BusinessType.painting,
         customerName: 'Verma Ji / वर्मा जी',
         customerPhone: '+91 98220 54321',
         customerAddress: 'Bungalow 7, Model Colony, Pune',

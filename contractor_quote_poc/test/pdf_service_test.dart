@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/pdf/pdf_service.dart';
 import 'package:contractor_quote_poc/screens/pdf_preview_screen.dart';
@@ -42,7 +42,7 @@ void main() {
 
       final pdfBytes = await PdfService.generateQuotationPdf(
         quote: quote,
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         quoteNumber: 'Q-2026-0042',
         validityDays: 15,
         notes: '50% advance before tile purchase, balance on work completion.',
@@ -82,7 +82,7 @@ void main() {
 
       final pdfBytes = await PdfService.generateQuotationPdf(
         quote: quote,
-        trade: Trade.painting,
+        businessType: BusinessType.painting,
         quoteNumber: 'Q-2026-0043',
         validityDays: 30,
         notes: 'Includes Asian Paints Royale luxury emulsion, 2 coats.',
@@ -124,7 +124,7 @@ void main() {
   });
 
   group('PdfPreviewScreen Widget Test', () {
-    testWidgets('renders PDF preview screen and trade badge', (WidgetTester tester) async {
+    testWidgets('renders PDF preview screen and businessType badge', (WidgetTester tester) async {
       final quote = Quote(
         customer: const Customer(name: 'Ramesh Patel', phone: '9876543210'),
         lineItems: const [
@@ -141,14 +141,14 @@ void main() {
         MaterialApp(
           home: PdfPreviewScreen(
             quote: quote,
-            trade: Trade.tiling,
+            businessType: BusinessType.tiling,
           ),
         ),
       );
 
       // Verify app bar title (Day 18: "Quotation ready" per design.md §6)
       expect(find.text('Quotation ready'), findsOneWidget);
-      // Verify trade chip
+      // Verify businessType chip
       expect(find.text('🪣 Tiling'), findsOneWidget);
     });
 
@@ -189,7 +189,7 @@ void main() {
                   MaterialPageRoute(
                     builder: (_) => PdfPreviewScreen(
                       quote: quote,
-                      trade: Trade.tiling,
+                      businessType: BusinessType.tiling,
                     ),
                   ),
                 ),

@@ -4,16 +4,16 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../config/api_config.dart';
 import '../models/extraction_models.dart';
 import '../parser/transcript_parser.dart';
-import '../storage/rate_memory_repository.dart';
+import '../storage/service_item_repository.dart';
 
 /// Day 13 — Client service connecting voice/text transcripts to extraction API.
 ///
 /// Features:
-/// - Sends transcript, trade catalog, and contractor rate memory to /api/extract.
+/// - Sends transcript, businessType catalog, and contractor rate memory to /api/extract.
 /// - Implements conservative timeout (6 seconds).
 /// - Resilient zero-data-loss fallback: if server is unreachable, times out, or
 ///   fails, seamlessly parses with local deterministic engine so work is never lost.
@@ -23,49 +23,61 @@ class ExtractionService {
   static const Duration _kTimeout = Duration(seconds: 6);
 
   /// Extracts structured quotation line items from [transcript].
+  ///
+  /// The request carries the user's own service list and saved rates — there is
+  /// no bundled catalog. Note the wire keys still use the backend's original
+  /// `catalogEntries`/`rateMemory` vocabulary; renaming them needs the Spring
+  /// API migration, which is a separate step.
   static Future<ExtractionResult> extract({
     required String transcript,
-    required Trade trade,
+    required BusinessType businessType,
     String languageHint = 'auto',
     http.Client? client,
   }) async {
     final cleanText = transcript.trim();
     if (cleanText.isEmpty) {
       return ExtractionResult(
-        trade: trade.name,
+        businessType: businessType.name,
         lineItems: const [],
         requiresReview: false,
       );
     }
 
     final httpClient = client ?? http.Client();
-    final rateMap = await RateMemoryRepository.getRateMap(trade);
-    final savedRates = await RateMemoryRepository.getRatesForTrade(trade);
+    final services = await ServiceItemRepository.getActiveForBusinessType(
+      businessType,
+    );
+    final rateMap = await ServiceItemRepository.getRateMap(businessType);
 
     // 1. Prepare request payload for /api/extract
-    final catalogItems = catalogForTrade(trade);
-    final catalogEntries = catalogItems.map((c) => {
-      'id': c.id,
-      'displayName': c.displayName,
-      'defaultUnit': c.defaultUnit,
-      'synonyms': c.synonyms,
-      'trade': c.trade.name,
-    }).toList();
+    final serviceEntries = services
+        .map(
+          (s) => {
+            'id': s.id,
+            'displayName': s.name,
+            'defaultUnit': s.unit,
+            'synonyms': s.matchTerms,
+          },
+        )
+        .toList();
 
-    final rateMemoryDtoList = savedRates.map((r) => {
-      'catalogItemId': r.catalogItemId,
-      'unit': r.unit,
-      'unitRatePaise': r.unitRatePaise,
-      'trade': r.trade.name,
-    }).toList();
+    final savedRateDtos = services
+        .map(
+          (s) => {
+            'catalogItemId': s.id,
+            'unit': s.unit,
+            'unitRatePaise': s.ratePaise,
+          },
+        )
+        .toList();
 
     final idempotencyKey = 'ext_${DateTime.now().millisecondsSinceEpoch}_${cleanText.hashCode.abs()}';
 
     final requestBody = json.encode({
       'transcript': cleanText,
-      'trade': trade.name,
-      'catalogEntries': catalogEntries,
-      'rateMemory': rateMemoryDtoList,
+      'businessType': businessTypeInfo(businessType).id,
+      'catalogEntries': serviceEntries,
+      'rateMemory': savedRateDtos,
       'language': languageHint,
       'schemaVersion': '1.0',
       'version': 1,
@@ -112,7 +124,7 @@ class ExtractionService {
         final reqReview = data['requiresReview'] as bool? ?? true;
 
         return ExtractionResult(
-          trade: trade.name,
+          businessType: businessType.name,
           lineItems: items,
           unknowns: unknowns,
           requiresReview: reqReview,
@@ -120,34 +132,34 @@ class ExtractionService {
         );
       } else {
         // Non-200 response -> fall back to local parser without discarding draft
-        return _fallbackToLocalParser(
+        return await _fallbackToLocalParser(
           transcript: cleanText,
-          trade: trade,
+          businessType: businessType,
           rateMap: rateMap,
           errorMessage: 'Server responded with status ${response.statusCode}. Used local extraction.',
         );
       }
     } on TimeoutException {
       // Timeout -> Fallback gracefully
-      return _fallbackToLocalParser(
+      return await _fallbackToLocalParser(
         transcript: cleanText,
-        trade: trade,
+        businessType: businessType,
         rateMap: rateMap,
         errorMessage: 'Extraction request timed out. Used local extraction.',
       );
     } on SocketException {
       // Network/offline -> Fallback gracefully
-      return _fallbackToLocalParser(
+      return await _fallbackToLocalParser(
         transcript: cleanText,
-        trade: trade,
+        businessType: businessType,
         rateMap: rateMap,
-        errorMessage: 'Network unavailable. Extracted offline using local catalog.',
+        errorMessage: 'Network unavailable. Extracted offline using your saved services.',
       );
     } catch (e) {
       // Any other error -> Fallback gracefully
-      return _fallbackToLocalParser(
+      return await _fallbackToLocalParser(
         transcript: cleanText,
-        trade: trade,
+        businessType: businessType,
         rateMap: rateMap,
         errorMessage: 'Extraction service error: $e. Used local extraction.',
       );
@@ -155,34 +167,31 @@ class ExtractionService {
   }
 
   /// Resilient fallback to deterministic local parser so site work is NEVER lost.
-  static ExtractionResult _fallbackToLocalParser({
+  static Future<ExtractionResult> _fallbackToLocalParser({
     required String transcript,
-    required Trade trade,
+    required BusinessType businessType,
     required Map<String, int> rateMap,
     String? errorMessage,
-  }) {
+  }) async {
     const parser = TranscriptParser();
-    final parseResult = parser.parse(transcript, rateMemory: rateMap);
+    final services =
+        await ServiceItemRepository.getActiveForBusinessType(businessType);
+    final parseResult =
+        parser.parse(transcript, services: services, savedRates: rateMap);
 
     final items = parseResult.items.map((pi) {
-      // Match back to catalog item ID
-      String catId = 'custom_item';
-      for (final cat in catalogForTrade(trade)) {
-        if (cat.displayName == pi.description) {
-          catId = cat.id;
-          break;
-        }
-      }
-
-      final rateFromMem = (rateMap[catId] ?? 0) > 0 && pi.unitRatePaise == rateMap[catId];
+      // Match back to the user's service id (the parser carries it when known).
+      final serviceId = pi.serviceItemId ?? 'custom_item';
+      final savedRate = rateMap[serviceId];
+      final rateFromSaved = savedRate != null && pi.unitRatePaise == savedRate;
 
       return ExtractedItem(
-        catalogItemId: catId,
+        serviceItemId: serviceId,
         description: pi.description,
         quantity: pi.quantity.toDouble(),
         unit: pi.unit,
         unitRatePaise: pi.unitRatePaise,
-        rateSource: rateFromMem ? ExtractedRateSource.rateMemory : ExtractedRateSource.unknown,
+        rateSource: rateFromSaved ? ExtractedRateSource.rateMemory : ExtractedRateSource.unknown,
         confidence: 0.9,
       );
     }).toList();
@@ -195,7 +204,7 @@ class ExtractionService {
     }).toList();
 
     return ExtractionResult(
-      trade: trade.name,
+      businessType: businessType.name,
       lineItems: items,
       unknowns: unknowns,
       requiresReview: true,

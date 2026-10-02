@@ -1,0 +1,55 @@
+{
+  "business_type": "painting",
+  "label": { "en": "Painting", "hi": "पेंटिंग", "mr": "पेंटिंग" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Wall putty",
+      "name_hi": "वॉल पुट्टी",
+      "name_mr": "भिंती पुट्टी",
+      "unit": "sq ft",
+      "default_rate_paise": 1800,
+      "keywords": ["putty", "wall putty", "wall care putty", "पुट्टी", "वॉल पुट्टी", "पॉलीश"]
+    },
+    {
+      "name": "Interior wall painting",
+      "name_hi": "अंदरूनी दीवार पेंटिंग",
+      "name_mr": "आतली भिंती कलम",
+      "unit": "sq ft",
+      "default_rate_paise": 1200,
+      "keywords": ["painting", "interior painting", "wall painting", "paint", "पेंटिंग", "दीवार पेंटिंग", "रंग", "पेंट"]
+    },
+    {
+      "name": "Exterior painting",
+      "name_hi": "बाहरी पेंटिंग",
+      "name_mr": "बाह्य पेंटिंग",
+      "unit": "sq ft",
+      "default_rate_paise": 1600,
+      "keywords": ["exterior painting", "outdoor painting", "facade painting", "बाहरी पेंटिंग", "फेसाड"]
+    },
+    {
+      "name": "Ceiling painting",
+      "name_hi": "छत पेंटिंग",
+      "name_mr": "छत कलम",
+      "unit": "sq ft",
+      "default_rate_paise": 1300,
+      "keywords": ["ceiling painting", "ceiling paint", "छत पेंटिंग", "छत"]
+    },
+    {
+      "name": "Primer coat",
+      "name_hi": "प्राइमर कोट",
+      "name_mr": "प्रायमर कोट",
+      "unit": "sq ft",
+      "default_rate_paise": 800,
+      "keywords": ["primer", "primer coat", "प्राइमर", "प्राइम"]
+    },
+    {
+      "name": "Waterproofing coat for walls",
+      "name_hi": "दीवार वॉटरप्रूफिंग",
+      "name_mr": "भिंती पाणीरोधक",
+      "unit": "sq ft",
+      "default_rate_paise": 2500,
+      "keywords": ["wall waterproofing", "waterproofing", "waterproof coat", "वॉटरप्रूफिंग", "पानी रोकना"]
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import 'app_preferences.dart';
 import 'diagnostic_consent.dart';
 import 'encrypted_draft_store.dart';
@@ -12,19 +12,19 @@ import 'feedback_repository.dart';
 import 'pdf_backup_settings.dart';
 import 'profile_repository.dart';
 import 'quote_repository.dart';
-import 'rate_memory_repository.dart';
+import 'service_item_repository.dart';
 import 'sync_outbox.dart';
 import 'transcript_draft_repository.dart';
 
 /// Day 22 — User data export + deletion path.
 ///
 /// Export: builds a plain JSON map of everything stored on this phone
-/// (profile, rates, quotes incl. transcripts, correction-feedback rows,
+/// (profile, services, quotes incl. transcripts, correction-feedback rows,
 /// preferences). No audio is stored on the phone after transcription, so
 /// an export never contains audio bytes.
 ///
 /// Delete: removes local quotes, encrypted drafts, outbox, feedback,
-/// transcript drafts, profile, rates, preferences/consent flags, and the
+/// transcript drafts, profile, services, preferences/consent flags, and the
 /// app-scoped `quotations/` PDF directory (best-effort).
 /// Cloud copies must be deleted via the signed-in API per-quote delete
 /// (RLS-scoped) — see docs/data-retention.md.
@@ -34,7 +34,7 @@ class DataDeletionService {
   /// Returns a JSON-encodable snapshot of on-device data for the user.
   static Future<Map<String, dynamic>> exportAll() async {
     final profile = await ProfileRepository.getProfile();
-    final rates = await RateMemoryRepository.getAllRates();
+    final services = await ServiceItemRepository.getAll();
     final quotes = await QuoteRepository.getQuotes();
     final feedback = await FeedbackRepository.getAll();
     final outbox = await SyncOutbox.getPending();
@@ -42,10 +42,10 @@ class DataDeletionService {
     final diagnosticOptIn = await DiagnosticConsent.isOptedIn();
     final pdfOptIn = await PdfBackupSettings.isOptedIn();
     final drafts = <String, Object?>{};
-    for (final trade in Trade.values) {
-      final d = await TranscriptDraftRepository.getDraft(trade);
+    for (final businessType in BusinessType.values) {
+      final d = await TranscriptDraftRepository.getDraft(businessType);
       if (d != null) {
-        drafts[trade.name] = {
+        drafts[businessType.name] = {
           'transcript': d.transcript,
           'language': d.language,
           'updatedAt': d.updatedAt.toIso8601String(),
@@ -56,23 +56,15 @@ class DataDeletionService {
     return {
       'exportedAt': DateTime.now().toIso8601String(),
       'profile': {
-        'name': profile.name,
         'businessName': profile.businessName,
+        'ownerName': profile.ownerName,
         'phone': profile.phone,
         'city': profile.city,
-        'trade': profile.trade.name,
+        'business_type': businessTypeInfo(profile.businessType).id,
         'gstin': profile.gstin,
         'quoteTerms': profile.quoteTerms,
       },
-      'rates': [
-        for (final r in rates)
-          {
-            'catalogItemId': r.catalogItemId,
-            'trade': r.trade.name,
-            'unit': r.unit,
-            'unitRatePaise': r.unitRatePaise,
-          },
-      ],
+      'services': [for (final s in services) s.toJson()],
       'quotes': [for (final q in quotes) q.toJson()],
       'feedback': [for (final f in feedback) f.toJson()],
       'transcriptDrafts': drafts,
@@ -104,10 +96,10 @@ class DataDeletionService {
     await SyncOutbox.clear();
     await FeedbackRepository.clearAll();
     await ProfileRepository.clearProfile();
-    await RateMemoryRepository.clearAll();
-    for (final trade in Trade.values) {
+    await ServiceItemRepository.clearAll();
+    for (final businessType in BusinessType.values) {
       try {
-        await TranscriptDraftRepository.clearDraft(trade);
+        await TranscriptDraftRepository.clearDraft(businessType);
       } catch (_) {}
     }
     // Reset consent + preference flags to OFF/defaults.

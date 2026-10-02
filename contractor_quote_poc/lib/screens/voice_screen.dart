@@ -19,7 +19,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../config/api_config.dart';
 import '../models/quote.dart';
 import '../models/transcript_draft.dart';
@@ -41,8 +41,8 @@ enum _RecordState { idle, recording, transcribing, extracting, hasTranscript }
 // VoiceScreen
 // ─────────────────────────────────────────────────────────────────────────────
 class VoiceScreen extends StatefulWidget {
-  final Trade trade;
-  const VoiceScreen({super.key, required this.trade});
+  final BusinessType businessType;
+  const VoiceScreen({super.key, required this.businessType});
 
   @override
   State<VoiceScreen> createState() => _VoiceScreenState();
@@ -101,13 +101,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
   Future<void> _loadPreferredLanguage() async {
     final preferred = await AppPreferences.getLanguage();
     if (!mounted) return;
-    // A saved per-trade draft language (loaded next) still wins when the
+    // A saved per-businessType draft language (loaded next) still wins when the
     // user already dictated in another language.
     setState(() => _selectedLanguage = preferred);
   }
 
   Future<void> _loadExistingDraft() async {
-    final draft = await TranscriptDraftRepository.getDraft(widget.trade);
+    final draft = await TranscriptDraftRepository.getDraft(widget.businessType);
     if (!mounted || draft == null || draft.transcript.trim().isEmpty) return;
     // Don't clobber a fresh transcription that already populated the field
     // while the async draft load was in flight.
@@ -126,8 +126,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
     if (text.isEmpty) return;
 
     final draft = TranscriptDraft(
-      id: 'draft_${widget.trade.name}',
-      trade: widget.trade,
+      id: 'draft_${widget.businessType.name}',
+      businessType: widget.businessType,
       transcript: text,
       language: _selectedLanguage,
       provider: kDefaultSttProvider,
@@ -350,8 +350,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
       // Overwrite the saved draft with THIS sample (not via listener ordering).
       final draft = TranscriptDraft(
-        id: 'draft_${widget.trade.name}',
-        trade: widget.trade,
+        id: 'draft_${widget.businessType.name}',
+        businessType: widget.businessType,
         transcript: result.transcript,
         language: _selectedLanguage,
         provider: result.provider,
@@ -416,7 +416,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       context,
       MaterialPageRoute(
         builder: (_) =>
-            ReviewScreen(trade: widget.trade, initialLineItems: const []),
+            ReviewScreen(businessType: widget.businessType, initialLineItems: const []),
       ),
     );
   }
@@ -426,7 +426,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _useDemo() {
     // Cancel any in-flight transcription so it can't overwrite the demo text.
     _transcriptionSeq++;
-    final text = widget.trade == Trade.tiling
+    final text = widget.businessType == BusinessType.tiling
         ? kTilingDemoTranscript
         : kPaintingDemoTranscript;
     _transcriptCtrl.value = TextEditingValue(
@@ -476,7 +476,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       final perfTimer = Stopwatch()..start();
       final result = await ExtractionService.extract(
         transcript: text,
-        trade: widget.trade,
+        businessType: widget.businessType,
         languageHint: _selectedLanguage,
       );
       debugPrint(
@@ -515,7 +515,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => ReviewScreen(
-            trade: widget.trade,
+            businessType: widget.businessType,
             originalTranscript: text,
             parsingWarnings: warnings,
             initialLineItems: lineItems,
@@ -539,7 +539,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _transcriptionSeq++;
     await _cancelRecording();
     _transcriptCtrl.clear();
-    await TranscriptDraftRepository.clearDraft(widget.trade);
+    await TranscriptDraftRepository.clearDraft(widget.businessType);
     if (!mounted) return;
     setState(() {
       _state = _RecordState.idle;
@@ -725,7 +725,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              widget.trade == Trade.tiling
+              widget.businessType == BusinessType.tiling
                   ? 'Example: “Kitchen wall tiles, 120 square feet.”'
                   : 'Example: “Wall putty, 1200 square feet.”',
               style: tt.bodyMedium?.copyWith(
@@ -803,7 +803,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
               child: Text(
-                widget.trade == Trade.tiling
+                widget.businessType == BusinessType.tiling
                     ? 'Use Tiling Demo / टाइलिंग डेमो'
                     : 'Use Painting Demo / पेंटिंग डेमो',
                 style: TextStyle(

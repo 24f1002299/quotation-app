@@ -1,4 +1,4 @@
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 
 /// Day 9 — Uncertainty metadata returned by the Grok / Whisper STT backend.
 class UncertaintyMetadata {
@@ -52,7 +52,7 @@ class UncertaintyMetadata {
 /// Ensures contractor work is never lost on network or parser failures.
 class TranscriptDraft {
   final String id;
-  final Trade? trade;
+  final BusinessType? businessType;
   final String transcript;
   final String language;
   final String provider;
@@ -61,7 +61,7 @@ class TranscriptDraft {
 
   const TranscriptDraft({
     required this.id,
-    this.trade,
+    this.businessType,
     required this.transcript,
     this.language = 'auto',
     this.provider = 'grok',
@@ -71,7 +71,7 @@ class TranscriptDraft {
 
   TranscriptDraft copyWith({
     String? id,
-    Trade? trade,
+    BusinessType? businessType,
     String? transcript,
     String? language,
     String? provider,
@@ -80,7 +80,7 @@ class TranscriptDraft {
   }) {
     return TranscriptDraft(
       id: id ?? this.id,
-      trade: trade ?? this.trade,
+      businessType: businessType ?? this.businessType,
       transcript: transcript ?? this.transcript,
       language: language ?? this.language,
       provider: provider ?? this.provider,
@@ -91,7 +91,7 @@ class TranscriptDraft {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'trade': trade?.name,
+        'business_type': businessType?.name,
         'transcript': transcript,
         'language': language,
         'provider': provider,
@@ -100,10 +100,10 @@ class TranscriptDraft {
       };
 
   factory TranscriptDraft.fromJson(Map<String, dynamic> json) {
-    Trade? parsedTrade;
-    if (json['trade'] != null) {
-      final tStr = json['trade'] as String;
-      parsedTrade = Trade.values.cast<Trade?>().firstWhere(
+    BusinessType? parsedTrade;
+    if (json['business_type'] != null) {
+      final tStr = json['business_type'] as String;
+      parsedTrade = BusinessType.values.cast<BusinessType?>().firstWhere(
             (t) => t?.name == tStr,
             orElse: () => null,
           );
@@ -111,7 +111,7 @@ class TranscriptDraft {
 
     return TranscriptDraft(
       id: json['id'] as String? ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      trade: parsedTrade,
+      businessType: parsedTrade,
       transcript: json['transcript'] as String? ?? '',
       language: json['language'] as String? ?? 'auto',
       provider: json['provider'] as String? ?? 'grok',

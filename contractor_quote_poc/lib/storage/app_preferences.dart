@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 
 /// Day 19 — Minimal app preferences: capture language + one-time tutorial.
 ///
@@ -11,7 +11,7 @@ class AppPreferences {
   static const _languageKey = 'app_language_v1';
   static const _tutorialSeenKey = 'home_tutorial_seen_v1';
   static const _languageChosenKey = 'app_language_chosen_v1';
-  static const _lastTradeKey = 'app_last_trade_v1';
+  static const _lastBusinessTypeKey = 'app_last_businessType_v1';
 
   /// Pure helper: Hindi default when the device locale is Hindi/Marathi
   /// (or Hinglish romanized variants); testable without platform calls.
@@ -48,23 +48,23 @@ class AppPreferences {
     await prefs.setBool(_languageChosenKey, true);
   }
 
-  /// Last-used trade for pre-selecting chips ('tiling' | 'painting').
-  static Future<Trade?> getLastTrade() async {
+  /// Last-used businessType for pre-selecting chips ('tiling' | 'painting').
+  static Future<BusinessType?> getLastBusinessType() async {
     final prefs = await SharedPreferences.getInstance();
-    switch (prefs.getString(_lastTradeKey)) {
+    switch (prefs.getString(_lastBusinessTypeKey)) {
       case 'painting':
-        return Trade.painting;
+        return BusinessType.painting;
       case 'tiling':
-        return Trade.tiling;
+        return BusinessType.tiling;
       default:
         return null;
     }
   }
 
-  static Future<void> setLastTrade(Trade trade) async {
+  static Future<void> setLastBusinessType(BusinessType businessType) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-        _lastTradeKey, trade == Trade.painting ? 'painting' : 'tiling');
+        _lastBusinessTypeKey, businessType == BusinessType.painting ? 'painting' : 'tiling');
   }
 
   static Future<String> getLanguage() async {

@@ -26,7 +26,7 @@ IconData iconForFlag(QuoteFlagType type) {
       return Icons.person_outline_rounded;
     case QuoteFlagType.failedSync:
       return Icons.cloud_off_rounded;
-    case QuoteFlagType.staleCatalog:
+    case QuoteFlagType.staleServiceList:
       return Icons.update_rounded;
   }
 }
@@ -246,11 +246,11 @@ class SyncFailureBanner extends StatelessWidget {
 }
 
 /// Stale-catalog banner with Refresh action.
-class StaleCatalogBanner extends StatelessWidget {
+class StaleServiceListBanner extends StatelessWidget {
   final String detail;
   final VoidCallback onRefresh;
 
-  const StaleCatalogBanner({
+  const StaleServiceListBanner({
     super.key,
     this.detail = '',
     required this.onRefresh,

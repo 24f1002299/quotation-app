@@ -1,0 +1,55 @@
+{
+  "business_type": "electrical",
+  "label": { "en": "Electrical", "hi": "इलेक्ट्रिकल", "mr": "इलेक्ट्रिकल" },
+  "default_unit": "point",
+  "services": [
+    {
+      "name": "Switch and socket work",
+      "name_hi": "स्विच और सॉकेट का काम",
+      "name_mr": "स्विच सॉकेट काम",
+      "unit": "point",
+      "default_rate_paise": 25000,
+      "keywords": ["switch socket", "switch and socket", "socket work", "switchboard", "स्विच", "सॉकेट", "बोर्ड"]
+    },
+    {
+      "name": "Fan installation",
+      "name_hi": "पंखा लगाना",
+      "name_mr": "फॅन बसवणे",
+      "unit": "point",
+      "default_rate_paise": 30000,
+      "keywords": ["fan installation", "ceiling fan", "exhaust fan", "पंखा", "फॅन", "पंखा लगाना"]
+    },
+    {
+      "name": "Light fitting work",
+      "name_hi": "लाइट फिटिंग",
+      "name_mr": "दिवे बसवणे",
+      "unit": "point",
+      "default_rate_paise": 20000,
+      "keywords": ["light fitting", "light installation", "tubelight", "led fitting", "लाइट", "ट्यूबलाइट", "दिवा"]
+    },
+    {
+      "name": "Wiring and rewiring",
+      "name_hi": "वायरिंग",
+      "name_mr": "वायरिंग",
+      "unit": "rft",
+      "default_rate_paise": 1200,
+      "keywords": ["wiring", "rewiring", "electrical wiring", "cable work", "वायरिंग", "तार", "केबल"]
+    },
+    {
+      "name": "MCB and panel work",
+      "name_hi": "एमसीबी और पैनल का काम",
+      "name_mr": "एमसीबी पॅनेल काम",
+      "unit": "item",
+      "default_rate_paise": 45000,
+      "keywords": ["mcb", "mcb box", "distribution board", "db box", "switchboard panel", "एमसीबी", "पैनल"]
+    },
+    {
+      "name": "Inverter and stabilizer installation",
+      "name_hi": "इन्वर्टर और स्टेबिलाइजर लगाना",
+      "name_mr": "इन्व्हर्टर बसवणे",
+      "unit": "item",
+      "default_rate_paise": 25000,
+      "keywords": ["inverter", "stabilizer", "inverter installation", "ups installation", "इन्वर्टर", "स्टेबिलाइजर", "यूपीएस"]
+    }
+  ]
+}

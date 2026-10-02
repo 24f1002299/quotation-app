@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
-import '../catalog/catalog.dart';
-import '../models/contractor_profile.dart';
+import '../templates/template_data.dart';
+import '../models/business_profile.dart';
 import '../models/quote.dart';
 import '../models/quote_flags.dart';
 import '../pdf/pdf_service.dart';
@@ -32,7 +32,7 @@ import 'review_screen.dart';
 ///   confirms "Mark as shared"; otherwise shows "Share sheet opened".
 class PdfPreviewScreen extends StatefulWidget {
   final Quote quote;
-  final Trade? trade;
+  final BusinessType? businessType;
   final int validityDays;
   final String? notes;
   final String? savedQuoteId;
@@ -40,7 +40,7 @@ class PdfPreviewScreen extends StatefulWidget {
   const PdfPreviewScreen({
     super.key,
     required this.quote,
-    this.trade,
+    this.businessType,
     this.validityDays = 15,
     this.notes,
     this.savedQuoteId,
@@ -52,7 +52,7 @@ class PdfPreviewScreen extends StatefulWidget {
 
 class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   Uint8List? _lastGeneratedBytes;
-  ContractorProfile? _profile;
+  BusinessProfile? _profile;
   SavedQuote? _existingQuote;
   String? _savedPdfPath;
   bool _hasSaved = false;
@@ -107,7 +107,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       quote: widget.quote,
       profile: _profile,
       format: format,
-      trade: widget.trade,
+      businessType: widget.businessType,
       validityDays: widget.quote.validityDays > 0
           ? widget.quote.validityDays
           : widget.validityDays,
@@ -156,7 +156,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             widget.quote.serverDisplayNumber ?? existing?.serverDisplayNumber,
         createdAt: existing?.createdAt ?? now,
         quoteDate: widget.quote.quoteDate ?? existing?.quoteDate ?? now,
-        trade: widget.trade ?? existing?.trade,
+        businessType: widget.businessType ?? existing?.businessType,
         customerName: widget.quote.customer.name.trim().isEmpty
             ? (existing?.customerName ?? 'Client')
             : widget.quote.customer.name.trim(),
@@ -333,7 +333,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         // Same field mapping as history "open for editing".
         builder: (_) => ReviewScreen(
           savedQuoteId: saved.id,
-          trade: saved.trade ?? widget.trade,
+          businessType: saved.businessType ?? widget.businessType,
           customerName: saved.customerName,
           customerPhone: saved.customerPhone,
           customerAddress: saved.customerAddress,
@@ -378,11 +378,11 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    final tradeBadge = widget.trade == null
+    final businessTypeBadge = widget.businessType == null
         ? null
         : Chip(
             label: Text(
-              widget.trade == Trade.tiling ? '🪣 Tiling' : '🖌️ Painting',
+              widget.businessType == BusinessType.tiling ? '🪣 Tiling' : '🖌️ Painting',
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),
@@ -464,9 +464,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (tradeBadge != null) ...[
+            if (businessTypeBadge != null) ...[
               const SizedBox(width: 8),
-              tradeBadge,
+              businessTypeBadge,
             ],
           ],
         ),
@@ -607,7 +607,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                                 children: [
                                   Icon(iconForFlag(w.type),
                                       size: 16,
-                                      color: forest),
+                                      color: kForest),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(w.message,
@@ -642,7 +642,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     icon: const Icon(Icons.share_rounded),
                     label: const Text('Share PDF'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: forest,
+                      backgroundColor: kForest,
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(56),
                     ),

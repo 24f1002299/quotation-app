@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/screens/quote_history_screen.dart';
 import 'package:contractor_quote_poc/storage/quote_repository.dart';
@@ -17,7 +17,7 @@ void main() {
         id: 'test_123',
         quoteNumber: 'Q-2026-9999',
         createdAt: DateTime(2026, 9, 20, 10, 30),
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         customerName: 'Mahesh Sharma',
         customerPhone: '+91 98765 00000',
         customerAddress: 'Flat 101, Pune',
@@ -40,7 +40,7 @@ void main() {
 
       expect(restored.id, equals(original.id));
       expect(restored.quoteNumber, equals(original.quoteNumber));
-      expect(restored.trade, equals(original.trade));
+      expect(restored.businessType, equals(original.businessType));
       expect(restored.customerName, equals(original.customerName));
       expect(restored.customerPhone, equals(original.customerPhone));
       expect(restored.validityDays, equals(original.validityDays));
@@ -69,8 +69,8 @@ void main() {
       final quotes = await QuoteRepository.getQuotes();
       expect(quotes, isNotEmpty);
       expect(quotes.length, equals(2));
-      expect(quotes.any((q) => q.trade == Trade.tiling), isTrue);
-      expect(quotes.any((q) => q.trade == Trade.painting), isTrue);
+      expect(quotes.any((q) => q.businessType == BusinessType.tiling), isTrue);
+      expect(quotes.any((q) => q.businessType == BusinessType.painting), isTrue);
     });
 
     test('saveQuote persists new quote and retrieves it', () async {
@@ -141,7 +141,7 @@ void main() {
       expect(find.text('₹45,450'), findsOneWidget);
       expect(find.text('₹36,000'), findsOneWidget);
 
-      // Verify trade badges
+      // Verify businessType badges
       expect(find.text('Tiling'), findsOneWidget);
       expect(find.text('Painting'), findsOneWidget);
     });

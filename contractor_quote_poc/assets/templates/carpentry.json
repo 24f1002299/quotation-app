@@ -1,0 +1,55 @@
+{
+  "business_type": "carpentry",
+  "label": { "en": "Carpentry", "hi": "बढ़ईगरी", "mr": "सुतारकाम" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Wooden door fitting",
+      "name_hi": "लकड़ी का दरवाज़ा लगाना",
+      "name_mr": "लाकूड दार बसवणे",
+      "unit": "item",
+      "default_rate_paise": 180000,
+      "keywords": ["door fitting", "wooden door", "door frame", "main door", "दरवाज़ा", "डोर", "लकड़ी का दरवाज़ा"]
+    },
+    {
+      "name": "Window fitting",
+      "name_hi": "खिड़की लगाना",
+      "name_mr": "खिडकी बसवणे",
+      "unit": "item",
+      "default_rate_paise": 120000,
+      "keywords": ["window fitting", "window", "window frame", "खिड़की", "विंडो"]
+    },
+    {
+      "name": "Wooden partition work",
+      "name_hi": "लकड़ी की पार्टिशन",
+      "name_mr": "लाकूड विभाजन",
+      "unit": "sq ft",
+      "default_rate_paise": 55000,
+      "keywords": ["partition", "wooden partition", "partition work", "पार्टिशन", "दीवार बनाना"]
+    },
+    {
+      "name": "Wooden stair work",
+      "name_hi": "लकड़ी की सीढ़ी",
+      "name_mr": "लाकूड जिने",
+      "unit": "step",
+      "default_rate_paise": 35000,
+      "keywords": ["wooden stair", "staircase", "stair work", "सीढ़ी", "सीढ़ियाँ", "स्टेयर"]
+    },
+    {
+      "name": "Kitchen cabinet work",
+      "name_hi": "किचन कैबिनेट",
+      "name_mr": "किचन कॅबिनेट",
+      "unit": "rft",
+      "default_rate_paise": 85000,
+      "keywords": ["kitchen cabinet", "kitchen cupboard", "modular kitchen", "किचन", "कैबिनेट", "कपाट"]
+    },
+    {
+      "name": "Furniture repair",
+      "name_hi": "फर्नीचर मरम्मत",
+      "name_mr": "फर्निचर दुरुस्ती",
+      "unit": "item",
+      "default_rate_paise": 25000,
+      "keywords": ["furniture repair", "furniture fixing", "wood repair", "फर्नीचर मरम्मत", "फर्नीचर ठीक करना"]
+    }
+  ]
+}

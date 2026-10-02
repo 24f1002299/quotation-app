@@ -64,4 +64,28 @@ const Map<String, String> stringsEn = {
   'recording': 'Recording…',
   'tell_work': 'Tell us the work and quantities',
   'voice_example': 'e.g. "Kitchen tiles, 120 sq ft, Rs 85 rate"',
+
+  // Business type — the user's line of work. Replaces the old tile/paint
+  // trade choice; the starter template for it seeds the service list.
+  'business_type': 'Business type',
+  'choose_business_type': 'Choose your work',
+  'business_type_note': 'We will add common services for your work. You can change them anytime.',
+  'change_business_type': 'Change',
+
+  // The user's own service list.
+  'my_services': 'My services',
+  'my_services_note': 'Your words for the work. Rates are yours to set.',
+  'services_empty': 'No services yet. Add what you sell.',
+  'add_service': '+ Add service',
+  'edit_service': 'Edit service',
+  'delete_service': 'Delete service',
+  'service_name': 'Service name',
+  'service_name_hi': 'Name in Hindi',
+  'service_name_mr': 'Name in Marathi',
+  'keywords': 'Other words',
+  'keywords_note': 'Words you speak for this work',
+  'rate_not_set': 'Rate not set',
+  'use_template': 'Add common services',
+  'template_added': 'Common services added',
+  'services_note_on_quote': 'Item not in your services. Check and fix it.',
 };

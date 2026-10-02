@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../l10n/app_strings.dart';
 import '../storage/profile_repository.dart';
+import '../storage/service_item_repository.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
+import '../widgets/business_type_chips.dart';
 
 /// Phase 6 — single-page progressive setup.
 ///
-/// Only what the first quote needs: name + business name + trade.
+/// Only what the first quote needs: name + business name + businessType.
 /// Phone, GSTIN, logo, city and rates live in Profile — never front-loaded.
 /// Rates setup is deferred: a "set your rates" nudge appears in Profile.
 class OnboardingScreen extends StatefulWidget {
@@ -22,7 +24,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _nameCtrl = TextEditingController();
   final _businessCtrl = TextEditingController();
-  Trade _trade = Trade.tiling;
+  BusinessType _businessType = BusinessType.tiling;
   bool _loading = true;
   bool _saving = false;
 
@@ -36,9 +38,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final profile = await ProfileRepository.getProfile();
     if (!mounted) return;
     setState(() {
-      _nameCtrl.text = profile.name;
+      _nameCtrl.text = profile.ownerName;
       _businessCtrl.text = profile.businessName;
-      _trade = profile.trade;
+      _businessType = profile.businessType;
       _loading = false;
     });
   }
@@ -65,12 +67,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final existing = await ProfileRepository.getProfile();
     await ProfileRepository.saveProfile(
       existing.copyWith(
-        name: _nameCtrl.text.trim(),
+        ownerName: _nameCtrl.text.trim(),
         businessName: _businessCtrl.text.trim(),
-        trade: _trade,
+        businessType: _businessType,
       ),
     );
     await ProfileRepository.setOnboardingCompleted(true);
+    // Seed the starter service list for the chosen work so the first quote is
+    // usable without the user typing a catalog.
+    await ServiceItemRepository.seedFromTemplate(_businessType);
     if (!mounted) return;
     if (widget.isEditMode) {
       Navigator.pop(context, true);
@@ -134,30 +139,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 decoration: InputDecoration(hintText: t('business')),
               ),
               const SizedBox(height: 16),
+              Text(t('business_type'), style: _labelStyle),
+              const SizedBox(height: 2),
               Text(
-                // Trade heading — uses raw trade names (proper nouns).
-                'Trade',
-                style: _labelStyle,
+                t('business_type_note'),
+                style: const TextStyle(fontSize: 13, color: kInkMuted),
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  _TradeOption(
-                    label: t('tiling'),
-                    icon: Icons.grid_4x4_rounded,
-                    selected: _trade == Trade.tiling,
-                    onTap: () =>
-                        setState(() => _trade = Trade.tiling),
-                  ),
-                  const SizedBox(width: 12),
-                  _TradeOption(
-                    label: t('painting'),
-                    icon: Icons.format_paint_rounded,
-                    selected: _trade == Trade.painting,
-                    onTap: () =>
-                        setState(() => _trade = Trade.painting),
-                  ),
-                ],
+              const SizedBox(height: 8),
+              BusinessTypeChips(
+                selected: _businessType,
+                onChanged: (type) => setState(() => _businessType = type),
               ),
               const SizedBox(height: 32),
               ElevatedButton(
@@ -193,57 +184,3 @@ const TextStyle _labelStyle = TextStyle(
   fontWeight: FontWeight.w600,
   color: kInk,
 );
-
-class _TradeOption extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _TradeOption({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: selected
-                ? kSage.withValues(alpha: 0.3)
-                : kSurfaceCard,
-            borderRadius:
-                BorderRadius.circular(AppDimensions.cardRadius),
-            border: Border.all(
-              color: selected ? kForest : kSurfaceMuted,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                color: selected ? kForest : kInkMuted,
-                size: 26,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: selected ? kForest : kInk,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

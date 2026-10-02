@@ -1,0 +1,55 @@
+{
+  "business_type": "furniture",
+  "label": { "en": "Furniture", "hi": "फर्नीचर", "mr": "फर्निचर" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Modular kitchen",
+      "name_hi": "मॉड्यूलर किचन",
+      "name_mr": "मॉड्युलर किचन",
+      "unit": "rft",
+      "default_rate_paise": 145000,
+      "keywords": ["modular kitchen", "kitchen design", "kitchen work", "मॉड्यूलर किचन", "किचन", "रसोई"]
+    },
+    {
+      "name": "Wardrobe",
+      "name_hi": "वॉर्डरोब",
+      "name_mr": "वॉर्डरोब",
+      "unit": "sq ft",
+      "default_rate_paise": 38000,
+      "keywords": ["wardrobe", "almirah", "cupboard", "वॉर्डरोब", "अलमारी", "कपाट"]
+    },
+    {
+      "name": "Bed and sofa furniture",
+      "name_hi": "बिस्तर और सोफा",
+      "name_mr": "बेड व सोफा",
+      "unit": "item",
+      "default_rate_paise": 28000,
+      "keywords": ["bed", "sofa", "bed furniture", "sofa set", "wooden bed", "बिस्तर", "सोफा", "मच्छन"]
+    },
+    {
+      "name": "TV unit and console",
+      "name_hi": "टीवी यूनिट",
+      "name_mr": "टीव्ही युनिट",
+      "unit": "item",
+      "default_rate_paise": 22000,
+      "keywords": ["tv unit", "tv stand", "console", "media unit", "टीवी यूनिट", "टीवी फर्नीचर"]
+    },
+    {
+      "name": "Study table and office desk",
+      "name_hi": "स्टडी टेबल",
+      "name_mr": "अभ्यास टेबल",
+      "unit": "item",
+      "default_rate_paise": 14000,
+      "keywords": ["study table", "office desk", "desk", "table", "स्टडी टेबल", "मेज", "डेस्क"]
+    },
+    {
+      "name": "Furniture polish and finishing",
+      "name_hi": "फर्नीचर पॉलिश",
+      "name_mr": "फर्निचर पॉलिश",
+      "unit": "sq ft",
+      "default_rate_paise": 1500,
+      "keywords": ["furniture polish", "polishing", "lacquer", "पॉलिश", "फर्नीचर पॉलिश"]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../models/quote.dart';
 
 /// Day 9 — Persistent representation of a generated or drafted quotation.
@@ -23,7 +23,7 @@ class SavedQuote {
 
   /// Day 15 commercial date (defaults to [createdAt] when null).
   final DateTime? quoteDate;
-  final Trade? trade;
+  final BusinessType? businessType;
   final String customerName;
   final String customerPhone;
   final String customerAddress;
@@ -55,7 +55,7 @@ class SavedQuote {
     this.serverDisplayNumber,
     String? idempotencyKey,
     this.quoteDate,
-    this.trade,
+    this.businessType,
     required this.customerName,
     this.customerPhone = '',
     this.customerAddress = '',
@@ -116,7 +116,7 @@ class SavedQuote {
     String? idempotencyKey,
     DateTime? createdAt,
     DateTime? quoteDate,
-    Trade? trade,
+    BusinessType? businessType,
     String? customerName,
     String? customerPhone,
     String? customerAddress,
@@ -141,7 +141,7 @@ class SavedQuote {
       idempotencyKey: idempotencyKey ?? this.idempotencyKey,
       createdAt: createdAt ?? this.createdAt,
       quoteDate: quoteDate ?? this.quoteDate,
-      trade: trade ?? this.trade,
+      businessType: businessType ?? this.businessType,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerAddress: customerAddress ?? this.customerAddress,
@@ -172,7 +172,7 @@ class SavedQuote {
     // rejected with 400 and sync silently never completes — always UTC.
     'createdAt': createdAt.toUtc().toIso8601String(),
     'quoteDate': quoteDate?.toIso8601String(),
-    'trade': trade?.name,
+    'business_type': businessType?.name,
     // Local names are kept for on-device storage; server-named aliases
     // follow so the API (clientName, displayNumber, …) binds correctly.
     // displayNumber carries ONLY the backend value (null on first sync so
@@ -207,7 +207,7 @@ class SavedQuote {
             'isUnknown': item.isUnknown,
             'requiresReview': item.requiresReview,
             'acknowledged': item.acknowledged,
-            'catalogItemId': item.catalogItemId,
+            'serviceItemId': item.serviceItemId,
           },
         )
         .toList(),
@@ -221,10 +221,10 @@ class SavedQuote {
   };
 
   factory SavedQuote.fromJson(Map<String, dynamic> json) {
-    Trade? parsedTrade;
-    if (json['trade'] != null) {
-      final tStr = json['trade'] as String;
-      parsedTrade = Trade.values.cast<Trade?>().firstWhere(
+    BusinessType? parsedTrade;
+    if (json['business_type'] != null) {
+      final tStr = json['business_type'] as String;
+      parsedTrade = BusinessType.values.cast<BusinessType?>().firstWhere(
         (t) => t?.name == tStr,
         orElse: () => null,
       );
@@ -250,7 +250,7 @@ class SavedQuote {
         isUnknown: m['isUnknown'] as bool? ?? false,
         requiresReview: m['requiresReview'] as bool? ?? false,
         acknowledged: m['acknowledged'] as bool? ?? false,
-        catalogItemId: m['catalogItemId'] as String?,
+        serviceItemId: m['serviceItemId'] as String?,
       );
     }).toList();
 
@@ -273,7 +273,7 @@ class SavedQuote {
       quoteDate: json['quoteDate'] != null
           ? DateTime.tryParse(json['quoteDate'] as String)
           : null,
-      trade: parsedTrade,
+      businessType: parsedTrade,
       customerName: json['customerName'] as String? ?? 'Client',
       customerPhone: json['customerPhone'] as String? ?? '',
       customerAddress: json['customerAddress'] as String? ?? '',

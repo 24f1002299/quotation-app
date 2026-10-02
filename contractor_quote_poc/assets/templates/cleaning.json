@@ -1,0 +1,55 @@
+{
+  "business_type": "cleaning",
+  "label": { "en": "Cleaning", "hi": "सफ़ाई", "mr": "साफसफाई" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Deep cleaning",
+      "name_hi": "डीप क्लीनिंग",
+      "name_mr": "डीप क्लीनिंग",
+      "unit": "sq ft",
+      "default_rate_paise": 900,
+      "keywords": ["deep cleaning", "house cleaning", "home cleaning", "सफाई", "डीप क्लीनिंग", "घर साफ करना", "क्लीनिंग"]
+    },
+    {
+      "name": "Kitchen cleaning",
+      "name_hi": "किचन सफाई",
+      "name_mr": "किचन साफ करणे",
+      "unit": "sq ft",
+      "default_rate_paise": 700,
+      "keywords": ["kitchen cleaning", "kitchen deep cleaning", "किचन सफाई", "रसोई साफ करना"]
+    },
+    {
+      "name": "Bathroom cleaning",
+      "name_hi": "बाथरुम सफाई",
+      "name_mr": "बाथरुम साफ करणे",
+      "unit": "sq ft",
+      "default_rate_paise": 600,
+      "keywords": ["bathroom cleaning", "toilet cleaning", "बाथरुम सफाई", "शौचालय साफ करना"]
+    },
+    {
+      "name": "Glass and window cleaning",
+      "name_hi": "काँच और खिड़की सफाई",
+      "name_mr": "गव्हे व खिडकी साफ करणे",
+      "unit": "sq ft",
+      "default_rate_paise": 500,
+      "keywords": ["glass cleaning", "window cleaning", "glass wiping", "काँच सफाई", "खिड़की सफाई", "गव्हे"]
+    },
+    {
+      "name": "Office cleaning",
+      "name_hi": "ऑफिस सफाई",
+      "name_mr": "ऑफिस साफ करणे",
+      "unit": "day",
+      "default_rate_paise": 300000,
+      "keywords": ["office cleaning", "commercial cleaning", "shop cleaning", "ऑफिस सफाई", "दुकान सफाई"]
+    },
+    {
+      "name": "Sofa and carpet cleaning",
+      "name_hi": "सोफा और कार्पेट सफाई",
+      "name_mr": "सोफा व कार्पेट साफ करणे",
+      "unit": "sq ft",
+      "default_rate_paise": 1100,
+      "keywords": ["sofa cleaning", "carpet cleaning", "shampoo cleaning", "सोफा सफाई", "कार्पेट सफाई"]
+    }
+  ]
+}

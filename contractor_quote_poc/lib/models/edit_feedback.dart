@@ -1,7 +1,7 @@
 // Day 21 — Privacy-minimal correction feedback model.
 //
 // What is stored (and only this):
-//   trade, catalogItemId, modelResult, finalValue, changedField, quoteIdHash.
+//   businessType, serviceItemId, modelResult, finalValue, changedField, quoteIdHash.
 // What is NEVER stored here: raw audio, full transcripts, customer PII,
 // microphone data. See docs/feedback-privacy.md for the deletion policy.
 library;
@@ -22,8 +22,8 @@ const Set<String> kFeedbackTrades = {'tiling', 'painting'};
 class EditFeedback {
   final String id;
   final String quoteIdHash; // SHA-256 hex of the quote UUID — never raw ID.
-  final String trade; // 'tiling' | 'painting'
-  final String? catalogItemId; // catalog id the model picked (if any)
+  final String businessType; // 'tiling' | 'painting'
+  final String? serviceItemId; // catalog id the model picked (if any)
   final String? modelResult; // what the model/extraction produced
   final String? finalValue; // what the user ended with
   final String changedField; // description | quantity | unit | rate
@@ -32,8 +32,8 @@ class EditFeedback {
   const EditFeedback({
     required this.id,
     required this.quoteIdHash,
-    required this.trade,
-    this.catalogItemId,
+    required this.businessType,
+    this.serviceItemId,
     this.modelResult,
     this.finalValue,
     required this.changedField,
@@ -43,8 +43,8 @@ class EditFeedback {
   Map<String, dynamic> toJson() => {
         'id': id,
         'quote_id_hash': quoteIdHash,
-        'trade': trade,
-        'catalog_item_id': catalogItemId,
+        'business_type': businessType,
+        'service_item_id': serviceItemId,
         'model_result': modelResult,
         'final_value': finalValue,
         'changed_field': changedField,
@@ -56,8 +56,8 @@ class EditFeedback {
   factory EditFeedback.fromJson(Map<String, dynamic> json) => EditFeedback(
         id: json['id'] as String? ?? '',
         quoteIdHash: json['quote_id_hash'] as String? ?? '',
-        trade: json['trade'] as String? ?? 'tiling',
-        catalogItemId: json['catalog_item_id'] as String?,
+        businessType: json['business_type'] as String? ?? 'tiling',
+        serviceItemId: json['service_item_id'] as String?,
         modelResult: json['model_result'] as String?,
         finalValue: json['final_value'] as String?,
         changedField: json['changed_field'] as String? ?? 'description',

@@ -12,7 +12,7 @@ enum QuoteFlagType {
   unusualRate,
   missingCustomer,
   failedSync,
-  staleCatalog,
+  staleServiceList,
 }
 
 /// One explainable problem on a quote.
@@ -38,7 +38,7 @@ class QuoteFlag {
 }
 
 /// Expected (saved/seed) rate per rupee for unusual-rate detection.
-/// Mirrors the seed rates in RateMemoryRepository so the check is pure and
+/// Mirrors the seed rates in ServiceItemRepository so the check is pure and
 /// unit-testable without SharedPreferences.
 int expectedRateRupeesForDescription(String description) {
   final d = description.toLowerCase();
@@ -190,8 +190,8 @@ List<QuoteFlag> analyzeQuoteLevel(
   Quote quote, {
   bool hasSyncFailure = false,
   String syncDetail = '',
-  bool isCatalogStale = false,
-  String catalogDetail = '',
+  bool isServiceListStale = false,
+  String serviceListDetail = '',
 }) {
   final flags = <QuoteFlag>[];
 
@@ -219,11 +219,11 @@ List<QuoteFlag> analyzeQuoteLevel(
   }
 
   // 7. Stale catalog — rates/items may be outdated.
-  if (isCatalogStale) {
+  if (isServiceListStale) {
     flags.add(QuoteFlag(
-      type: QuoteFlagType.staleCatalog,
-      message: catalogDetail.trim().isNotEmpty
-          ? 'Rate list may be outdated. $catalogDetail'
+      type: QuoteFlagType.staleServiceList,
+      message: serviceListDetail.trim().isNotEmpty
+          ? 'Rate list may be outdated. $serviceListDetail'
           : 'Rate list may be outdated. Refresh when online to get latest items.',
       actionLabel: 'Refresh',
       isBlocking: false,
@@ -239,8 +239,8 @@ List<QuoteFlag> analyzeQuote(
   int Function(String description)? expectedRateFor,
   bool hasSyncFailure = false,
   String syncDetail = '',
-  bool isCatalogStale = false,
-  String catalogDetail = '',
+  bool isServiceListStale = false,
+  String serviceListDetail = '',
 }) {
   return [
     ...analyzeLineItems(quote, expectedRateFor: expectedRateFor),
@@ -248,8 +248,8 @@ List<QuoteFlag> analyzeQuote(
       quote,
       hasSyncFailure: hasSyncFailure,
       syncDetail: syncDetail,
-      isCatalogStale: isCatalogStale,
-      catalogDetail: catalogDetail,
+      isServiceListStale: isServiceListStale,
+      serviceListDetail: serviceListDetail,
     ),
   ];
 }

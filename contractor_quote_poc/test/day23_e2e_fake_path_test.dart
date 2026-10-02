@@ -27,12 +27,12 @@ class FakeExtractionServer {
     const parser = TranscriptParser();
     final parsed = parser.parse(transcript);
     return {
-      'trade': 'tiling',
+      'business_type': 'tiling',
       'requiresReview': parsed.hasWarnings,
       'lineItems': [
         for (final item in parsed.items)
           {
-            'catalogItemId': 'tile_labour_or_skirting',
+            'serviceItemId': 'tile_labour_or_skirting',
             'description': item.description,
             'quantity': item.quantity,
             'unit': item.unit,
@@ -119,14 +119,14 @@ void main() {
   test('extraction unknowns become review-flagged items, PDF stays blocked',
       () async {
     const unknownPayload = {
-      'catalogItemId': 'custom_item',
+      'serviceItemId': 'custom_item',
       'description': 'Sofa repair',
       'quantity': 1.0,
       'unit': 'item',
       'unitRatePaise': 0,
       'rateSource': 'UNKNOWN',
       'confidence': 0.4,
-      'uncertaintyNote': 'Not in trade catalog',
+      'uncertaintyNote': 'Not in businessType catalog',
     };
     final item =
         ExtractedItem.fromJson(unknownPayload).toQuoteLineItem();

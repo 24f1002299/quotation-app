@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../catalog/catalog.dart';
+import '../templates/template_data.dart';
 import '../storage/quote_repository.dart';
 import '../storage/quote_sync_service.dart';
 import '../storage/saved_quote.dart';
@@ -313,7 +313,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
           savedQuoteId: quote.id,
-          trade: quote.trade,
+          businessType: quote.businessType,
           customerName: quote.customerName,
           customerPhone: quote.customerPhone,
           customerAddress: quote.customerAddress,
@@ -341,7 +341,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       MaterialPageRoute(
         builder: (_) => PdfPreviewScreen(
           quote: quote.toQuote(),
-          trade: quote.trade,
+          businessType: quote.businessType,
           validityDays: quote.validityDays,
           notes: quote.notes,
           savedQuoteId: quote.id,
@@ -632,15 +632,15 @@ class _SavedQuoteCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final dateFormat = DateFormat('dd MMM yyyy');
 
-    final tradeIcon = quote.trade == Trade.tiling
+    final businessTypeIcon = quote.businessType == BusinessType.tiling
         ? '🪣'
-        : quote.trade == Trade.painting
+        : quote.businessType == BusinessType.painting
             ? '🖌️'
             : '📄';
 
-    final tradeLabel = quote.trade == Trade.tiling
+    final businessTypeLabel = quote.businessType == BusinessType.tiling
         ? 'Tiling'
-        : quote.trade == Trade.painting
+        : quote.businessType == BusinessType.painting
             ? 'Painting'
             : 'Quote';
 
@@ -673,7 +673,7 @@ class _SavedQuoteCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Row: Trade badge + Quote Number + Status Chip + Menu
+              // Top Row: BusinessType badge + Quote Number + Status Chip + Menu
               Row(
                 children: [
                   Container(
@@ -686,10 +686,10 @@ class _SavedQuoteCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(tradeIcon, style: const TextStyle(fontSize: 12)),
+                        Text(businessTypeIcon, style: const TextStyle(fontSize: 12)),
                         const SizedBox(width: 4),
                         Text(
-                          tradeLabel,
+                          businessTypeLabel,
                           style: tt.bodySmall?.copyWith(
                             color: cs.primary,
                             fontWeight: FontWeight.w600,

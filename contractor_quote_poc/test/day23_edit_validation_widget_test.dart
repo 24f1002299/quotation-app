@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
 
@@ -23,7 +23,7 @@ Future<void> _pumpReview(
   return tester.pumpWidget(
     MaterialApp(
       home: ReviewScreen(
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         initialLineItems: items,
       ),
     ),
@@ -107,7 +107,7 @@ void main() {
         unitRatePaise: 0,
         isUnknown: true,
         requiresReview: true,
-        uncertaintyNote: 'Not in trade catalog',
+        uncertaintyNote: 'Not in businessType catalog',
       ),
     ]);
 

@@ -7,4 +7,14 @@ class AppDimensions {
   static const double gridUnit = 8.0; // base spacing unit
   static const double micButtonSize = 96.0; // hero mic on home
   static const double buttonRadius = 14.0;
+
+  /// Vertical rhythm inside cards and list rows.
+  static const double gapXs = 4.0;
+  static const double gapSm = 8.0;
+  static const double gapMd = 16.0;
+  static const double gapLg = 24.0;
+
+  /// Hairline borders and dividers.
+  static const double borderWidth = 1.0;
+  static const double focusBorderWidth = 2.0;
 }

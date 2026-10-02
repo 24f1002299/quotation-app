@@ -1,14 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/api_config.dart';
-import '../models/contractor_profile.dart';
+import '../models/business_profile.dart';
+import '../templates/template_data.dart';
 import 'sync_outbox.dart';
 
-/// Day 12 — Repository for contractor profile and user-scoped storage.
+/// Business profile storage.
 ///
 /// Features:
 /// - Local cache backed by SharedPreferences for instant, offline access.
@@ -16,27 +18,27 @@ import 'sync_outbox.dart';
 /// - User-scoped Supabase Storage for logos with signed URLs only.
 /// - Sync with Spring Boot API / Supabase profiles table.
 class ProfileRepository {
-  static const _storageKey = 'contractor_profile_v1';
-  static const _onboardingCompletedKey = 'contractor_onboarding_completed_v1';
+  static const _storageKey = 'business_profile_v1';
+  static const _onboardingCompletedKey = 'business_onboarding_completed_v1';
 
-  /// Returns the cached contractor profile, or empty default if fresh install.
-  static Future<ContractorProfile> getProfile() async {
+  /// Returns the cached profile, or an empty default on a fresh install.
+  static Future<BusinessProfile> getProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_storageKey);
 
     if (jsonStr == null || jsonStr.isEmpty) {
-      return ContractorProfile.empty();
+      return BusinessProfile.empty();
     }
 
     try {
       final map = json.decode(jsonStr) as Map<String, dynamic>;
-      return ContractorProfile.fromJson(map);
+      return BusinessProfile.fromJson(map);
     } catch (_) {
-      return ContractorProfile.empty();
+      return BusinessProfile.empty();
     }
   }
 
-  /// Whether the contractor has completed first-time setup / onboarding.
+  /// Whether the user has completed first-time setup / onboarding.
   static Future<bool> hasCompletedOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     final completed = prefs.getBool(_onboardingCompletedKey);
@@ -46,22 +48,21 @@ class ProfileRepository {
     return profile.isConfigured;
   }
 
-  /// Sets onboarding completion flag.
   static Future<void> setOnboardingCompleted(bool completed) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompletedKey, completed);
   }
 
-  /// Saves the contractor profile locally and enqueues sync outbox.
-  static Future<void> saveProfile(ContractorProfile profile) async {
+  /// Saves the profile locally and enqueues a sync outbox mutation.
+  static Future<BusinessProfile> saveProfile(BusinessProfile profile) async {
     final prefs = await SharedPreferences.getInstance();
-    final updated = profile.copyWith(version: profile.version + 1, updatedAt: DateTime.now());
+    final updated =
+        profile.copyWith(version: profile.version + 1, updatedAt: DateTime.now());
     await prefs.setString(_storageKey, json.encode(updated.toJson()));
     await prefs.setBool(_onboardingCompletedKey, true);
 
-    // Enqueue outbox mutation
     await SyncOutbox.enqueue(OutboxItem(
-      operationId: 'profile_${updated.id}_${DateTime.now().millisecondsSinceEpoch}',
+      operationId: 'profile_${updated.id}_${updated.version}',
       entityType: 'profile',
       action: 'upsert',
       payload: updated.toJson(),
@@ -69,27 +70,27 @@ class ProfileRepository {
       createdAt: DateTime.now(),
     ));
 
-    // Attempt non-blocking remote sync
     _attemptSyncProfile(updated);
+    return updated;
   }
 
-  /// Clears stored profile (for test resets).
+  /// Clears the stored profile (sign-out, test resets).
   static Future<void> clearProfile() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
     await prefs.remove(_onboardingCompletedKey);
   }
 
-  // ── Supabase Storage & User-Scoped Signed URLs ───────────────────────────
+  // ── Supabase Storage & user-scoped signed URLs ───────────────────────────
 
-  /// Uploads logo to user-scoped path `{userId}/logos/{filename}` in private bucket `user-files`.
-  /// Generates a signed URL only (no public URLs).
+  /// Uploads a logo to the user-scoped path `{userId}/logos/{filename}` in the
+  /// private bucket `user-files`. Returns a signed URL only, never a public one.
   static Future<({String logoPath, String signedUrl})> uploadLogo({
     required List<int> bytes,
     required String filename,
     String mimeType = 'image/png',
   }) async {
-    String userId = 'local_contractor';
+    String userId = 'local_business';
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -97,7 +98,7 @@ class ProfileRepository {
         userId = user.id;
       }
     } catch (_) {
-      // Supabase not initialized or running in unit test
+      // Supabase not initialized or running in a unit test.
     }
 
     final sanitizedFilename = filename.replaceAll(RegExp(r'[^\w\.\-]'), '_');
@@ -108,17 +109,13 @@ class ProfileRepository {
       await storage.uploadBinary(
         storagePath,
         bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
-        fileOptions: FileOptions(
-          contentType: mimeType,
-          upsert: true,
-        ),
+        fileOptions: FileOptions(contentType: mimeType, upsert: true),
       );
 
-      // Create signed URL valid for 7 days
       final signedUrl = await storage.createSignedUrl(storagePath, 60 * 60 * 24 * 7);
       return (logoPath: storagePath, signedUrl: signedUrl);
     } catch (_) {
-      // Fallback if offline or local dev: construct valid user-scoped path and ephemeral signed URL
+      // Offline / local dev: keep a valid user-scoped path and an ephemeral URL.
       final simulatedSignedUrl = '$kApiBaseUrl/storage/signed-url?path=$storagePath';
       return (logoPath: storagePath, signedUrl: simulatedSignedUrl);
     }
@@ -133,7 +130,6 @@ class ProfileRepository {
       return await storage.createSignedUrl(logoPath, 60 * 60 * 24 * 7);
     } catch (_) {
       try {
-        // Fallback via Spring API signed-url endpoint
         final res = await http.get(
           Uri.parse('$kApiBaseUrl/storage/signed-url?path=$logoPath'),
         ).timeout(const Duration(seconds: 3));
@@ -143,7 +139,7 @@ class ProfileRepository {
           return data['signedUrl'] as String?;
         }
       } catch (_) {
-        // Ignored
+        // Ignored — the logo simply stays unavailable offline.
       }
       return null;
     }
@@ -151,7 +147,7 @@ class ProfileRepository {
 
   // ── Non-blocking remote sync ──────────────────────────────────────────────
 
-  static void _attemptSyncProfile(ContractorProfile profile) async {
+  static void _attemptSyncProfile(BusinessProfile profile) async {
     try {
       final supaClient = Supabase.instance.client;
       final user = supaClient.auth.currentUser;
@@ -160,8 +156,13 @@ class ProfileRepository {
           'id': user.id,
           'user_id': user.id,
           'business_name': profile.businessName,
-          'trade': profile.trade.name,
+          'owner_name': profile.ownerName,
+          // The legacy `trade` column is left untouched: it is a two-value
+          // check constraint and `business_type` (migration 007) is the
+          // source of truth from here on.
+          'business_type': businessTypeInfo(profile.businessType).id,
           'city': profile.city,
+          'address': profile.address,
           'phone': profile.phone,
           'gstin': profile.gstin,
           'logo_path': profile.logoPath,
@@ -172,18 +173,19 @@ class ProfileRepository {
         return;
       }
     } catch (_) {
-      // Supabase offline / uninitialized
+      // Supabase offline / uninitialized.
     }
 
     try {
-      final uri = Uri.parse('$kApiBaseUrl/profiles/me');
-      await http.put(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(profile.toJson()),
-      ).timeout(const Duration(seconds: 3));
+      await http
+          .put(
+            Uri.parse('$kApiBaseUrl/profiles/me'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(profile.toJson()),
+          )
+          .timeout(const Duration(seconds: 3));
     } catch (_) {
-      // Stays safely in SyncOutbox
+      // Stays safely in SyncOutbox.
     }
   }
 }

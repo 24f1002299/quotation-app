@@ -35,7 +35,7 @@ void main() {
           quantity: 1,
           unit: 'job',
           unitRatePaise: 50000,
-          uncertaintyNote: 'Not in trade catalog',
+          uncertaintyNote: 'Not in businessType catalog',
           isUnknown: true,
           requiresReview: true,
         ),
@@ -176,11 +176,11 @@ void main() {
       ]);
       final flags = analyzeQuote(
         q,
-        isCatalogStale: true,
-        catalogDetail: 'Server has tiling v3, this phone has v1.',
+        isServiceListStale: true,
+        serviceListDetail: 'Server has tiling v3, this phone has v1.',
       );
       final f =
-          flags.firstWhere((e) => e.type == QuoteFlagType.staleCatalog);
+          flags.firstWhere((e) => e.type == QuoteFlagType.staleServiceList);
       expect(f.isBlocking, isFalse);
       expect(f.actionLabel, 'Refresh');
       expect(quotePdfBlockingReason(q), isNull);

@@ -410,7 +410,7 @@ void main() {
     test('catches unresolved unknown item (PDF blocked)', () {
       const unknown = ExplicitUnknown(
         text: 'sofa repair 1 piece',
-        reason: 'Not in trade catalog',
+        reason: 'Not in businessType catalog',
       );
       final quote = Quote(
         customer: _customer,

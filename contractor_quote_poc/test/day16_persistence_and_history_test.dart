@@ -4,9 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:contractor_quote_poc/catalog/catalog.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
-import 'package:contractor_quote_poc/storage/catalog_version_repository.dart';
+import 'package:contractor_quote_poc/storage/service_list_version_repository.dart';
 import 'package:contractor_quote_poc/storage/encrypted_draft_store.dart';
 import 'package:contractor_quote_poc/storage/quote_repository.dart';
 import 'package:contractor_quote_poc/storage/quote_sync_service.dart';
@@ -20,7 +20,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await QuoteRepository.clearAll();
     await SyncOutbox.clear();
-    await CatalogVersionRepository.clearAll();
+    await ServiceListVersionRepository.clearAll();
     await EncryptedDraftStore.clearAll();
     EncryptedDraftStore.setDeviceKeyForTesting('test_secret_encryption_key_32_bytes!');
   });
@@ -121,7 +121,7 @@ void main() {
         quoteNumber: 'Q-2026-OFFLINE',
         createdAt: DateTime.now(),
         customerName: 'Patil Residence',
-        trade: Trade.tiling,
+        businessType: BusinessType.tiling,
         lineItems: const [
           QuoteLineItem(description: 'Floor tiles', quantity: 100, unit: 'sq ft', unitRatePaise: 8500),
         ],
@@ -190,7 +190,7 @@ void main() {
         quoteNumber: 'Q-2026-DROP',
         createdAt: DateTime.now(),
         customerName: 'Asha Ji',
-        trade: Trade.painting,
+        businessType: BusinessType.painting,
         lineItems: const [
           QuoteLineItem(description: 'Wall Putty', quantity: 200, unit: 'sq ft', unitRatePaise: 1800),
         ],
@@ -342,20 +342,20 @@ void main() {
 
   group('Day 16 — Catalog Version Repository', () {
     test('Default catalog versions are seeded and accessible', () async {
-      final tilingVersion = await CatalogVersionRepository.getVersion(Trade.tiling);
-      expect(tilingVersion.trade, equals(Trade.tiling));
+      final tilingVersion = await ServiceListVersionRepository.getVersion(BusinessType.tiling);
+      expect(tilingVersion.businessType, equals(BusinessType.tiling));
       expect(tilingVersion.version, equals(1));
       expect(tilingVersion.itemCount, greaterThan(0));
 
-      final paintingVersion = await CatalogVersionRepository.getVersion(Trade.painting);
-      expect(paintingVersion.trade, equals(Trade.painting));
+      final paintingVersion = await ServiceListVersionRepository.getVersion(BusinessType.painting);
+      expect(paintingVersion.businessType, equals(BusinessType.painting));
       expect(paintingVersion.version, equals(1));
 
       // Detect stale catalog
-      final isStale = await CatalogVersionRepository.isCatalogStale(Trade.tiling, 2);
+      final isStale = await ServiceListVersionRepository.isServiceListStale(BusinessType.tiling, 2);
       expect(isStale, isTrue);
 
-      final isNotStale = await CatalogVersionRepository.isCatalogStale(Trade.tiling, 1);
+      final isNotStale = await ServiceListVersionRepository.isServiceListStale(BusinessType.tiling, 1);
       expect(isNotStale, isFalse);
     });
   });

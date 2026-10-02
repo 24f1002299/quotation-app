@@ -1,0 +1,55 @@
+{
+  "business_type": "appliance_repair",
+  "label": { "en": "AC & appliance repair", "hi": "एसी एवं उपकरण सर्विस", "mr": "एसी दुरुस्ती" },
+  "default_unit": "item",
+  "services": [
+    {
+      "name": "AC servicing",
+      "name_hi": "एसी सर्विसिंग",
+      "name_mr": "एसी सर्व्हिसिंग",
+      "unit": "item",
+      "default_rate_paise": 50000,
+      "keywords": ["ac servicing", "ac service", "ac cleaning", "air conditioner service", "एसी सर्विस", "एसी सर्विसिंग", "एयसी"]
+    },
+    {
+      "name": "AC installation",
+      "name_hi": "एसी लगाना",
+      "name_mr": "एसी बसवणे",
+      "unit": "item",
+      "default_rate_paise": 65000,
+      "keywords": ["ac installation", "ac fitting", "split ac installation", "एसी लगाना", "एसी फिटिंग"]
+    },
+    {
+      "name": "AC gas refilling",
+      "name_hi": "एसी गैस भरना",
+      "name_mr": "एसी गॅस भरणे",
+      "unit": "item",
+      "default_rate_paise": 35000,
+      "keywords": ["ac gas", "gas refilling", "refrigerant", "एसी गैस", "गैस भरना", "रिफ्रिजरेंट"]
+    },
+    {
+      "name": "Refrigerator repair",
+      "name_hi": "फ्रिज मरम्मत",
+      "name_mr": "फ्रिज दुरुस्ती",
+      "unit": "item",
+      "default_rate_paise": 25000,
+      "keywords": ["refrigerator repair", "fridge repair", "fridge service", "फ्रिज", "फ्रीजर", "रफ्रिजरेटर"]
+    },
+    {
+      "name": "Washing machine repair",
+      "name_hi": "वाशिंग मशीन मरम्मत",
+      "name_mr": "वॉशिंग मशीन दुरुस्ती",
+      "unit": "item",
+      "default_rate_paise": 20000,
+      "keywords": ["washing machine repair", "washing machine service", "washer repair", "वाशिंग मशीन", "वॉशिंग मशीन मरम्मत"]
+    },
+    {
+      "name": "Home appliance installation",
+      "name_hi": "घरेलू उपकरण इंस्टॉल",
+      "name_mr": "घरगुती उपकरण बसवणे",
+      "unit": "item",
+      "default_rate_paise": 12000,
+      "keywords": ["appliance installation", "home appliance", "installation", "उपकरण इंस्टॉल", "उपकरण लगाना"]
+    }
+  ]
+}

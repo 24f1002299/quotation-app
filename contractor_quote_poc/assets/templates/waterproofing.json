@@ -1,0 +1,55 @@
+{
+  "business_type": "waterproofing",
+  "label": { "en": "Waterproofing", "hi": "वॉटरप्रूफिंग", "mr": "पाणीरोधक काम" },
+  "default_unit": "sq ft",
+  "services": [
+    {
+      "name": "Terrace waterproofing",
+      "name_hi": "छत का वॉटरप्रूफिंग",
+      "name_mr": "छत पाणीरोधक",
+      "unit": "sq ft",
+      "default_rate_paise": 2500,
+      "keywords": ["waterproofing", "terrace waterproofing", "roof waterproofing", "roof sealing", "वॉटरप्रूफिंग", "छत", "पानी रोकना", "तरुणा"]
+    },
+    {
+      "name": "Bathroom waterproofing",
+      "name_hi": "बाथरुम वॉटरप्रूफिंग",
+      "name_mr": "बाथरुम पाणीरोधक",
+      "unit": "sq ft",
+      "default_rate_paise": 3000,
+      "keywords": ["bathroom waterproofing", "toilet waterproofing", "bathroom sealing", "बाथरुम वॉटरप्रूफिंग", "बाथरुम", "शौचालय"]
+    },
+    {
+      "name": "Water tank waterproofing",
+      "name_hi": "टंकी का वॉटरप्रूफिंग",
+      "name_mr": "टाकी पाणीरोधक",
+      "unit": "sq ft",
+      "default_rate_paise": 2200,
+      "keywords": ["tank waterproofing", "water tank coating", "टंकी वॉटरप्रूफिंग", "टंकी"]
+    },
+    {
+      "name": "Wall damp treatment",
+      "name_hi": "दीवार की नमी ठीक करना",
+      "name_mr": "भिंतीचा दम टिकवणे",
+      "unit": "sq ft",
+      "default_rate_paise": 3500,
+      "keywords": ["damp treatment", "damp proofing", "damp wall", "seepage treatment", "नमी", "दम", "सीपेज", "रिसाव"]
+    },
+    {
+      "name": "Injection grouting",
+      "name_hi": "इंजेक्शन ग्राउटिंग",
+      "name_mr": "इंजेक्शन ग्राउटिंग",
+      "unit": "rft",
+      "default_rate_paise": 90000,
+      "keywords": ["injection grouting", "grouting", "crack repair", "ग्राउटिंग", "दरार भरना", "इंजेक्शन"]
+    },
+    {
+      "name": "Terrace repair and plastering",
+      "name_hi": "छत की मरम्मत और प्लास्टर",
+      "name_mr": "छत दुरुस्ती व प्लास्टर",
+      "unit": "sq ft",
+      "default_rate_paise": 1500,
+      "keywords": ["terrace repair", "roof plastering", "terrace plastering", "छत मरम्मत", "छत प्लास्टर"]
+    }
+  ]
+}

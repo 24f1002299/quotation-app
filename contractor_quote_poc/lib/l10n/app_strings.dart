@@ -20,26 +20,29 @@ class AppStrings extends InheritedWidget {
     required super.child,
   });
 
-  static const _tables = {
+  static const Map<String, Map<String, String>> _tables = {
     'en': stringsEn,
     'hi': stringsHi,
     'mr': stringsMr,
   };
 
+  /// The string table for [languageCode], or the Hindi table when unknown.
+  static Map<String, String> tableFor(String languageCode) =>
+      _tables[languageCode] ?? stringsHi;
+
   /// Look up [key] for [languageCode]; falls back to Hindi then English.
-  static String text(String languageCode, String key) {
-    return _tables[languageCode]?[key] ??
-        stringsHi[key] ??
-        stringsEn[key] ??
-        key;
-  }
+  /// An unknown key is returned verbatim so a missing label is visible, never
+  /// silently blank.
+  static String text(String languageCode, String key) =>
+      _tables[languageCode]?[key] ??
+      stringsHi[key] ??
+      stringsEn[key] ??
+      key;
 
   /// Current-language lookup via context. Falls back to Hindi outside scope.
   static String of(BuildContext context, String key) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<AppStrings>();
-    final lang = scope?.languageCode ?? 'hi';
-    return text(lang, key);
+    final scope = context.dependOnInheritedWidgetOfExactType<AppStrings>();
+    return text(scope?.languageCode ?? 'hi', key);
   }
 
   /// Non-listening lookup (e.g. inside callbacks).
@@ -53,6 +56,13 @@ class AppStrings extends InheritedWidget {
       return true;
     });
     return text(lang ?? 'hi', key);
+  }
+
+  /// English keys missing from [languageCode]. English is the reference
+  /// table, so an empty result means the translation is complete.
+  static List<String> missingKeys(String languageCode) {
+    final table = tableFor(languageCode);
+    return stringsEn.keys.where((key) => !table.containsKey(key)).toList();
   }
 
   @override
