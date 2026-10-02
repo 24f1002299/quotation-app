@@ -378,11 +378,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
+    // Generic business-type badge from metadata — all 12 types render.
     final businessTypeBadge = widget.businessType == null
         ? null
         : Chip(
             label: Text(
-              widget.businessType == BusinessType.tiling ? '🪣 Tiling' : '🖌️ Painting',
+              businessTypeInfo(widget.businessType!).labels['en'] ??
+                  widget.businessType!.name,
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),

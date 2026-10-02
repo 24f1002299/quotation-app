@@ -9,6 +9,7 @@ import 'screens/new_quote_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/privacy_notice_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/quote_history_screen.dart';
 import 'screens/review_screen.dart';
 import 'screens/sign_in_screen.dart';
@@ -108,6 +109,7 @@ class _ContractorQuoteAppState extends State<ContractorQuoteApp> {
               LanguagePickerScreen(onChosen: _onLanguageChanged),
           '/onboarding': (_) => const OnboardingScreen(),
           '/profile': (_) => const ProfileScreen(),
+          '/settings': (_) => const SettingsScreen(),
           '/privacy': (_) => const PrivacyNoticeScreen(),
           '/new-quote': (_) => const NewQuoteScreen(),
           '/review': (_) => const ReviewScreen(),

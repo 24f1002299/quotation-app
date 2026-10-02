@@ -17,12 +17,14 @@ const Set<String> kFeedbackChangedFields = {
   'rate',
 };
 
+/// Legacy two-trade allow-list. No longer used as a gate: correction feedback
+/// is recorded for any business slug. Kept for backward compatibility.
 const Set<String> kFeedbackTrades = {'tiling', 'painting'};
 
 class EditFeedback {
   final String id;
   final String quoteIdHash; // SHA-256 hex of the quote UUID — never raw ID.
-  final String businessType; // 'tiling' | 'painting'
+  final String businessType; // any business slug, e.g. 'tiling' | 'pest_control'
   final String? serviceItemId; // catalog id the model picked (if any)
   final String? modelResult; // what the model/extraction produced
   final String? finalValue; // what the user ended with

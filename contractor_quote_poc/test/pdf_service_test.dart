@@ -148,8 +148,8 @@ void main() {
 
       // Verify app bar title (Day 18: "Quotation ready" per design.md §6)
       expect(find.text('Quotation ready'), findsOneWidget);
-      // Verify businessType chip
-      expect(find.text('🪣 Tiling'), findsOneWidget);
+      // Verify businessType chip (generic metadata label, all types).
+      expect(find.text('Tiling'), findsOneWidget);
     });
 
     testWidgets('Day-24: Edit quote returns to Review with saved items, never Home',

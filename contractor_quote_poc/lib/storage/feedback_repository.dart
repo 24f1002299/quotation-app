@@ -22,7 +22,8 @@ class FeedbackRepository {
   /// [edited] (user's final values). Creates one [EditFeedback] per changed
   /// field among description/quantity/unit/rate. Returns created records.
   ///
-  /// No-ops (returns []) when nothing changed or [businessType] is null.
+  /// No-ops (returns []) when nothing changed or [businessType] is null/blank.
+  /// Any business slug is recorded — feedback is universal, not tiling-only.
   static Future<List<EditFeedback>> recordCorrection({
     required String quoteId,
     required String? businessType,
@@ -33,7 +34,6 @@ class FeedbackRepository {
   }) async {
     if (businessType == null || businessType.trim().isEmpty) return [];
     final t = businessType.trim().toLowerCase();
-    if (!kFeedbackTrades.contains(t)) return [];
 
     final hash = hashQuoteId(quoteId);
     final now = DateTime.now();

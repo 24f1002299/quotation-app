@@ -240,11 +240,11 @@ class PdfService {
     final gstin = profile?.gstin?.trim();
     final effectiveBusinessType = businessType ?? profile?.businessType;
 
-    final businessTypeLabel = effectiveBusinessType == BusinessType.tiling
-        ? 'Tiling & Flooring Contractor'
-        : effectiveBusinessType == BusinessType.painting
-            ? 'Painting & Surface Finishing'
-            : 'Civil & Interior Contractor';
+    // Generic header line: the business-type's own English label for any
+    // domain ('Pest control Services'), never a trade-specific tagline.
+    final businessTypeLabel = effectiveBusinessType == null
+        ? 'Contracting Services'
+        : '${businessTypeInfo(effectiveBusinessType).labels['en'] ?? effectiveBusinessType.name} Services';
 
     // ── Resolve quote metadata ─────────────────────────────────────────────
     final effectiveQuoteNumber =
@@ -572,11 +572,10 @@ class PdfService {
               ),
               pw.SizedBox(height: 3),
               pw.Text(
-                effectiveBusinessType == BusinessType.tiling
-                    ? 'Tiling & Flooring'
-                    : effectiveBusinessType == BusinessType.painting
-                        ? 'Painting & Surface Finish'
-                        : 'Labour & Materials',
+                effectiveBusinessType == null
+                    ? 'General'
+                    : (businessTypeInfo(effectiveBusinessType).labels['en'] ??
+                        effectiveBusinessType.name),
                 style: pw.TextStyle(
                   fontSize: 9.5,
                   fontWeight: pw.FontWeight.bold,

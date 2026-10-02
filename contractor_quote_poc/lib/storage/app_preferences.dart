@@ -48,23 +48,22 @@ class AppPreferences {
     await prefs.setBool(_languageChosenKey, true);
   }
 
-  /// Last-used businessType for pre-selecting chips ('tiling' | 'painting').
+  /// Last-used business type for pre-selecting chips, stored as the stable
+  /// [BusinessTypeInfo.id] slug so all 12 types round-trip (not just tiling).
   static Future<BusinessType?> getLastBusinessType() async {
     final prefs = await SharedPreferences.getInstance();
-    switch (prefs.getString(_lastBusinessTypeKey)) {
-      case 'painting':
-        return BusinessType.painting;
-      case 'tiling':
-        return BusinessType.tiling;
-      default:
-        return null;
-    }
+    final slug = prefs.getString(_lastBusinessTypeKey);
+    if (slug == null || slug.isEmpty) return null;
+    // businessTypeFromId falls back to tiling for unknown slugs; treat a
+    // stored-but-unknown value as "no preference" instead.
+    if (!kBusinessTypes.any((info) => info.id == slug)) return null;
+    return businessTypeFromId(slug);
   }
 
   static Future<void> setLastBusinessType(BusinessType businessType) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-        _lastBusinessTypeKey, businessType == BusinessType.painting ? 'painting' : 'tiling');
+        _lastBusinessTypeKey, businessTypeInfo(businessType).id);
   }
 
   static Future<String> getLanguage() async {

@@ -632,17 +632,11 @@ class _SavedQuoteCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final dateFormat = DateFormat('dd MMM yyyy');
 
-    final businessTypeIcon = quote.businessType == BusinessType.tiling
-        ? '🪣'
-        : quote.businessType == BusinessType.painting
-            ? '🖌️'
-            : '📄';
-
-    final businessTypeLabel = quote.businessType == BusinessType.tiling
-        ? 'Tiling'
-        : quote.businessType == BusinessType.painting
-            ? 'Painting'
-            : 'Quote';
+    // Generic business-type badge: icon + English label from the
+    // business-type metadata, so all 12 types render (no trade special-case).
+    final typeInfo = quote.businessType == null
+        ? null
+        : businessTypeInfo(quote.businessType!);
 
     // Status chip color
     Color statusBg = Colors.grey.shade200;
@@ -676,29 +670,30 @@ class _SavedQuoteCard extends StatelessWidget {
               // Top Row: BusinessType badge + Quote Number + Status Chip + Menu
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(businessTypeIcon, style: const TextStyle(fontSize: 12)),
-                        const SizedBox(width: 4),
-                        Text(
-                          businessTypeLabel,
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.primary,
-                            fontWeight: FontWeight.w600,
+                  if (typeInfo != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(typeInfo.icon, size: 14, color: cs.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            typeInfo.labels['en'] ?? typeInfo.id,
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                  if (typeInfo != null) const SizedBox(width: 8),
                   Text(
                     quote.displayNumber,
                     style: tt.bodySmall?.copyWith(
