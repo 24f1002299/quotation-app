@@ -1127,6 +1127,7 @@ class _ErrorBanner extends StatelessWidget {
                 onPressed: onDismiss,
                 icon: const Icon(Icons.close_rounded, size: 18),
                 visualDensity: VisualDensity.compact,
+                tooltip: 'Dismiss',
               ),
             ],
           ),

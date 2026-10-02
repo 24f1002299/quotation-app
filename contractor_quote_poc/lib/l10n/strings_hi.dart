@@ -84,4 +84,11 @@ const Map<String, String> stringsHi = {
   'use_template': 'आम सेवाएं जोड़ें',
   'template_added': 'आम सेवाएं जोड़ दी गईं',
   'services_note_on_quote': 'यह काम आपकी सेवाओं में नहीं है। देखकर ठीक करें।',
+
+  'sign_in': 'साइन इन',
+  'sign_out': 'साइन आउट',
+  'privacy_notice': 'प्राइवेसी सूचना',
+  'delete_my_data': 'मेरा डेटा हटाएं',
+  'pdf_backup': 'PDF बैकअप',
+  'diagnostics': 'डायग्नोस्टिक्स',
 };

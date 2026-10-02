@@ -460,6 +460,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                   suffixIcon: _searchCtrl.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear_rounded),
+                          tooltip: 'Clear search',
                           onPressed: () {
                             _searchCtrl.clear();
                             _onSearchChanged('');
@@ -719,6 +720,7 @@ class _SavedQuoteCard extends StatelessWidget {
                   ),
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded, size: 20),
+                    tooltip: 'Quote actions',
                     onSelected: (val) {
                       if (val == 'edit') onTap();
                       if (val == 'pdf') onViewPdf();

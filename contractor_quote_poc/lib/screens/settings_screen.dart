@@ -13,7 +13,7 @@ import '../storage/profile_repository.dart';
 import '../storage/service_item_repository.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
-import '../widgets/business_type_chips.dart';
+import 'business_edit_page.dart';
 import 'my_services_screen.dart';
 
 /// iOS-style grouped Settings, backed by [BusinessProfile] and the user's
@@ -146,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _openBusinessEdit() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const _BusinessEditPage()),
+      MaterialPageRoute(builder: (_) => const BusinessEditPage()),
     );
     _load();
   }
@@ -231,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: _pickLanguage,
               ),
               _SwitchRow(
-                label: 'PDF backup',
+                label: t('pdf_backup'),
                 value: _backupOptIn,
                 onChanged: (v) async {
                   await PdfBackupSettings.setOptedIn(v);
@@ -239,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
               _SwitchRow(
-                label: 'Diagnostics',
+                label: t('diagnostics'),
                 value: _diagnosticOptIn,
                 onChanged: (v) async {
                   await DiagnosticConsent.setOptedIn(v);
@@ -253,7 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _Group(
             children: [
               _Row(
-                label: _signedIn ? 'Sign out' : 'Sign in',
+                label: _signedIn ? t('sign_out') : t('sign_in'),
                 value: '',
                 onTap: () async {
                   if (_signedIn) {
@@ -265,12 +265,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
               _Row(
-                label: 'Privacy notice',
+                label: t('privacy_notice'),
                 value: '',
                 onTap: () => Navigator.pushNamed(context, '/privacy'),
               ),
               _Row(
-                label: 'Delete my data',
+                label: t('delete_my_data'),
                 value: '',
                 destructive: true,
                 onTap: _deleteMyData,
@@ -395,151 +395,6 @@ class _SwitchRow extends StatelessWidget {
             child: Text(label, style: const TextStyle(fontSize: 15)),
           ),
           Switch(value: value, onChanged: onChanged, activeThumbColor: kForest),
-        ],
-      ),
-    );
-  }
-}
-
-/// Business details edit sub-page (fields moved out of the old tab).
-class _BusinessEditPage extends StatefulWidget {
-  const _BusinessEditPage();
-
-  @override
-  State<_BusinessEditPage> createState() => _BusinessEditPageState();
-}
-
-class _BusinessEditPageState extends State<_BusinessEditPage> {
-  final _nameCtrl = TextEditingController();
-  final _businessCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _gstinCtrl = TextEditingController();
-  final _termsCtrl = TextEditingController();
-  BusinessType _businessType = BusinessType.tiling;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _preload();
-  }
-
-  Future<void> _preload() async {
-    final p = await ProfileRepository.getProfile();
-    if (!mounted) return;
-    setState(() {
-      _nameCtrl.text = p.ownerName;
-      _businessCtrl.text = p.businessName;
-      _phoneCtrl.text = p.phone;
-      _cityCtrl.text = p.city;
-      _gstinCtrl.text = p.gstin ?? '';
-      _termsCtrl.text = p.quoteTerms;
-      _businessType = p.businessType;
-      _loading = false;
-    });
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _businessCtrl.dispose();
-    _phoneCtrl.dispose();
-    _cityCtrl.dispose();
-    _gstinCtrl.dispose();
-    _termsCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final existing = await ProfileRepository.getProfile();
-    await ProfileRepository.saveProfile(
-      existing.copyWith(
-        ownerName: _nameCtrl.text.trim(),
-        businessName: _businessCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        city: _cityCtrl.text.trim(),
-        businessType: _businessType,
-        gstin:
-            _gstinCtrl.text.trim().isNotEmpty ? _gstinCtrl.text.trim() : null,
-        quoteTerms: _termsCtrl.text.trim().isNotEmpty
-            ? _termsCtrl.text.trim()
-            : existing.quoteTerms,
-      ),
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved / सुरक्षित हो गया'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    String t(String k) => AppStrings.of(context, k);
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: kForest)),
-      );
-    }
-    return Scaffold(
-      appBar: AppBar(title: Text(t('business'))),
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimensions.page),
-        children: [
-          _field(t('client_name'), _nameCtrl),
-          _field(t('business'), _businessCtrl),
-          _field(t('phone'), _phoneCtrl,
-              keyboard: TextInputType.phone),
-          _field(t('site'), _cityCtrl),
-          _field('GSTIN', _gstinCtrl),
-          _field('Terms', _termsCtrl, maxLines: 3),
-          const SizedBox(height: 8),
-          Text(
-            t('business_type'),
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: kInk,
-            ),
-          ),
-          const SizedBox(height: 8),
-          BusinessTypeChips(
-            selected: _businessType,
-            onChanged: (type) => setState(() => _businessType = type),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(onPressed: _save, child: Text(t('done'))),
-        ],
-      ),
-    );
-  }
-
-  Widget _field(String label, TextEditingController ctrl,
-      {int maxLines = 1, TextInputType? keyboard}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: kInk,
-            ),
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: ctrl,
-            maxLines: maxLines,
-            keyboardType: keyboard,
-            decoration: InputDecoration(hintText: label),
-          ),
         ],
       ),
     );

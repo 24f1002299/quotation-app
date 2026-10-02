@@ -88,4 +88,12 @@ const Map<String, String> stringsEn = {
   'use_template': 'Add common services',
   'template_added': 'Common services added',
   'services_note_on_quote': 'Item not in your services. Check and fix it.',
+
+  // Settings rows (single language at a time — no bilingual slashes).
+  'sign_in': 'Sign in',
+  'sign_out': 'Sign out',
+  'privacy_notice': 'Privacy notice',
+  'delete_my_data': 'Delete my data',
+  'pdf_backup': 'PDF backup',
+  'diagnostics': 'Diagnostics',
 };

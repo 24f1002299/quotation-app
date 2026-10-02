@@ -84,4 +84,11 @@ const Map<String, String> stringsMr = {
   'use_template': 'नेहमीच्या सेवा जोडा',
   'template_added': 'नेहमीच्या सेवा जोडल्या',
   'services_note_on_quote': 'हे काम तुमच्या सेवांत नाही. पाहून दुरुस्त करा.',
+
+  'sign_in': 'साइन इन',
+  'sign_out': 'साइन आउट',
+  'privacy_notice': 'गोपनीयता सूचना',
+  'delete_my_data': 'माझा डेटा हटवा',
+  'pdf_backup': 'PDF बॅकअप',
+  'diagnostics': 'निदान',
 };
