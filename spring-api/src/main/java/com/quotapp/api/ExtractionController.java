@@ -93,7 +93,7 @@ public class ExtractionController {
             }
         }
 
-        log.info("Processing extraction for user={}, trade={}, transcriptLength={}, catalogCount={}",
+        log.info("Processing extraction for user={}, businessType={}, transcriptLength={}, serviceCount={}",
             userId, request.trade(), request.transcript().length(), request.catalogEntries().size());
 
         // Create job record

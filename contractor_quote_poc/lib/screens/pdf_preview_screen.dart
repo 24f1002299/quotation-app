@@ -108,6 +108,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       profile: _profile,
       format: format,
       businessType: widget.businessType,
+      businessTypeCustom: _profile?.customBusinessType ?? '',
       validityDays: widget.quote.validityDays > 0
           ? widget.quote.validityDays
           : widget.validityDays,
@@ -157,6 +158,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         createdAt: existing?.createdAt ?? now,
         quoteDate: widget.quote.quoteDate ?? existing?.quoteDate ?? now,
         businessType: widget.businessType ?? existing?.businessType,
+      businessTypeLabel: (_profile?.businessType == BusinessType.other)
+          ? (_profile?.customBusinessType.trim() ?? '')
+          : (existing?.businessTypeLabel ?? ''),
         customerName: widget.quote.customer.name.trim().isEmpty
             ? (existing?.customerName ?? 'Client')
             : widget.quote.customer.name.trim(),
@@ -378,13 +382,17 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    // Generic business-type badge from metadata — all 12 types render.
+    // Generic business-type badge from metadata — all types render.
+    // Free-text businesses show the profile's custom name.
     final businessTypeBadge = widget.businessType == null
         ? null
         : Chip(
             label: Text(
-              businessTypeInfo(widget.businessType!).labels['en'] ??
-                  widget.businessType!.name,
+              quoteBusinessLabel(
+                widget.businessType,
+                _profile?.customBusinessType ?? '',
+                'en',
+              ),
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),

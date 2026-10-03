@@ -191,7 +191,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _Row(
                 label: t('business_type'),
-                value: businessTypeInfo(_profile.businessType).label(_language),
+                value: businessTypeLabel(
+                  _profile.businessType,
+                  _profile.customBusinessType,
+                  _language,
+                ),
                 onTap: _openBusinessEdit,
               ),
               _Row(

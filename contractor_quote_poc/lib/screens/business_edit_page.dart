@@ -24,6 +24,7 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
   final _cityCtrl = TextEditingController();
   final _gstinCtrl = TextEditingController();
   final _termsCtrl = TextEditingController();
+  final _customCtrl = TextEditingController();
   BusinessType _businessType = BusinessType.tiling;
   bool _loading = true;
 
@@ -43,6 +44,7 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
       _cityCtrl.text = p.city;
       _gstinCtrl.text = p.gstin ?? '';
       _termsCtrl.text = p.quoteTerms;
+      _customCtrl.text = p.customBusinessType;
       _businessType = p.businessType;
       _loading = false;
     });
@@ -56,10 +58,22 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
     _cityCtrl.dispose();
     _gstinCtrl.dispose();
     _termsCtrl.dispose();
+    _customCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
+    if (_businessType == BusinessType.other &&
+        _customCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('${AppStrings.of(context, 'custom_business_type')} *'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final existing = await ProfileRepository.getProfile();
     await ProfileRepository.saveProfile(
       existing.copyWith(
@@ -68,6 +82,9 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
         phone: _phoneCtrl.text.trim(),
         city: _cityCtrl.text.trim(),
         businessType: _businessType,
+        customBusinessType: _businessType == BusinessType.other
+            ? _customCtrl.text.trim()
+            : '',
         gstin:
             _gstinCtrl.text.trim().isNotEmpty ? _gstinCtrl.text.trim() : null,
         quoteTerms: _termsCtrl.text.trim().isNotEmpty
@@ -119,6 +136,25 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
             selected: _businessType,
             onChanged: (type) => setState(() => _businessType = type),
           ),
+          if (_businessType == BusinessType.other) ...[
+            const SizedBox(height: 12),
+            Text(
+              t('custom_business_type'),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: kInk,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _customCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: t('custom_business_hint'),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           ElevatedButton(onPressed: _save, child: Text(t('done'))),
         ],

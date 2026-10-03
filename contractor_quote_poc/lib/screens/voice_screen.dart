@@ -23,9 +23,9 @@ import '../templates/template_data.dart';
 import '../config/api_config.dart';
 import '../models/quote.dart';
 import '../models/transcript_draft.dart';
-import '../parser/demo_transcripts.dart';
 import '../screens/review_screen.dart';
 import '../storage/app_preferences.dart';
+import '../storage/service_item_repository.dart';
 import '../storage/transcript_draft_repository.dart';
 import '../theme.dart';
 import '../voice/extraction_service.dart';
@@ -421,14 +421,26 @@ class _VoiceScreenState extends State<VoiceScreen> {
     );
   }
 
-  // ── Demo shortcut ─────────────────────────────────────────────────────────
+  // ── Sample shortcut ─────────────────────────────────────────────────
+  // Builds a sample line from the user's own services so any business can
+  // try the flow without hardcoded demo transcripts.
 
-  void _useDemo() {
-    // Cancel any in-flight transcription so it can't overwrite the demo text.
+  Future<void> _useDemo() async {
+    // Cancel any in-flight transcription so it can't overwrite the sample text.
     _transcriptionSeq++;
-    final text = widget.businessType == BusinessType.tiling
-        ? kTilingDemoTranscript
-        : kPaintingDemoTranscript;
+    String text;
+    try {
+      final services =
+          await ServiceItemRepository.getActiveForBusinessType(widget.businessType);
+      if (services.isNotEmpty) {
+        final s = services.first;
+        text = '${s.name} 100 ${s.unit}, 50 rupaye per ${s.unit}';
+      } else {
+        text = 'Work 100 item, 50 rupaye per item';
+      }
+    } catch (_) {
+      text = 'Work 100 item, 50 rupaye per item';
+    }
     _transcriptCtrl.value = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
@@ -806,9 +818,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
               child: Text(
-                widget.businessType == BusinessType.tiling
-                    ? 'Use Tiling Demo / टाइलिंग डेमो'
-                    : 'Use Painting Demo / पेंटिंग डेमो',
+                'Use sample / नमूना आज़माएं',
                 style: TextStyle(
                   fontSize: 12,
                   color: cs.onSurface.withValues(alpha: 0.5),

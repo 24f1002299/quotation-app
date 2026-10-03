@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../templates/template_data.dart';
+import '../templates/template_loader.dart';
 
 /// Version metadata for the user's saved service list.
 ///
@@ -59,7 +60,7 @@ class ServiceListVersionRepository {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_storageKey);
     if (jsonStr == null || jsonStr.isEmpty) {
-      final defaults = _seedDefaults();
+      final defaults = await _seedDefaults();
       await _saveAll(defaults);
       return defaults;
     }
@@ -71,11 +72,11 @@ class ServiceListVersionRepository {
         final raw = map[info.id];
         result[info.type] = raw is Map<String, dynamic>
             ? ServiceListVersion.fromJson(raw)
-            : _defaultVersion(info.type);
+            : await _defaultWithTemplateCount(info.type);
       }
       return result;
     } catch (_) {
-      final defaults = _seedDefaults();
+      final defaults = await _seedDefaults();
       await _saveAll(defaults);
       return defaults;
     }
@@ -111,9 +112,35 @@ class ServiceListVersionRepository {
     await prefs.setString(_storageKey, json.encode(map));
   }
 
-  static Map<BusinessType, ServiceListVersion> _seedDefaults() => {
-        for (final info in kBusinessTypes) info.type: _defaultVersion(info.type),
-      };
+  static Future<Map<BusinessType, ServiceListVersion>> _seedDefaults() async {
+    final map = <BusinessType, ServiceListVersion>{};
+    for (final info in kBusinessTypes) {
+      map[info.type] = await _defaultWithTemplateCount(info.type);
+    }
+    return map;
+  }
+
+  /// Default version carrying the bundled template's item count, so a fresh
+  /// install reports real seeds (tiling: 6) instead of zeros. Types without
+  /// a template (Other) stay at 0.
+  static Future<ServiceListVersion> _defaultWithTemplateCount(
+    BusinessType businessType,
+  ) async {
+    var count = 0;
+    try {
+      final template = await TemplateLoader.load(businessType);
+      count = template.services.length;
+    } catch (_) {
+      count = 0;
+    }
+    return ServiceListVersion(
+      businessType: businessType,
+      version: 1,
+      itemCount: count,
+      versionTag: '${businessTypeInfo(businessType).id}_v1',
+      lastUpdated: DateTime.now(),
+    );
+  }
 
   static ServiceListVersion _defaultVersion(BusinessType businessType) {
     return ServiceListVersion(

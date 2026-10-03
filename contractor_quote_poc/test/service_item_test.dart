@@ -78,8 +78,11 @@ void main() {
   });
 
   group('Starter templates', () {
-    test('every business type ships a template that parses', () async {
+    test('every templated business type ships a template that parses', () async {
       for (final info in kBusinessTypes) {
+        // Other has no bundled template by design: free-text businesses
+        // start from scratch (see custom_business_type_test.dart).
+        if (info.type == BusinessType.other) continue;
         final template = await TemplateLoader.load(info.type);
         expect(template.services, isNotEmpty,
             reason: '${info.id} must seed at least one service');

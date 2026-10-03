@@ -349,7 +349,10 @@ class TranscriptParser {
   /// Matches the transcript against each service's [ServiceItem.matchTerms].
   ///
   /// Terms are tried longest-first ("tile fixing labour" before "tile") and
-  /// each service can be claimed at most once. Word boundaries are strict for
+  /// each service can be claimed at most once. Noisy sites often drop words,
+  /// so a bare first-token root ("tiles" for "tiles lagana") also matches —
+  /// but only the FIRST token, so a trailing generic ("work" in "base work")
+  /// can never claim an unrelated sentence. Word boundaries are strict for
   /// BOTH Latin and Devanagari letters, so 'रंग' never matches inside
   /// 'औरंगाबाद'.
   List<_ServiceMatch> _findServiceMatches(String text, List<ServiceItem> services) {
@@ -357,12 +360,28 @@ class TranscriptParser {
     // Map char_position → service_id to prevent overlapping matches.
     final claimed = <int, String>{};
 
-    final entries = <(String, ServiceItem)>[
-      for (final service in services)
-        for (final term in service.matchTerms) (term, service),
-    ]..sort((a, b) => b.$1.length.compareTo(a.$1.length));
+    final seen = <String>{};
+    final entries = <(String, ServiceItem, int)>[];
+    for (var i = 0; i < services.length; i++) {
+      for (final term in services[i].matchTerms) {
+        if (term.isEmpty || !seen.add('${services[i].id}‖$term')) continue;
+        entries.add((term, services[i], i));
+        // Bare-root fallback for noisy transcripts (see doc comment).
+        final root = _rootOf(term);
+        if (root.isNotEmpty &&
+            root != term &&
+            seen.add('${services[i].id}‖root‖$root')) {
+          entries.add((root, services[i], i));
+        }
+      }
+    }
+    entries.sort((a, b) {
+      final byLen = b.$1.length.compareTo(a.$1.length);
+      if (byLen != 0) return byLen;
+      return a.$3.compareTo(b.$3);
+    });
 
-    for (final (term, service) in entries) {
+    for (final (term, service, _) in entries) {
       if (term.isEmpty) continue;
       // Each service appears at most once.
       if (matches.any((m) => m.service.id == service.id)) continue;
@@ -391,6 +410,18 @@ class TranscriptParser {
 
     matches.sort((a, b) => a.start.compareTo(b.start));
     return matches;
+  }
+
+  /// First-token root of a match term for noisy transcripts: 'tiles' for
+  /// 'tiles lagana'. Empty unless the token is significant (4+ chars, not a
+  /// number), so short particles never match.
+  static String _rootOf(String term) {
+    final first = term.split(' ').firstWhere(
+          (w) => w.trim().isNotEmpty,
+          orElse: () => '',
+        );
+    if (first.length < 4 || RegExp(r'^\d+$').hasMatch(first)) return '';
+    return first;
   }
 
   /// Latin word characters AND Devanagari letters/marks (U+0900–U+097F) both

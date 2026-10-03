@@ -23,6 +23,11 @@ enum BusinessType {
   cleaning,
   pestControl,
   catering,
+
+  /// Free-text business: the user typed their own trade. Has no bundled
+  /// template (starts from scratch); the display label comes from
+  /// [BusinessProfile.customBusinessType].
+  other,
 }
 
 /// Static, non-user-editable metadata for one business type.
@@ -133,6 +138,12 @@ const List<BusinessTypeInfo> kBusinessTypes = [
     labels: {'en': 'Catering', 'hi': 'कैटरिंग', 'mr': 'जेवण पुरवठा'},
     icon: Icons.restaurant_rounded,
   ),
+  BusinessTypeInfo(
+    type: BusinessType.other,
+    id: 'other',
+    labels: {'en': 'Other', 'hi': 'अन्य', 'mr': 'इतर'},
+    icon: Icons.more_horiz_rounded,
+  ),
 ];
 
 /// Metadata for [type], or the first entry when unknown.
@@ -142,8 +153,48 @@ BusinessTypeInfo businessTypeInfo(BusinessType type) =>
       orElse: () => kBusinessTypes.first,
     );
 
-/// Resolves a persisted/backend id ('appliance_repair') to a business type.
-/// Unknown or missing ids fall back to [fallback] (default: tiling).
+/// Display label for a business: the user's own words when they chose
+/// [BusinessType.other] with a custom name, otherwise the localized
+/// template label.
+String businessTypeLabel(
+  BusinessType type,
+  String custom,
+  String languageCode,
+) {
+  if (type == BusinessType.other && custom.trim().isNotEmpty) {
+    return custom.trim();
+  }
+  return businessTypeInfo(type).label(languageCode);
+}
+
+/// Quote display label: a saved custom snapshot wins for
+/// [BusinessType.other]; otherwise the localized template label. Null types
+/// (legacy/manual quotes) fall back to the snapshot or 'Quote'.
+String quoteBusinessLabel(
+  BusinessType? type,
+  String customLabel,
+  String languageCode,
+) {
+  final custom = customLabel.trim();
+  if (type == null) return custom.isEmpty ? 'Quote' : custom;
+  if (type == BusinessType.other && custom.isNotEmpty) return custom;
+  return businessTypeInfo(type).label(languageCode);
+}
+
+/// Wire/DB slug for a business: a slugified custom name for
+/// [BusinessType.other], otherwise the stable template id. The backend and
+/// Supabase accept any slug (no allow-list since migration 007).
+String businessTypeSlug(BusinessType type, String custom) {
+  if (type == BusinessType.other) {
+    final slug = custom
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s\-]+'), '_')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    if (slug.isNotEmpty) return slug;
+  }
+  return businessTypeInfo(type).id;
+}
 BusinessType businessTypeFromId(String? id, {BusinessType fallback = BusinessType.tiling}) {
   if (id == null || id.trim().isEmpty) return fallback;
   final lower = id.trim().toLowerCase();

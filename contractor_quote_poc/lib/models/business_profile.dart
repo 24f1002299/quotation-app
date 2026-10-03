@@ -11,10 +11,16 @@ class BusinessProfile {
   final String city;
   final String address;
   final BusinessType businessType;
+
+  /// Free-text trade name, used only when [businessType] is
+  /// [BusinessType.other] (e.g. "Event Planning"). Empty otherwise.
+  final String customBusinessType;
   final String? gstin;
   final String? logoPath;
   final String? logoSignedUrl;
   final String quoteTerms;
+  final String defaultUnit;
+  final String currency;
   final int schemaVersion;
 
   /// Record version for optimistic concurrency and conflict detection.
@@ -29,10 +35,13 @@ class BusinessProfile {
     this.city = '',
     this.address = '',
     this.businessType = BusinessType.tiling,
+    this.customBusinessType = '',
     this.gstin,
     this.logoPath,
     this.logoSignedUrl,
     this.quoteTerms = '50% advance before starting work, balance upon completion.',
+    this.defaultUnit = 'item',
+    this.currency = 'INR',
     this.schemaVersion = 1,
     this.version = 1,
     required this.updatedAt,
@@ -56,10 +65,13 @@ class BusinessProfile {
     String? city,
     String? address,
     BusinessType? businessType,
+    String? customBusinessType,
     String? gstin,
     String? logoPath,
     String? logoSignedUrl,
     String? quoteTerms,
+    String? defaultUnit,
+    String? currency,
     int? schemaVersion,
     int? version,
     DateTime? updatedAt,
@@ -72,10 +84,13 @@ class BusinessProfile {
       city: city ?? this.city,
       address: address ?? this.address,
       businessType: businessType ?? this.businessType,
+      customBusinessType: customBusinessType ?? this.customBusinessType,
       gstin: gstin ?? this.gstin,
       logoPath: logoPath ?? this.logoPath,
       logoSignedUrl: logoSignedUrl ?? this.logoSignedUrl,
       quoteTerms: quoteTerms ?? this.quoteTerms,
+      defaultUnit: defaultUnit ?? this.defaultUnit,
+      currency: currency ?? this.currency,
       schemaVersion: schemaVersion ?? this.schemaVersion,
       version: version ?? this.version,
       updatedAt: updatedAt ?? DateTime.now(),
@@ -91,10 +106,13 @@ class BusinessProfile {
         'city': city,
         'address': address,
         'business_type': businessTypeInfo(businessType).id,
+        'custom_business_type': customBusinessType,
         'gstin': gstin,
         'logo_path': logoPath,
         'logo_signed_url': logoSignedUrl,
         'quote_terms': quoteTerms,
+        'default_unit': defaultUnit,
+        'currency': currency,
         'schema_version': schemaVersion,
         'version': version,
         // Wire contract: ProfileDto.updatedAt is an Instant — zone-less ISO
@@ -103,6 +121,23 @@ class BusinessProfile {
       };
 
   factory BusinessProfile.fromJson(Map<String, dynamic> json) {
+    final slug =
+        json['business_type'] as String? ?? json['businessType'] as String?;
+    final custom = json['custom_business_type'] as String? ??
+        json['customBusinessType'] as String? ??
+        '';
+    var type = businessTypeFromId(slug);
+    var customOut = custom;
+    // A slug the app doesn't ship a template for (e.g. synced from another
+    // device or an older free-text value) becomes Other with the slug as its
+    // display name, so custom businesses survive a sync round-trip.
+    if (slug != null &&
+        slug.trim().isNotEmpty &&
+        customOut.trim().isEmpty &&
+        !kBusinessTypes.any((info) => info.id == slug.trim().toLowerCase())) {
+      type = BusinessType.other;
+      customOut = slug.trim().replaceAll('_', ' ');
+    }
     return BusinessProfile(
       id: json['id'] as String? ??
           json['user_id'] as String? ??
@@ -114,14 +149,15 @@ class BusinessProfile {
       phone: json['phone'] as String? ?? '',
       city: json['city'] as String? ?? '',
       address: json['address'] as String? ?? '',
-      businessType: businessTypeFromId(
-        json['business_type'] as String? ?? json['businessType'] as String?,
-      ),
+      businessType: type,
+      customBusinessType: customOut,
       gstin: json['gstin'] as String?,
       logoPath: json['logo_path'] as String? ?? json['logoPath'] as String?,
       logoSignedUrl:
           json['logo_signed_url'] as String? ?? json['logoSignedUrl'] as String?,
       quoteTerms: json['quote_terms'] as String? ?? json['quoteTerms'] as String? ?? '',
+      defaultUnit: json['default_unit'] as String? ?? json['defaultUnit'] as String? ?? 'item',
+      currency: json['currency'] as String? ?? 'INR',
       schemaVersion: json['schema_version'] as int? ?? 1,
       version: json['version'] as int? ?? 1,
       updatedAt: json['updated_at'] != null

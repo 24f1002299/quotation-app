@@ -22,6 +22,10 @@ class LineItemCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onAcknowledge;
 
+  /// One-tap save to the user's service list. Null hides the action; the
+  /// screen passes it only for unlisted items worth keeping.
+  final VoidCallback? onAddToList;
+
   const LineItemCard({
     super.key,
     required this.item,
@@ -33,6 +37,7 @@ class LineItemCard extends StatelessWidget {
     required this.onMoveDown,
     required this.onDelete,
     required this.onAcknowledge,
+    this.onAddToList,
   });
 
   @override
@@ -127,6 +132,12 @@ class LineItemCard extends StatelessWidget {
                       icon: const Icon(Icons.build_outlined, size: 18),
                       label: const Text('Fix now'),
                     ),
+                    if (onAddToList != null)
+                      OutlinedButton.icon(
+                        onPressed: onAddToList,
+                        icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                        label: const Text('Add to my list'),
+                      ),
                     OutlinedButton.icon(
                       onPressed: onAcknowledge,
                       icon: const Icon(

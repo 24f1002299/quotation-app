@@ -24,6 +24,11 @@ class SavedQuote {
   /// Day 15 commercial date (defaults to [createdAt] when null).
   final DateTime? quoteDate;
   final BusinessType? businessType;
+
+  /// Free-text business name snapshot (only set when [businessType] is
+  /// [BusinessType.other]). Printed on the PDF and history badge so custom
+  /// trades appear in the user's own words. Empty for template types.
+  final String businessTypeLabel;
   final String customerName;
   final String customerPhone;
   final String customerAddress;
@@ -56,6 +61,7 @@ class SavedQuote {
     String? idempotencyKey,
     this.quoteDate,
     this.businessType,
+    this.businessTypeLabel = '',
     required this.customerName,
     this.customerPhone = '',
     this.customerAddress = '',
@@ -117,6 +123,7 @@ class SavedQuote {
     DateTime? createdAt,
     DateTime? quoteDate,
     BusinessType? businessType,
+    String? businessTypeLabel,
     String? customerName,
     String? customerPhone,
     String? customerAddress,
@@ -142,6 +149,7 @@ class SavedQuote {
       createdAt: createdAt ?? this.createdAt,
       quoteDate: quoteDate ?? this.quoteDate,
       businessType: businessType ?? this.businessType,
+      businessTypeLabel: businessTypeLabel ?? this.businessTypeLabel,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerAddress: customerAddress ?? this.customerAddress,
@@ -173,6 +181,7 @@ class SavedQuote {
     'createdAt': createdAt.toUtc().toIso8601String(),
     'quoteDate': quoteDate?.toIso8601String(),
     'business_type': businessType?.name,
+    'business_type_label': businessTypeLabel,
     // Local names are kept for on-device storage; server-named aliases
     // follow so the API (clientName, displayNumber, …) binds correctly.
     // displayNumber carries ONLY the backend value (null on first sync so
@@ -274,6 +283,7 @@ class SavedQuote {
           ? DateTime.tryParse(json['quoteDate'] as String)
           : null,
       businessType: parsedTrade,
+      businessTypeLabel: json['business_type_label'] as String? ?? '',
       customerName: json['customerName'] as String? ?? 'Client',
       customerPhone: json['customerPhone'] as String? ?? '',
       customerAddress: json['customerAddress'] as String? ?? '',

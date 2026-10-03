@@ -118,11 +118,11 @@ public class ExtractionService {
                 CatalogItemDto catalogItem = catalogMap.get(catId);
 
                 if (catalogItem == null) {
-                    // Item ID not found in chosen trade catalog -> isolate into explicit unknowns
+                    // Item ID not found in the user's service list -> isolate into explicit unknowns
                     unknowns.add(new ExplicitUnknownDto(
                         rawItem.sourceSpan() != null ? rawItem.sourceSpan() : catId,
                         catId,
-                        "Item not found in " + request.trade() + " catalog",
+                        "Item not found in " + request.trade() + " service list",
                         0.2
                     ));
                     continue;

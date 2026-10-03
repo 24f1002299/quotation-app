@@ -179,9 +179,24 @@ void main() {
     });
 
     test('waterproofing maps when the user sells it', () {
+      // The tiling starter list has no waterproofing service, so the test
+      // gives the user one — matching depends on what is sold, not the
+      // business type.
+      final withWaterproofing = [
+        ...tiling,
+        ServiceItem(
+          id: 'svc_waterproofing',
+          name: 'Waterproofing',
+          unit: 'sq ft',
+          ratePaise: 3000,
+          businessType: BusinessType.tiling,
+          keywords: const ['waterproofing', 'waterproof'],
+          updatedAt: DateTime.now(),
+        ),
+      ];
       final result = parser.parse(
         'bathroom waterproofing 50 sq ft at 30 rupaye',
-        services: tiling,
+        services: withWaterproofing,
       );
       expect(result.items, hasLength(1));
       expect(result.items.first.description, contains('Waterproofing'));

@@ -44,6 +44,12 @@ public record ProfileDto(
     @JsonAlias("quoteTerms")
     String quoteTerms,
 
+    @JsonProperty("default_unit")
+    @JsonAlias("defaultUnit")
+    String defaultUnit,
+
+    String currency,
+
     @JsonProperty("schema_version")
     @JsonAlias("schemaVersion")
     Integer schemaVersion,

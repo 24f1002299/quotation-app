@@ -178,12 +178,15 @@ class ServiceItemRepository {
 
   /// Seeds the starter template for [businessType] when the user has no
   /// service for it yet. Existing services are never overwritten.
+  /// [BusinessType.other] has no template and starts from scratch.
   /// Returns the services now on file for that business type.
   static Future<List<ServiceItem>> seedFromTemplate(
     BusinessType businessType,
   ) async {
     final existing = await getActiveForBusinessType(businessType);
-    if (existing.isNotEmpty) return existing;
+    if (existing.isNotEmpty || businessType == BusinessType.other) {
+      return existing;
+    }
 
     final seeded = await TemplateLoader.starterServiceItems(businessType);
     final all = await getAll();

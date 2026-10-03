@@ -208,6 +208,8 @@ class PdfService {
     BusinessProfile? profile,
     PdfPageFormat format = PdfPageFormat.a4,
     BusinessType? businessType,
+    // Free-text snapshot for BusinessType.other (ignored otherwise).
+    String businessTypeCustom = '',
     // Legacy override params used when profile is null
     String contractorName = '',
     String contractorPhone = '',
@@ -241,10 +243,10 @@ class PdfService {
     final effectiveBusinessType = businessType ?? profile?.businessType;
 
     // Generic header line: the business-type's own English label for any
-    // domain ('Pest control Services'), never a trade-specific tagline.
+    // domain, or the saved free-text snapshot — never trade-specific.
     final businessTypeLabel = effectiveBusinessType == null
         ? 'Contracting Services'
-        : '${businessTypeInfo(effectiveBusinessType).labels['en'] ?? effectiveBusinessType.name} Services';
+        : '${quoteBusinessLabel(effectiveBusinessType, businessTypeCustom, 'en')} Services';
 
     // ── Resolve quote metadata ─────────────────────────────────────────────
     final effectiveQuoteNumber =
@@ -321,6 +323,7 @@ class PdfService {
           _buildCustomerBox(
             quote: quote,
             effectiveBusinessType: effectiveBusinessType,
+            businessTypeCustom: businessTypeCustom,
           ),
 
           pw.SizedBox(height: 12),
@@ -499,6 +502,7 @@ class PdfService {
   static pw.Widget _buildCustomerBox({
     required Quote quote,
     required BusinessType? effectiveBusinessType,
+    String businessTypeCustom = '',
   }) {
     final clientName = quote.customer.name.trim().isEmpty
         ? 'Valued Client'
@@ -574,8 +578,8 @@ class PdfService {
               pw.Text(
                 effectiveBusinessType == null
                     ? 'General'
-                    : (businessTypeInfo(effectiveBusinessType).labels['en'] ??
-                        effectiveBusinessType.name),
+                    : quoteBusinessLabel(
+                        effectiveBusinessType, businessTypeCustom, 'en'),
                 style: pw.TextStyle(
                   fontSize: 9.5,
                   fontWeight: pw.FontWeight.bold,

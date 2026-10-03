@@ -1,5 +1,6 @@
 package com.quotapp.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.quotapp.api.validation.ValidContractorUnit;
@@ -21,6 +22,7 @@ import jakarta.validation.constraints.Positive;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExtractedLineItemDto(
     @NotBlank(message = "catalogItemId is required")
+    @JsonAlias("serviceItemId")
     String catalogItemId,
 
     @NotBlank(message = "description is required")

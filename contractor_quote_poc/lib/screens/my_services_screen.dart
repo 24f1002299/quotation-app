@@ -21,11 +21,22 @@ class MyServicesScreen extends StatefulWidget {
 class _MyServicesScreenState extends State<MyServicesScreen> {
   List<ServiceItem> _services = [];
   bool _loading = true;
+  final _searchCtrl = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
+    _searchCtrl.addListener(() {
+      if (mounted) setState(() => _query = _searchCtrl.text.trim());
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -111,6 +122,14 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
   @override
   Widget build(BuildContext context) {
     String t(String k) => AppStrings.of(context, k);
+    final needle = _query.toLowerCase();
+    final visible = needle.isEmpty
+        ? _services
+        : _services
+            .where((s) =>
+                s.name.toLowerCase().contains(needle) ||
+                s.matchTerms.any((term) => term.contains(needle)))
+            .toList(growable: false);
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(t('my_services'))),
@@ -141,7 +160,23 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
             style: const TextStyle(fontSize: 13, color: kInkMuted),
           ),
           const SizedBox(height: 12),
-          if (_services.isEmpty)
+          TextField(
+            controller: _searchCtrl,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: t('search_services'),
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear_rounded),
+                      tooltip: 'Clear search',
+                      onPressed: _searchCtrl.clear,
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (visible.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(
@@ -151,7 +186,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               ),
             )
           else
-            for (final service in _services)
+            for (final service in visible)
               Card(
                 child: ListTile(
                   title: Text(service.name),

@@ -13,7 +13,6 @@ import '../storage/service_item_repository.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
 import '../utils/rupee_format.dart';
-import '../widgets/business_type_chips.dart';
 import '../widgets/common_widgets.dart';
 import 'pdf_preview_screen.dart';
 import 'my_services_screen.dart';
@@ -23,8 +22,8 @@ import 'voice_screen.dart';
 /// Phase 2 — Voice-first dashboard.
 ///
 /// - Mic is the hero (96dp, centre of screen, one tap starts recording
-///   with the last-used business type pre-selected).
-/// - Business type selection is inline chips, not a separate screen.
+///   for the user's own business).
+/// - No business-type selector: the profile's business is the context.
 /// - Drafts appear only when they exist, as compact cards.
 /// - No tutorial card: a one-line hint under the mic, auto-dismissed.
 /// - Offline status is a slim bar; sign-in nudge is a dot on the avatar.
@@ -249,20 +248,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
                 const SizedBox(height: 24),
-                // ── Business type + services the user sells ────────────
-                BusinessTypeChips(
-                  selected: _businessType,
-                  onChanged: (type) {
-                    setState(() => _businessType = type);
-                    AppPreferences.setLastBusinessType(type);
-                    ServiceItemRepository.getActiveForBusinessType(type).then(
-                      (services) {
-                        if (mounted) {
-                          setState(() => _servicesCount = services.length);
-                        }
-                      },
-                    );
-                  },
+                // ── Business identity (no selector: profile is the context) ──
+                Center(
+                  child: Text(
+                    _profile.businessName.isNotEmpty
+                        ? _profile.businessName
+                        : businessTypeLabel(
+                            _businessType,
+                            _profile.customBusinessType,
+                            'en',
+                          ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: kInk,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Center(

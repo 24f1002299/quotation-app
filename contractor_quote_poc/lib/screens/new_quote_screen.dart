@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../parser/demo_transcripts.dart';
-import '../parser/transcript_parser.dart';
 import '../screens/review_screen.dart';
 import '../screens/voice_screen.dart';
-import '../storage/service_item_repository.dart';
 import '../templates/template_data.dart';
 import '../theme.dart';
 import '../widgets/business_type_chips.dart';
@@ -56,31 +53,6 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
     }
   }
 
-  /// Parse the demo transcript for [businessType] and jump straight to review
-  /// with pre-filled line items. Also selects that business type.
-  Future<void> _useDemoTranscript(BusinessType businessType) async {
-    setState(() => _selectedType = businessType);
-    final transcript = businessType == BusinessType.tiling
-        ? kTilingDemoTranscript
-        : kPaintingDemoTranscript;
-    final services = await ServiceItemRepository.seedFromTemplate(businessType);
-    final rateMap = await ServiceItemRepository.getRateMap(businessType);
-    final result = const TranscriptParser()
-        .parse(transcript, services: services, savedRates: rateMap);
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReviewScreen(
-          businessType: businessType,
-          originalTranscript: transcript,
-          parsingWarnings: result.warnings,
-          initialLineItems: result.items.map((i) => i.toQuoteLineItem()).toList(),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -104,33 +76,6 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
               ),
 
               const SizedBox(height: 20),
-
-              // ── Demo shortcut ──────────────────────────────────────────
-              Text(
-                '— or try a demo / डेमो देखें —',
-                style: tt.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _useDemoTranscript(BusinessType.tiling),
-                      icon: const Icon(Icons.grid_4x4_rounded, size: 18),
-                      label: const Text('Tiling Demo'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _useDemoTranscript(BusinessType.painting),
-                      icon: const Icon(Icons.format_paint_rounded, size: 18),
-                      label: const Text('Painting Demo'),
-                    ),
-                  ),
-                ],
-              ),
 
               const Spacer(),
 

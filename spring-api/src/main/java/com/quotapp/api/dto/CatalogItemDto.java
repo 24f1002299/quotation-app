@@ -10,11 +10,13 @@ import java.util.List;
 /**
  * One service the contractor sells, passed as extraction context.
  *
- * <p>Legacy name kept for wire compatibility; the "catalog" is the user's own
+ * <p><b>Deprecated:</b> use {@link ServiceItemDto} for new code. This legacy
+ * name is kept for wire compatibility; the "catalog" is the user's own
  * service list and works for any business domain. New clients send
  * {@code name}/{@code unit}/{@code keywords}; the old
  * {@code displayName}/{@code defaultUnit}/{@code synonyms} names still bind.
  */
+@Deprecated(forRemoval = false, since = "universal-business")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record CatalogItemDto(
     @NotBlank(message = "Catalog item ID cannot be blank")
@@ -35,4 +37,9 @@ public record CatalogItemDto(
     List<String> synonyms,
 
     String trade
-) {}
+) {
+    /** Canonical service view of this legacy entry. */
+    public ServiceItemDto toServiceItem() {
+        return ServiceItemDto.fromCatalog(this);
+    }
+}

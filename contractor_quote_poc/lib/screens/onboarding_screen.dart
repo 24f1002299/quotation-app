@@ -25,6 +25,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _nameCtrl = TextEditingController();
   final _businessCtrl = TextEditingController();
+  final _customCtrl = TextEditingController();
   BusinessType _businessType = BusinessType.tiling;
   bool _loading = true;
   bool _saving = false;
@@ -45,6 +46,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _nameCtrl.text = profile.ownerName;
       _businessCtrl.text = profile.businessName;
       _businessType = profile.businessType;
+      _customCtrl.text = profile.customBusinessType;
       _loading = false;
     });
   }
@@ -53,6 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _businessCtrl.dispose();
+    _customCtrl.dispose();
     super.dispose();
   }
 
@@ -67,8 +70,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
       return;
     }
+    // Free-text businesses must be named: "Other" without words is nothing.
+    if (_businessType == BusinessType.other &&
+        _customCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('${AppStrings.of(context, 'custom_business_type')} *'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     // Step 0 → step 1: preview the starter template for the chosen work.
-    if (_step == 0 && !widget.isEditMode) {
+    // "Other" has no template and starts from scratch — save directly.
+    if (_step == 0 && !widget.isEditMode && _businessType != BusinessType.other) {
       setState(() => _saving = true);
       try {
         final template = await TemplateLoader.load(_businessType);
@@ -95,6 +111,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ownerName: _nameCtrl.text.trim(),
         businessName: _businessCtrl.text.trim(),
         businessType: _businessType,
+        customBusinessType: _businessType == BusinessType.other
+            ? _customCtrl.text.trim()
+            : '',
       ),
     );
     await ProfileRepository.setOnboardingCompleted(true);
@@ -177,6 +196,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 selected: _businessType,
                 onChanged: (type) => setState(() => _businessType = type),
               ),
+              if (_businessType == BusinessType.other) ...[
+                const SizedBox(height: 12),
+                Text(t('custom_business_type'), style: _labelStyle),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _customCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: t('custom_business_hint'),
+                  ),
+                ),
+              ],
               if (_step == 1) ...[
                 const SizedBox(height: 20),
                 Row(

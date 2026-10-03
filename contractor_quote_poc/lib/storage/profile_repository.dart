@@ -159,14 +159,18 @@ class ProfileRepository {
           'owner_name': profile.ownerName,
           // The legacy `trade` column is left untouched: it is a two-value
           // check constraint and `business_type` (migration 007) is the
-          // source of truth from here on.
-          'business_type': businessTypeInfo(profile.businessType).id,
+          // source of truth from here on. Free-text businesses sync as
+          // their slugified custom name (server accepts any slug).
+          'business_type': businessTypeSlug(
+              profile.businessType, profile.customBusinessType),
           'city': profile.city,
           'address': profile.address,
           'phone': profile.phone,
           'gstin': profile.gstin,
           'logo_path': profile.logoPath,
           'quote_terms': profile.quoteTerms,
+          'default_unit': profile.defaultUnit,
+          'currency': profile.currency,
           'schema_version': profile.schemaVersion,
           'version': profile.version,
         });

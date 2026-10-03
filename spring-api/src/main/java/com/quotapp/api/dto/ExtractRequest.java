@@ -13,15 +13,15 @@ import java.util.List;
 /**
  * Extraction endpoint request payload.
  *
- * <p>Specifies the spoken transcript, the contractor's business type (any
- * free-form slug such as 'tiling', 'pest_control' or 'catering' — the old
- * tiling|painting restriction was removed for universal business support),
- * the user's own service list, saved rates, language hint, and schema
- * version.
+ * <p>Canonical names are {@code businessType} and {@code serviceItems}
+ * (the user's own service list for any business domain). Legacy wire names
+ * are still accepted: {@code trade} for {@code businessType},
+ * {@code catalogEntries} for {@code serviceItems}, and {@code rateMemory}
+ * for {@code savedRates}.
  *
- * <p>Legacy wire names are still accepted: {@code trade} for
- * {@code businessType}, {@code catalogEntries} for {@code serviceItems},
- * and {@code rateMemory} for {@code savedRates}.
+ * <p>Use {@link #resolvedBusinessType()} and {@link #resolvedServiceItems()}
+ * in new code: they expose the canonical names regardless of which wire
+ * key the client sent.
  *
  * <p>Enforces a 5,000 character transcript ceiling to protect backend latency and tokens.
  */
@@ -66,5 +66,15 @@ public record ExtractRequest(
         if (schemaVersion == null || schemaVersion.isBlank()) {
             schemaVersion = "1.0";
         }
+    }
+
+    /** Canonical business-type slug, regardless of which wire key was sent. */
+    public String resolvedBusinessType() {
+        return trade;
+    }
+
+    /** Canonical service-list view of the legacy catalog entries. */
+    public List<ServiceItemDto> resolvedServiceItems() {
+        return catalogEntries.stream().map(ServiceItemDto::fromCatalog).toList();
     }
 }

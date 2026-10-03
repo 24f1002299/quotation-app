@@ -4,6 +4,8 @@ import '../templates/template_data.dart';
 import '../models/quote.dart';
 import '../models/quote_flags.dart';
 import '../storage/service_list_version_repository.dart';
+import '../storage/profile_repository.dart';
+import '../storage/service_item_repository.dart';
 import '../storage/feedback_repository.dart';
 import '../storage/quote_defaults.dart';
 import '../storage/quote_repository.dart';
@@ -143,6 +145,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _warningsAcknowledged = false;
   bool _transcriptExpanded = true;
 
+  /// Free-text business snapshot for the AppBar badge (Other only).
+  String _customLabel = '';
+
   // ── Day 20: uncertainty / error-safe state ───────────────────────────────
   // Failed-sync detail for this quote (from durable outbox), stale-catalog
   // flag, and a stable error-report ID for support (behind Get help only).
@@ -237,7 +242,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
     for (final item in _items) {
       _attachListeners(item);
     }
+    if (widget.businessType == BusinessType.other) _loadCustomLabel();
     _loadDay20Status();
+  }
+
+  /// Display-only: free-text trades show the profile's custom name on the
+  /// badge. Never blocks or alters the draft.
+  Future<void> _loadCustomLabel() async {
+    try {
+      final profile = await ProfileRepository.getProfile();
+      if (!mounted) return;
+      setState(() => _customLabel = profile.customBusinessType.trim());
+    } catch (_) {}
   }
 
   /// Day 20: load failed-sync (durable outbox) + stale-catalog state.
@@ -476,6 +492,53 @@ class _ReviewScreenState extends State<ReviewScreen> {
     setState(() => item.acknowledged = true);
   }
 
+  /// Only unlisted items with a real quantity can grow the service list.
+  bool _canAddToMyList(EditableItem item) {
+    if (item.serviceItemId != null) return false;
+    if (item.description.text.trim().isEmpty) return false;
+    return (int.tryParse(item.quantity.text.trim()) ?? 0) > 0;
+  }
+
+  /// One-tap "Add to my list": saves the suggested item as a ServiceItem and
+  /// links the row to it, clearing its review flag.
+  Future<void> _addToMyList(int index) async {
+    if (index < 0 || index >= _items.length) return;
+    final item = _items[index];
+    if (!_canAddToMyList(item)) return;
+    final type = widget.businessType ??
+        (await ProfileRepository.getProfile()).businessType;
+    final rateRupees = int.tryParse(item.rate.text.trim()) ?? 0;
+    final saved = await ServiceItemRepository.upsert(
+      name: item.description.text.trim(),
+      unit: item.unit.text.trim().isEmpty ? 'item' : item.unit.text.trim(),
+      ratePaise: (rateRupees < 0 ? 0 : rateRupees) * 100,
+      businessType: type,
+    );
+    if (!mounted) return;
+    final linked = EditableItem(
+      description: item.description.text,
+      quantity: item.quantity.text,
+      unit: item.unit.text,
+      rate: item.rate.text,
+      confidence: item.confidence,
+      uncertaintyNote: item.uncertaintyNote,
+      sourceSpan: item.sourceSpan,
+      isUnknown: false,
+      requiresReview: false,
+      acknowledged: true,
+      serviceItemId: saved.id,
+    );
+    _items[index].dispose();
+    _attachListeners(linked);
+    setState(() => _items[index] = linked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved to my services / मेरी सेवाओं में सहेजा गया'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _acknowledgeWarnings() {
     setState(() {
       _warningsAcknowledged = true;
@@ -605,6 +668,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
     // Day 15: immutable [_quoteId] is the idempotency anchor — reused on
     // every re-save of this draft. [_displayNumber] stays stable while
     // editing; backend may later fill serverDisplayNumber on first sync.
+    // Free-text businesses snapshot their custom label onto the quote so
+    // history/PDF print the user's own words.
+    final profile = await ProfileRepository.getProfile();
     final saved = SavedQuote(
       id: _quoteId,
       quoteNumber: _displayNumber,
@@ -612,6 +678,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
       createdAt: DateTime.now(),
       quoteDate: _quoteDate ?? DateTime.now(),
       businessType: widget.businessType,
+      businessTypeLabel: profile.businessType == BusinessType.other
+          ? profile.customBusinessType.trim()
+          : '',
       customerName: _customerNameCtrl.text.trim().isEmpty
           ? 'Client'
           : _customerNameCtrl.text.trim(),
@@ -653,14 +722,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final blockingReason = _pdfBlockingReason;
 
     // Phase 4: businessType was chosen upstream — AppBar stays clean.
-    // Badge uses the business-type metadata so all 10 types render
-    // correctly (the old tiling/painting ternary only covered two).
+    // Badge uses the business-type metadata so all types render correctly;
+    // free-text trades show the profile's custom name.
     final businessTypeBadge = widget.businessType == null
         ? null
         : Chip(
             label: Text(
-              businessTypeInfo(widget.businessType!).labels['en'] ??
-                  widget.businessType!.name,
+              quoteBusinessLabel(
+                  widget.businessType, _customLabel, 'en'),
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),
@@ -793,6 +862,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                             onDelete: () => _deleteItem(entry.key),
                             onAcknowledge: () =>
                                 _acknowledgeItem(entry.value),
+                            onAddToList: _canAddToMyList(entry.value)
+                                ? () => _addToMyList(entry.key)
+                                : null,
                           ),
                         ),
                       ],

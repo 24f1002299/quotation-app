@@ -9,9 +9,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:contractor_quote_poc/models/extraction_models.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
+import 'package:contractor_quote_poc/models/service_item.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';
 import 'package:contractor_quote_poc/storage/saved_quote.dart';
+import 'package:contractor_quote_poc/storage/service_item_repository.dart';
 import 'package:contractor_quote_poc/storage/sync_outbox.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
+import 'package:contractor_quote_poc/templates/template_loader.dart';
 
 const _customer = Customer(name: 'Test Client');
 
@@ -172,10 +176,22 @@ void main() {
   group('parsing and validation', () {
     const parser = TranscriptParser();
 
+    // New contract: the parser matches the user's own service list, so
+    // these tests seed the tiling starter list first.
+    late List<ServiceItem> tiling;
+    setUpAll(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      TemplateLoader.clearCache();
+      tiling =
+          await ServiceItemRepository.seedFromTemplate(BusinessType.tiling);
+    });
+
     test('known tiling phrase maps to catalog item with qty/rate', () {
       final r = parser.parse(
         '850 square foot tiles labour, 45 rupaye per foot, '
         'skirting 120 running foot, 60 rupaye per foot',
+        services: tiling,
       );
       expect(r.items, hasLength(2));
       expect(r.items.first.quantity, 850);
@@ -191,6 +207,7 @@ void main() {
     test('Devanagari digits parse (१२० running foot)', () {
       final r = parser.parse(
         'skirting १२० running foot, 60 rupaye per foot',
+        services: tiling,
       );
       expect(r.items, isNotEmpty);
       expect(r.items.first.quantity, 120);
@@ -200,11 +217,15 @@ void main() {
       // Fully-specified parse proves the phrase resolves to a catalog item.
       final full = parser.parse(
         '850 square foot tiles labour, 45 rupaye per foot',
+        services: tiling,
       );
       expect(full.items, isNotEmpty);
       // Spot-check: without memory the rate is 0 AND a warning is raised
       // (never a silent zero that looks confident).
-      final noRate = parser.parse('850 square foot tiles labour');
+      final noRate = parser.parse(
+        '850 square foot tiles labour',
+        services: tiling,
+      );
       expect(noRate.items, isNotEmpty);
       expect(noRate.items.first.unitRatePaise, 0);
       expect(noRate.hasWarnings, isTrue);

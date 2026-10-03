@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/parser/demo_transcripts.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
+import 'package:contractor_quote_poc/storage/service_item_repository.dart';
+import 'package:contractor_quote_poc/templates/template_loader.dart';
 
 void main() {
   const parser = TranscriptParser();
@@ -19,7 +22,18 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final result = parser.parse(kTilingDemoTranscript);
+    // New contract: parse against the user's seeded service list.
+    SharedPreferences.setMockInitialValues({});
+    TemplateLoader.clearCache();
+    final services =
+        await ServiceItemRepository.seedFromTemplate(BusinessType.tiling);
+    final rateMap =
+        await ServiceItemRepository.getRateMap(BusinessType.tiling);
+    final result = parser.parse(
+      kTilingDemoTranscript,
+      services: services,
+      savedRates: rateMap,
+    );
     expect(result.warnings, isEmpty);
     expect(result.items, hasLength(2));
 
@@ -35,16 +49,16 @@ void main() {
       ),
     );
 
-    // Verify BusinessType chip in app bar
-    expect(find.text('🪣 Tiling'), findsOneWidget);
+    // Verify BusinessType chip in app bar (generic metadata label)
+    expect(find.text('Tiling'), findsOneWidget);
 
     // Verify Spoken Note card is present and displays the transcript
     expect(find.text('Spoken Note / मूल आवाज़'), findsOneWidget);
     expect(find.text('“$kTilingDemoTranscript”'), findsOneWidget);
 
-    // Verify items are rendered
-    expect(find.text('Tile Labour / टाइल मजदूरी'), findsOneWidget);
-    expect(find.text('Skirting / स्कर्टिंग'), findsOneWidget);
+    // Verify items are rendered (user's service names from the template)
+    expect(find.text('Tile fixing'), findsOneWidget);
+    expect(find.text('Skirting tiles'), findsOneWidget);
 
     // Verify subtotal ₹45,450 (both in summary and bottom bar)
     expect(find.text('₹45,450'), findsNWidgets(2));
@@ -62,7 +76,17 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final result = parser.parse(kPaintingDemoTranscript);
+    SharedPreferences.setMockInitialValues({});
+    TemplateLoader.clearCache();
+    final services =
+        await ServiceItemRepository.seedFromTemplate(BusinessType.painting);
+    final rateMap =
+        await ServiceItemRepository.getRateMap(BusinessType.painting);
+    final result = parser.parse(
+      kPaintingDemoTranscript,
+      services: services,
+      savedRates: rateMap,
+    );
     expect(result.warnings, isEmpty);
     expect(result.items, hasLength(2));
 
@@ -78,16 +102,16 @@ void main() {
       ),
     );
 
-    // Verify BusinessType chip in app bar
-    expect(find.text('🖌️ Painting'), findsOneWidget);
+    // Verify BusinessType chip in app bar (generic metadata label)
+    expect(find.text('Painting'), findsOneWidget);
 
     // Verify Spoken Note card
     expect(find.text('Spoken Note / मूल आवाज़'), findsOneWidget);
     expect(find.text('“$kPaintingDemoTranscript”'), findsOneWidget);
 
-    // Verify items
-    expect(find.text('Wall Putty / वॉल पुट्टी'), findsOneWidget);
-    expect(find.text('Painting / पेंटिंग'), findsOneWidget);
+    // Verify items (user's service names from the template)
+    expect(find.text('Wall putty'), findsOneWidget);
+    expect(find.text('Interior wall painting'), findsOneWidget);
 
     // Verify subtotal ₹36,000
     expect(find.text('₹36,000'), findsNWidgets(2));
@@ -121,7 +145,7 @@ void main() {
 
     // Warning banner is displayed
     expect(find.text('Please Review / ध्यान दें'), findsOneWidget);
-    expect(find.textContaining('No recognized items'), findsOneWidget);
+    expect(find.textContaining('No services in your list match'), findsOneWidget);
 
     // Empty items hint tailored for voice
     expect(find.text('No items auto-detected from voice'), findsOneWidget);

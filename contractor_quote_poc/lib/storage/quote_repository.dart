@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../templates/template_data.dart';
 import '../models/quote.dart';
-import '../parser/demo_transcripts.dart';
 import 'saved_quote.dart';
 
 import 'encrypted_draft_store.dart';
@@ -134,7 +133,9 @@ class QuoteRepository {
         customerAddress: 'Flat 302, Green Acres, Mumbai',
         validityDays: 15,
         notes: '50% advance before tile delivery, balance on completion.',
-        originalTranscript: kTilingDemoTranscript,
+        originalTranscript:
+            'Sharma ji ka flat, 850 square foot tiles labour, 45 rupaye per foot, '
+            'skirting 120 running foot, 60 rupaye per foot.',
         lineItems: const [
           QuoteLineItem(
             description: 'Tile Labour / टाइल मजदूरी',
@@ -160,7 +161,9 @@ class QuoteRepository {
         customerAddress: 'Bungalow 7, Model Colony, Pune',
         validityDays: 30,
         notes: 'Includes Asian Paints Royale luxury emulsion, 2 coats.',
-        originalTranscript: kPaintingDemoTranscript,
+        originalTranscript:
+            'Verma ji ka flat, 1200 square foot wall putty, 18 rupaye per foot, '
+            'painting 1200 square foot, 12 rupaye per foot.',
         lineItems: const [
           QuoteLineItem(
             description: 'Wall Putty / वॉल पुट्टी',

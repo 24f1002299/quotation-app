@@ -23,5 +23,6 @@ public record RateMemoryItemDto(
     @Min(value = 0, message = "unitRatePaise cannot be negative")
     Long unitRatePaise,
 
+    @JsonAlias("businessType")
     String trade
 ) {}

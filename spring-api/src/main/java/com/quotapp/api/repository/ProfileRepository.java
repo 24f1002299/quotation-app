@@ -44,6 +44,8 @@ public class ProfileRepository {
             profile.gstin() != null ? profile.gstin() : (existing != null ? existing.gstin() : null),
             profile.logoPath() != null ? profile.logoPath() : (existing != null ? existing.logoPath() : null),
             profile.quoteTerms() != null ? profile.quoteTerms() : (existing != null ? existing.quoteTerms() : ""),
+            profile.defaultUnit() != null ? profile.defaultUnit() : (existing != null ? existing.defaultUnit() : "item"),
+            profile.currency() != null ? profile.currency() : (existing != null ? existing.currency() : "INR"),
             profile.schemaVersion() != null ? profile.schemaVersion() : 1,
             nextVersion,
             Instant.now()

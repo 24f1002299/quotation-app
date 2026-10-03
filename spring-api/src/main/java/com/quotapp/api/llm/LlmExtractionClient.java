@@ -119,7 +119,7 @@ public class LlmExtractionClient {
      */
     public RawExtractionResult extract(
         String transcript,
-        String trade,
+        String businessType,
         List<CatalogItemDto> catalogEntries,
         List<RateMemoryItemDto> rateMemory,
         String language
@@ -137,7 +137,7 @@ public class LlmExtractionClient {
             return fallbackExtract(transcript, catalogEntries);
         }
 
-        String systemPrompt = buildSystemPrompt(trade, catalogEntries, rateMemory);
+        String systemPrompt = buildSystemPrompt(businessType, catalogEntries, rateMemory);
         String userPrompt = "Contractor Transcript: \"" + transcript + "\"";
 
         Map<String, Object> requestPayload = Map.of(
@@ -153,8 +153,8 @@ public class LlmExtractionClient {
         // Day 22: never log transcript content — log lengths/counts only.
         // Contractor speech may contain customer PII; the transcript itself
         // is sent to the provider API but must not land in our logs.
-        log.info("Sending constrained LLM request: provider={}, model={}, trade={}, transcriptChars={}, catalogEntries={}",
-            provider, activeModel, trade, transcript != null ? transcript.length() : 0, catalogEntries.size());
+        log.info("Sending constrained LLM request: provider={}, model={}, businessType={}, transcriptChars={}, catalogEntries={}",
+            provider, activeModel, businessType, transcript != null ? transcript.length() : 0, catalogEntries.size());
 
         int attempts = 0;
         Exception lastException = null;
@@ -175,7 +175,7 @@ public class LlmExtractionClient {
 
             } catch (Exception ex) {
                 lastException = ex;
-                log.warn("LLM extraction call attempt {} failed for trade={}, error={}", attempts, trade, ex.getMessage());
+                log.warn("LLM extraction call attempt {} failed for businessType={}, error={}", attempts, businessType, ex.getMessage());
                 if (attempts <= maxRetries) {
                     try {
                         Thread.sleep(200L * attempts); // Exponential backoff
@@ -188,11 +188,11 @@ public class LlmExtractionClient {
         }
 
         circuitBreaker.recordFailure();
-        log.error("All {} LLM extraction attempts failed for trade={}", attempts, trade);
+        log.error("All {} LLM extraction attempts failed for businessType={}", attempts, businessType);
         throw new RuntimeException("LLM extraction failed: " + (lastException != null ? lastException.getMessage() : "Unknown error"), lastException);
     }
 
-    private String buildSystemPrompt(String trade, List<CatalogItemDto> catalogEntries, List<RateMemoryItemDto> rateMemory) {
+    private String buildSystemPrompt(String businessType, List<CatalogItemDto> catalogEntries, List<RateMemoryItemDto> rateMemory) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are a quotation extraction engine for Indian contractors in ANY business ")
           .append("(tiling, painting, pest control, catering, electrical, plumbing, cleaning, ...).\n");
@@ -200,7 +200,7 @@ public class LlmExtractionClient {
           .append("There is no other catalog. Transcripts may be Hindi, Marathi, Hinglish, or English.\n\n");
         sb.append("### STRICT RULES:\n");
         sb.append("1. 'items': ONLY work that clearly matches one service below (name or synonyms). ")
-          .append("Use its exact service id. Business type '").append(trade).append("' is context only — ")
+          .append("Use its exact service id. Business type '").append(businessType).append("' is context only — ")
           .append("never reject a listed service because of it.\n");
         sb.append("2. 'suggestedItems': clearly billable work with a quantity that matches NO listed service. ")
           .append("Propose a short name, quantity, unit, and rateHintPaise ONLY when the transcript states a rate; ")
@@ -209,7 +209,7 @@ public class LlmExtractionClient {
           .append("DO NOT guess or hallucinate.\n");
         sb.append("4. DO NOT calculate amounts, subtotals, grand totals, or GST. Never output 'amount' or 'total'.\n");
         sb.append("5. Output ONLY valid JSON matching this schema:\n");
-        sb.append("{\n  \"items\": [\n    {\"catalogItemId\": \"id_from_services\", \"quantity\": 120.0, \"unit\": \"sq ft\", \"sourceSpan\": \"exact words\"}\n  ],\n");
+        sb.append("{\n  \"items\": [\n    {\"serviceItemId\": \"id_from_services\", \"quantity\": 120.0, \"unit\": \"sq ft\", \"sourceSpan\": \"exact words\"}\n  ],\n");
         sb.append("  \"suggestedItems\": [\n    {\"proposedName\": \"short name\", \"quantity\": 2.0, \"unit\": \"room\", \"rateHintPaise\": 50000, \"sourceSpan\": \"exact words\"}\n  ],\n");
         sb.append("  \"unknowns\": [\n    {\"sourceSpan\": \"exact words\", \"suspectedTerm\": \"optional guess\", \"reason\": \"explanation\"}\n  ]\n}\n\n");
 
@@ -354,7 +354,7 @@ public class LlmExtractionClient {
         }
 
         if (items.isEmpty()) {
-            unknowns.add(new RawUnknownItem(transcript.length() > 35 ? transcript.substring(0, 35) + "..." : transcript, null, "No matching catalog items found"));
+            unknowns.add(new RawUnknownItem(transcript.length() > 35 ? transcript.substring(0, 35) + "..." : transcript, null, "No matching service-list items found"));
         }
 
         return new RawExtractionResult(items, unknowns);
