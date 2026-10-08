@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // VoiceNoteCard — collapsible spoken-note card.
 // ParsingWarningsBanner — parser warnings with dismiss action.
@@ -46,7 +48,7 @@ class VoiceNoteCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Spoken Note / मूल आवाज़',
+                      AppStrings.of(context, 'spoken_note'),
                       style: tt.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -62,7 +64,7 @@ class VoiceNoteCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      'Voice Transcript',
+                      AppStrings.of(context, 'voice_transcript'),
                       style: tt.bodySmall?.copyWith(
                         fontSize: 10,
                         color: cs.primary,
@@ -106,7 +108,7 @@ class VoiceNoteCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Parsed into line items below',
+                        AppStrings.of(context, 'parsed_into_items'),
                         style: tt.bodySmall?.copyWith(fontSize: 11),
                       ),
                     ],
@@ -157,7 +159,7 @@ class ParsingWarningsBanner extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Please Review / ध्यान दें',
+                  AppStrings.of(context, 'please_review'),
                   style: tt.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF92400E),
@@ -172,7 +174,7 @@ class ParsingWarningsBanner extends StatelessWidget {
                 ),
                 onPressed: onDismiss,
                 visualDensity: VisualDensity.compact,
-                tooltip: 'Dismiss warning',
+                tooltip: AppStrings.of(context, 'dismiss'),
               ),
             ],
           ),
@@ -201,7 +203,7 @@ class ParsingWarningsBanner extends StatelessWidget {
             ),
           const SizedBox(height: 6),
           Text(
-            'Check the items below or tap "Add item" to complete any missing details.',
+            AppStrings.of(context, 'check_items_add_missing'),
             style: tt.bodySmall?.copyWith(fontSize: 11),
           ),
         ],

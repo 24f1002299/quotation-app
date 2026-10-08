@@ -232,7 +232,7 @@ public class QuoteRepository {
             idempKey != null ? idempKey : quoteId,
             displayNumber,
             quote.status() != null ? quote.status() : "ready",
-            quote.trade() != null ? quote.trade() : "tiling",
+            quote.businessType() != null ? quote.businessType() : "tiling",
             quote.clientName() != null ? quote.clientName() : "Client",
             quote.clientPhone(),
             quote.siteAddress(),

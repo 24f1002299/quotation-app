@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AttentionSummary — "Needs attention (N)" banner.
 // Light amber surface; colour is never the only signal (icon + text).
@@ -30,7 +32,8 @@ class AttentionSummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Needs attention ($count)',
+                  AppStrings.of(context, 'needs_attention_title')
+                      .replaceAll('{n}', '$count'),
                   style: tt.titleMedium?.copyWith(
                     color: const Color(0xFF92400E),
                     fontWeight: FontWeight.w700,
@@ -38,7 +41,7 @@ class AttentionSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Check or acknowledge the highlighted items before creating the PDF.',
+                  AppStrings.of(context, 'check_items_before_pdf'),
                   style: tt.bodySmall,
                 ),
               ],

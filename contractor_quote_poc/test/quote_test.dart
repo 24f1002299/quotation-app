@@ -194,20 +194,20 @@ void main() {
       ),
     );
 
-    expect(find.text('Needs attention (1)'), findsOneWidget);
-    await tester.tap(find.text('Generate PDF / PDF बनाएं'));
+    expect(find.text('ध्यान दें (1)'), findsOneWidget);
+    await tester.tap(find.text('PDF बनाएं'));
     await tester.pump();
-    expect(find.text('PDF Preview / पूर्वावलोकन'), findsNothing);
+    expect(find.text('PDF देखें'), findsNothing);
     expect(
       find.textContaining('Please check "Wall paint"'),
       findsAtLeastNWidgets(1),
     );
 
-    await tester.tap(find.text('Mark as checked / जांच ली'));
+    await tester.tap(find.text('जांच लिया'));
     await tester.pump();
-    expect(find.text('Needs attention (1)'), findsNothing);
+    expect(find.text('ध्यान दें (1)'), findsNothing);
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('Checked / जांच ली गई'), findsOneWidget);
+    expect(find.text('जांच लिया'), findsOneWidget);
   });
 
   testWidgets(
@@ -240,45 +240,45 @@ void main() {
         ),
       );
 
-      expect(find.text('Item 1 / मद 1'), findsOneWidget);
+      expect(find.text('काम 1'), findsOneWidget);
       expect(find.text('₹200'), findsOneWidget);
-      expect(find.text('Duplicate'), findsNWidgets(2));
+      expect(find.text('दोहराएं'), findsNWidgets(2));
 
-      await tester.tap(find.text('Edit').first);
+      await tester.tap(find.text('बदलें').first);
       await tester.pumpAndSettle();
-      expect(find.text('Edit Item / मद बदलें'), findsOneWidget);
+      expect(find.text('काम बदलें'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField).at(1), '4');
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('सेव करें'));
       await tester.pumpAndSettle();
       expect(find.text('₹550'), findsNWidgets(2));
 
-      await tester.tap(find.text('Duplicate').first);
+      await tester.tap(find.text('दोहराएं').first);
       await tester.pumpAndSettle();
-      expect(find.text('Item 3 / मद 3'), findsOneWidget);
+      expect(find.text('काम 3'), findsOneWidget);
       expect(find.text('A'), findsNWidgets(2));
 
-      await tester.tap(find.byTooltip('Move item 3 up'));
+      await tester.tap(find.byTooltip('काम 3 ऊपर करें'));
       await tester.pumpAndSettle();
       final bTop = tester.getTopLeft(find.text('B')).dy;
       final duplicateTop = tester.getTopLeft(find.text('A').last).dy;
       expect(bTop, lessThan(duplicateTop));
 
-      await tester.tap(find.text('Add item'));
+      await tester.tap(find.text('+ काम जोड़ें'));
       await tester.pumpAndSettle();
       final formFields = find.byType(TextFormField);
       await tester.enterText(formFields.at(0), 'C');
       await tester.enterText(formFields.at(1), '1');
       await tester.enterText(formFields.at(2), 'job');
       await tester.enterText(formFields.at(3), '25');
-      await tester.tap(find.text('Add'));
+      await tester.tap(find.text('जोड़ें'));
       await tester.pumpAndSettle();
       expect(find.text('C'), findsOneWidget);
       expect(find.text('₹975'), findsNWidgets(2));
 
-      await tester.tap(find.text('Delete').first);
+      await tester.tap(find.text('हटाएं').first);
       await tester.pumpAndSettle();
-      expect(find.text('Delete item / मद हटाएं?'), findsOneWidget);
-      await tester.tap(find.text('Delete / हटाएं'));
+      expect(find.text('"A" कोटेशन से हटाएं?'), findsOneWidget);
+      await tester.tap(find.text('हटाएं').last);
       await tester.pumpAndSettle();
       expect(find.text('A'), findsOneWidget);
     },

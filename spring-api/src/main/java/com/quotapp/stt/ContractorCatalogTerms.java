@@ -18,7 +18,9 @@ public final class ContractorCatalogTerms {
     private ContractorCatalogTerms() {}
 
     /**
-     * Common trade terms, units, and Hindi/Marathi phrases for tiling and painting.
+     * Common service terms, units, and Hindi/Marathi phrases across all
+     * business domains (tiling and painting first, plus anchors for pest
+     * control, catering, electrical, plumbing, cleaning and beyond).
      */
     public static final List<String> TERMS = List.of(
         // Tiling catalogue items & synonyms

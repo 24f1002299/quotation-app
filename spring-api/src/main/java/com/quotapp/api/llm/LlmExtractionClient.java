@@ -2,8 +2,8 @@ package com.quotapp.api.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quotapp.api.dto.CatalogItemDto;
 import com.quotapp.api.dto.RateMemoryItemDto;
+import com.quotapp.api.dto.ServiceItemDto;
 import com.quotapp.api.resilience.ExtractionCircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,7 +84,7 @@ public class LlmExtractionClient {
     }
 
     public record RawExtractedItem(
-        String catalogItemId,
+        String serviceItemId,
         Double quantity,
         String unit,
         String sourceSpan
@@ -120,8 +120,8 @@ public class LlmExtractionClient {
     public RawExtractionResult extract(
         String transcript,
         String businessType,
-        List<CatalogItemDto> catalogEntries,
-        List<RateMemoryItemDto> rateMemory,
+        List<ServiceItemDto> serviceItems,
+        List<RateMemoryItemDto> savedRates,
         String language
     ) {
         if (!circuitBreaker.canExecute()) {
@@ -133,11 +133,11 @@ public class LlmExtractionClient {
         String activeModel = "openai".equals(provider) ? openaiModel : grokModel;
 
         if (!StringUtils.hasText(activeApiKey)) {
-            log.warn("LLM API key not configured for provider={}. Falling back to rule-based catalog matcher.", provider);
-            return fallbackExtract(transcript, catalogEntries);
+            log.warn("LLM API key not configured for provider={}. Falling back to rule-based service matcher.", provider);
+            return fallbackExtract(transcript, serviceItems);
         }
 
-        String systemPrompt = buildSystemPrompt(businessType, catalogEntries, rateMemory);
+        String systemPrompt = buildSystemPrompt(businessType, serviceItems, savedRates);
         String userPrompt = "Contractor Transcript: \"" + transcript + "\"";
 
         Map<String, Object> requestPayload = Map.of(
@@ -153,8 +153,8 @@ public class LlmExtractionClient {
         // Day 22: never log transcript content — log lengths/counts only.
         // Contractor speech may contain customer PII; the transcript itself
         // is sent to the provider API but must not land in our logs.
-        log.info("Sending constrained LLM request: provider={}, model={}, businessType={}, transcriptChars={}, catalogEntries={}",
-            provider, activeModel, businessType, transcript != null ? transcript.length() : 0, catalogEntries.size());
+        log.info("Sending constrained LLM request: provider={}, model={}, businessType={}, transcriptChars={}, serviceItems={}",
+            provider, activeModel, businessType, transcript != null ? transcript.length() : 0, serviceItems.size());
 
         int attempts = 0;
         Exception lastException = null;
@@ -171,7 +171,7 @@ public class LlmExtractionClient {
                     .body(String.class);
 
                 circuitBreaker.recordSuccess();
-                return parseLlmResponse(responseBody, catalogEntries);
+                return parseLlmResponse(responseBody, serviceItems);
 
             } catch (Exception ex) {
                 lastException = ex;
@@ -192,7 +192,7 @@ public class LlmExtractionClient {
         throw new RuntimeException("LLM extraction failed: " + (lastException != null ? lastException.getMessage() : "Unknown error"), lastException);
     }
 
-    private String buildSystemPrompt(String businessType, List<CatalogItemDto> catalogEntries, List<RateMemoryItemDto> rateMemory) {
+    private String buildSystemPrompt(String businessType, List<ServiceItemDto> serviceItems, List<RateMemoryItemDto> savedRates) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are a quotation extraction engine for Indian contractors in ANY business ")
           .append("(tiling, painting, pest control, catering, electrical, plumbing, cleaning, ...).\n");
@@ -214,15 +214,15 @@ public class LlmExtractionClient {
         sb.append("  \"unknowns\": [\n    {\"sourceSpan\": \"exact words\", \"suspectedTerm\": \"optional guess\", \"reason\": \"explanation\"}\n  ]\n}\n\n");
 
         sb.append("### CONTRACTOR SERVICES (any business):\n");
-        if (catalogEntries == null || catalogEntries.isEmpty()) {
+        if (serviceItems == null || serviceItems.isEmpty()) {
             sb.append("(no saved services — put every billable phrase in suggestedItems, noise in unknowns)\n");
         }
-        for (CatalogItemDto item : catalogEntries) {
+        for (ServiceItemDto item : serviceItems) {
             sb.append("- ID: ").append(item.id())
-              .append(", Name: ").append(item.displayName())
-              .append(", DefaultUnit: ").append(item.defaultUnit());
-            if (item.synonyms() != null && !item.synonyms().isEmpty()) {
-                sb.append(", Synonyms: ").append(String.join(", ", item.synonyms()));
+              .append(", Name: ").append(item.name())
+              .append(", DefaultUnit: ").append(item.unit());
+            if (item.keywords() != null && !item.keywords().isEmpty()) {
+                sb.append(", Synonyms: ").append(String.join(", ", item.keywords()));
             }
             sb.append("\n");
         }
@@ -230,7 +230,7 @@ public class LlmExtractionClient {
         return sb.toString();
     }
 
-    private RawExtractionResult parseLlmResponse(String rawJson, List<CatalogItemDto> catalogEntries) {
+    private RawExtractionResult parseLlmResponse(String rawJson, List<ServiceItemDto> serviceItems) {
         List<RawExtractedItem> items = new ArrayList<>();
         List<RawUnknownItem> unknowns = new ArrayList<>();
         List<RawSuggestedItem> suggested = new ArrayList<>();
@@ -250,17 +250,17 @@ public class LlmExtractionClient {
             // Extract items
             if (contentNode.has("items") && contentNode.get("items").isArray()) {
                 for (JsonNode itemNode : contentNode.get("items")) {
-                    String rawId = itemNode.has("catalogItemId") ? itemNode.get("catalogItemId").asText() : "";
-                    if (rawId.isBlank() && itemNode.has("serviceItemId")) {
-                        rawId = itemNode.get("serviceItemId").asText();
+                    String rawId = itemNode.has("serviceItemId") ? itemNode.get("serviceItemId").asText() : "";
+                    if (rawId.isBlank() && itemNode.has("catalogItemId")) {
+                        rawId = itemNode.get("catalogItemId").asText();
                     }
                     final String catalogId = rawId;
                     double qty = itemNode.has("quantity") ? itemNode.get("quantity").asDouble() : 1.0;
                     String unit = itemNode.has("unit") ? itemNode.get("unit").asText() : "sq ft";
                     String span = itemNode.has("sourceSpan") ? itemNode.get("sourceSpan").asText() : "";
 
-                    // Verify catalogId belongs to allowed catalog
-                    boolean allowed = catalogEntries.stream().anyMatch(c -> c.id().equalsIgnoreCase(catalogId));
+                    // Verify serviceItemId belongs to allowed service list
+                    boolean allowed = serviceItems.stream().anyMatch(c -> c.id().equalsIgnoreCase(catalogId));
                     if (allowed) {
                         items.add(new RawExtractedItem(catalogId, qty, unit, span));
                     } else if (!catalogId.isBlank()) {
@@ -283,8 +283,8 @@ public class LlmExtractionClient {
                     // Never let a suggestion shadow a listed service: the
                     // service list wins, so re-route exact matches to items.
                     String shadowed = null;
-                    for (CatalogItemDto c : catalogEntries) {
-                        if (c.id().equalsIgnoreCase(name) || c.displayName().equalsIgnoreCase(name)) {
+                    for (ServiceItemDto c : serviceItems) {
+                        if (c.id().equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name)) {
                             shadowed = c.id();
                             break;
                         }
@@ -316,20 +316,20 @@ public class LlmExtractionClient {
     }
 
     /**
-     * Fallback catalog matcher when LLM is unavailable or unconfigured (offline / local dev).
+     * Fallback service matcher when LLM is unavailable or unconfigured (offline / local dev).
      */
-    public RawExtractionResult fallbackExtract(String transcript, List<CatalogItemDto> catalogEntries) {
+    public RawExtractionResult fallbackExtract(String transcript, List<ServiceItemDto> serviceItems) {
         List<RawExtractedItem> items = new ArrayList<>();
         List<RawUnknownItem> unknowns = new ArrayList<>();
 
         java.util.regex.Pattern numPattern = java.util.regex.Pattern.compile("(\\d+(\\.\\d+)?)");
 
-        for (CatalogItemDto catalogItem : catalogEntries) {
+        for (ServiceItemDto serviceItem : serviceItems) {
             List<String> keywords = new ArrayList<>();
-            keywords.add(catalogItem.id());
-            keywords.add(catalogItem.displayName());
-            if (catalogItem.synonyms() != null) {
-                keywords.addAll(catalogItem.synonyms());
+            keywords.add(serviceItem.id());
+            keywords.add(serviceItem.name());
+            if (serviceItem.keywords() != null) {
+                keywords.addAll(serviceItem.keywords());
             }
 
             for (String kw : keywords) {
@@ -347,7 +347,7 @@ public class LlmExtractionClient {
                             qty = Double.parseDouble(m.group(1));
                         } catch (NumberFormatException ignored) {}
                     }
-                    items.add(new RawExtractedItem(catalogItem.id(), qty, catalogItem.defaultUnit(), transcript.substring(idx, Math.min(transcript.length(), idx + kw.length()))));
+                    items.add(new RawExtractedItem(serviceItem.id(), qty, serviceItem.unit(), transcript.substring(idx, Math.min(transcript.length(), idx + kw.length()))));
                     break;
                 }
             }

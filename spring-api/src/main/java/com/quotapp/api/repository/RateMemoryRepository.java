@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Repository
 public class RateMemoryRepository {
 
-    // userId -> Map<catalogItemId, RateMemoryItemDto>
+    // userId -> Map<serviceItemId, RateMemoryItemDto>
     private final ConcurrentHashMap<String, Map<String, RateMemoryItemDto>> userRates = new ConcurrentHashMap<>();
 
     public List<RateMemoryItemDto> findByUserId(String userId) {
@@ -33,8 +33,8 @@ public class RateMemoryRepository {
         }
         Map<String, RateMemoryItemDto> rates = userRates.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
         for (RateMemoryItemDto item : items) {
-            if (item.catalogItemId() != null && !item.catalogItemId().isBlank()) {
-                rates.put(item.catalogItemId().toLowerCase(Locale.ROOT), item);
+            if (item.serviceItemId() != null && !item.serviceItemId().isBlank()) {
+                rates.put(item.serviceItemId().toLowerCase(Locale.ROOT), item);
             }
         }
         return new ArrayList<>(rates.values());

@@ -175,26 +175,26 @@ void main() {
       await tester.pumpAndSettle();
 
       // Customer fields are present
-      expect(find.text('Client name / ग्राहक का नाम *'), findsOneWidget);
-      expect(find.text('Phone / फ़ोन (optional)'), findsOneWidget);
-      expect(find.text('Site / Address / कार्यस्थल (optional)'), findsOneWidget);
+      expect(find.text('ग्राहक का नाम *'), findsOneWidget);
+      expect(find.text('फोन (वैकल्पिक)'), findsOneWidget);
+      expect(find.text('साइट / पता'), findsOneWidget);
 
       // Progressive disclosure header is present
-      expect(find.text('More quote details / अतिरिक्त विवरण'), findsOneWidget);
-      expect(find.text('Expand'), findsOneWidget);
+      expect(find.text('और जानकारी'), findsOneWidget);
+      expect(find.text('खोलें'), findsOneWidget);
 
       // Tap to expand
-      await tester.tap(find.text('Expand'));
+      await tester.tap(find.text('खोलें'));
       await tester.pumpAndSettle();
 
       // Expanded commercial fields are now visible
-      expect(find.text('Quote Number / कोटेशन संख्या'), findsOneWidget);
-      expect(find.text('Offline ID / पहचान'), findsOneWidget);
-      expect(find.text('Quote Date / दिनांक'), findsOneWidget);
-      expect(find.text('Validity / मान्यता (दिन)'), findsOneWidget);
-      expect(find.text('GST / जीएसटी कर'), findsOneWidget);
-      expect(find.text('Advance / अग्रिम भुगतान (optional)'), findsOneWidget);
-      expect(find.text('Terms & Conditions / नियम व शर्तें'), findsOneWidget);
+      expect(find.text('कोटेशन नंबर'), findsOneWidget);
+      expect(find.text('ऑफलाइन ID'), findsOneWidget);
+      expect(find.text('कोटेशन तारीख'), findsOneWidget);
+      expect(find.text('वैधता'), findsOneWidget);
+      expect(find.text('GST'), findsOneWidget);
+      expect(find.text('अग्रिम (वैकल्पिक)'), findsOneWidget);
+      expect(find.text('नियम व शर्तें'), findsOneWidget);
 
       // Toggle GST to 18%
       await tester.tap(find.text('18% GST'));
@@ -205,8 +205,8 @@ void main() {
       expect(find.text('₹4,720'), findsAtLeastNWidgets(1));
 
       // Reset defaults button resets terms
-      expect(find.text('Reset defaults / डिफ़ॉल्ट'), findsOneWidget);
-      await tester.tap(find.text('Reset defaults / डिफ़ॉल्ट'));
+      expect(find.text('डिफ़ॉल्ट करें'), findsOneWidget);
+      await tester.tap(find.text('डिफ़ॉल्ट करें'));
       await tester.pumpAndSettle();
     });
   });

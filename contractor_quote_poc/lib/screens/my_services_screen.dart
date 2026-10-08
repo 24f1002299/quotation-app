@@ -91,7 +91,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(AppStrings.of(ctx, 'cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -170,7 +170,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                   ? null
                   : IconButton(
                       icon: const Icon(Icons.clear_rounded),
-                      tooltip: 'Clear search',
+                      tooltip: t('clear_search'),
                       onPressed: _searchCtrl.clear,
                     ),
             ),

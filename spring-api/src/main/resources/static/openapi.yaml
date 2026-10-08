@@ -8,7 +8,7 @@ info:
     ### Key Architectural Invariants:
     1. **Strict Model Boundary**: Spoken transcripts and extraction results are **untrusted candidates** for review.
     2. **Arithmetic Exclusion**: The extraction endpoint strictly **never computes arithmetic totals** (amount, subtotal, grandTotal, gst). All quotation math is computed deterministically on the client.
-    3. **Rate Provenance**: Rates originate strictly from contractor `rateMemory` (`RATE_MEMORY`), or flagged suggestions (`SUGGESTED`), or `UNKNOWN`.
+    3. **Rate Provenance**: Rates originate strictly from the user's saved service rates (`RATE_MEMORY`), or flagged suggestions (`SUGGESTED`), or `UNKNOWN`.
     4. **Privacy & Ephemerality**: Audio files are streamed in-memory only and never written to server disk or databases. Provider API secrets are never returned or logged.
     5. **Standardized Operations**: Every request supports `X-Request-Id` for tracing and `Idempotency-Key` to safely prevent duplicate submissions.
 
@@ -114,8 +114,9 @@ paths:
     post:
       summary: Extract structured quotation items from transcript
       description: |
-        Parses spoken transcript text into candidate line items, bounded by the trade catalog and
-        contractor rate memory. Unrecognized or ambiguous work is isolated into explicit unknowns.
+        Parses spoken transcript text into candidate line items, bounded by the user's own
+        service list and saved rates. Works for ANY business domain. Unrecognized or
+        ambiguous work is isolated into explicit unknowns or suggested items.
         
         **CRITICAL:** This endpoint NEVER calculates or returns arithmetic totals (`amount`, `total`, `subtotal`).
       security:
@@ -240,8 +241,8 @@ components:
       type: object
       required:
         - transcript
-        - trade
-        - catalogEntries
+        - businessType
+        - serviceItems
         - schemaVersion
       properties:
         transcript:
@@ -249,19 +250,21 @@ components:
           maxLength: 5000
           description: Spoken transcript text (maximum 5,000 characters).
           example: "Kitchen wall tiles 120 sq ft, and skirting 40 rft"
-        trade:
+        businessType:
           type: string
-          enum: [tiling, painting]
+          description: Free-form business slug (tiling, pest_control, catering, ...). Legacy key `trade` still accepted.
           example: "tiling"
-        catalogEntries:
+        serviceItems:
           type: array
-          minItems: 1
+          minItems: 0
+          description: The user's own service list. Legacy key `catalogEntries` still accepted.
           items:
-            $ref: '#/components/schemas/CatalogItem'
-        rateMemory:
+            $ref: '#/components/schemas/ServiceItem'
+        savedRates:
           type: array
+          description: Saved per-service rates. Legacy key `rateMemory` still accepted.
           items:
-            $ref: '#/components/schemas/RateMemoryItem'
+            $ref: '#/components/schemas/SavedRateItem'
         language:
           type: string
           enum: [hi, mr, en, auto]
@@ -277,42 +280,45 @@ components:
           type: string
           example: "c7f9e5a1-4321-4f12-9876-123456789abc"
 
-    CatalogItem:
+    ServiceItem:
       type: object
+      description: One service from the user's own service list (any business domain). Legacy keys `displayName`, `defaultUnit`, `synonyms`, `trade` still accepted.
       required:
         - id
-        - displayName
-        - defaultUnit
+        - name
+        - unit
       properties:
         id:
           type: string
           example: "tile_labour"
-        displayName:
+        name:
           type: string
-          example: "Tile Labour / टाइल मजदूरी"
-        defaultUnit:
+          example: "Tile Labour"
+        unit:
           $ref: '#/components/schemas/ContractorUnit'
         allowableUnits:
           type: array
           items:
             $ref: '#/components/schemas/ContractorUnit'
-        synonyms:
+        keywords:
           type: array
           items:
             type: string
-          example: ["tile labour", "tiles lagana", "टाइल लगाना"]
-        trade:
+          example: ["tile labour", "tiles lagana"]
+        businessType:
           type: string
+          description: Free-form business slug.
           example: "tiling"
 
-    RateMemoryItem:
+    SavedRateItem:
       type: object
+      description: Saved per-service rate. Legacy keys `catalogItemId`, `trade` still accepted.
       required:
-        - catalogItemId
+        - serviceItemId
         - unit
         - unitRatePaise
       properties:
-        catalogItemId:
+        serviceItemId:
           type: string
           example: "tile_labour"
         unit:
@@ -322,7 +328,7 @@ components:
           minimum: 0
           description: Rate in paise (e.g. 3500 paise = ₹35.00).
           example: 3500
-        trade:
+        businessType:
           type: string
           example: "tiling"
 
@@ -330,7 +336,7 @@ components:
       type: object
       required:
         - schemaVersion
-        - trade
+        - businessType
         - lineItems
         - unknowns
         - uncertaintyMetadata
@@ -341,8 +347,9 @@ components:
         schemaVersion:
           type: string
           example: "1.0"
-        trade:
+        businessType:
           type: string
+          description: Free-form business slug echoed from the request.
           example: "tiling"
         lineItems:
           type: array
@@ -371,15 +378,16 @@ components:
         Candidate line item extracted from transcript.
         CRITICAL: Contains NO arithmetic fields (no amount, subtotal, grandTotal).
       required:
-        - catalogItemId
+        - serviceItemId
         - description
         - quantity
         - unit
         - rateSource
         - confidence
       properties:
-        catalogItemId:
+        serviceItemId:
           type: string
+          description: User's service id. Legacy key `catalogItemId` still accepted on input.
           example: "tile_labour"
         description:
           type: string

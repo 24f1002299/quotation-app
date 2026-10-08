@@ -3,7 +3,7 @@ package com.quotapp.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.quotapp.api.dto.CatalogItemDto;
+import com.quotapp.api.dto.ServiceItemDto;
 import com.quotapp.api.dto.ExtractRequest;
 import com.quotapp.api.dto.QuoteDto;
 import com.quotapp.api.llm.LlmExtractionClient;
@@ -173,7 +173,7 @@ class Day23RiskCoverageTest {
     void oversizedTranscript_rejected() throws Exception {
         ExtractRequest request = new ExtractRequest(
             "x".repeat(5001), "tiling",
-            List.of(new CatalogItemDto("tile_labour", "Tile Labour", "sq ft",
+            List.of(new ServiceItemDto("tile_labour", "Tile Labour", "sq ft",
                 List.of("sq ft"), List.of("tile labour"), "tiling")),
             Collections.emptyList(), "auto", "1.0", 1, null);
         mockMvc.perform(
@@ -205,8 +205,8 @@ class Day23RiskCoverageTest {
         LlmExtractionClient real = new LlmExtractionClient(
             "grok", "", "https://api.x.ai/v1/chat/completions", "grok-2-mini",
             "", "", "gpt-4o-mini", 10, 0, objectMapper, circuitBreaker);
-        List<CatalogItemDto> catalog = List.of(
-            new CatalogItemDto("tile_labour", "Tile Labour / टाइल मजदूरी", "sq ft",
+        List<ServiceItemDto> catalog = List.of(
+            new ServiceItemDto("tile_labour", "Tile Labour / टाइल मजदूरी", "sq ft",
                 List.of("sq ft"), List.of("tile labour", "floor tile"), "tiling"));
         when(mockLlmClient.extract(anyString(), anyString(), anyList(), anyList(), any()))
             .thenAnswer(inv -> real.fallbackExtract(inv.getArgument(0), catalog));

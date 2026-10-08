@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
+import '../l10n/app_strings.dart';
 import '../templates/template_data.dart';
 import '../models/business_profile.dart';
 import '../models/quote.dart';
@@ -221,13 +222,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         _saveAnnounced = true;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text(
-              'PDF saved on this phone / पीडीएफ इस फोन में सहेजी गई',
+            content: Text(
+              AppStrings.read(context, 'offline_saved'),
             ),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
-              label: 'View History',
+              label: AppStrings.read(context, 'view_history'),
               onPressed: () => Navigator.pushNamed(context, '/history'),
             ),
           ),
@@ -241,8 +242,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     if (bytes == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('PDF is still generating… / कृपया प्रतीक्षा करें'),
+        SnackBar(
+          content: Text(AppStrings.read(context, 'pdf_generating')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -264,24 +265,21 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Share sheet opened'),
-        content: const Text(
-          'Android can send this PDF to WhatsApp, Gmail, Drive, or any app '
-          'you choose.\n\nWe cannot confirm delivery — '
-          'mark as shared only after you have sent it.\n'
-          'शीट खुल गई है — भेजने के बाद "Mark as shared" दबाएं।',
+        title: Text(AppStrings.of(ctx, 'share_sheet_opened')),
+        content: Text(
+          AppStrings.of(ctx, 'share_sheet_info'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Not yet / अभी नहीं'),
+            child: Text(AppStrings.of(ctx, 'not_yet')),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               _markAsShared();
             },
-            child: const Text('Mark as shared'),
+            child: Text(AppStrings.of(ctx, 'mark_shared')),
           ),
         ],
       ),
@@ -308,8 +306,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       _existingQuote = updated;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Marked as shared / साझा किया गया ✓'),
+      SnackBar(
+        content: Text(AppStrings.read(context, 'marked_shared')),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -369,8 +367,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cloud backup enabled / क्लाउड बैकअप चालू'),
+        SnackBar(
+          content: Text(AppStrings.read(context, 'backup_enabled')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -403,7 +401,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     final blockingReason = quotePdfBlockingReason(widget.quote);
     if (blockingReason != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('PDF Preview / पूर्वावलोकन')),
+        appBar: AppBar(title: Text(AppStrings.of(context, 'pdf_preview'))),
         body: SafeArea(
           child: Center(
             child: Padding(
@@ -414,7 +412,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   Icon(Icons.warning_amber_rounded, size: 48, color: cs.error),
                   const SizedBox(height: 16),
                   Text(
-                    'This quote is not ready for PDF / यह कोटेशन अभी PDF के लिए तैयार नहीं है',
+                    AppStrings.of(context, 'quote_not_ready'),
                     style: tt.titleMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -426,14 +424,14 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Your work is saved — go back, fix the highlighted item, then come back.',
+                    AppStrings.of(context, 'fix_highlighted_item'),
                     style: tt.bodySmall,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Go back and fix / वापस जाकर ठीक करें'),
+                    child: Text(AppStrings.of(context, 'go_back_fix')),
                   ),
                   TextButton(
                     onPressed: () => showErrorHelpDialog(
@@ -441,7 +439,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                       area: 'PDF preview',
                       errorReportId: _previewErrorId,
                     ),
-                    child: const Text('Get help'),
+                    child: Text(AppStrings.of(context, 'get_help')),
                   ),
                 ],
               ),
@@ -468,9 +466,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         // overflowed by ~20px on 360dp-wide phones (Day-24 device finding).
         title: Row(
           children: [
-            const Flexible(
+            Flexible(
               child: Text(
-                'Quotation ready',
+                AppStrings.of(context, 'quotation_ready'),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -483,7 +481,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.share_rounded),
-            tooltip: 'Share via WhatsApp / शेयर करें',
+            tooltip: AppStrings.of(context, 'share_pdf'),
             onPressed: _sharePdf,
           ),
         ],
@@ -501,9 +499,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   Icon(Icons.check_circle_rounded,
                       size: 20, color: Colors.green.shade700),
                   const SizedBox(width: 6),
-                  const Text(
-                    '✓ Quotation Ready',
-                    style: TextStyle(
+                  Text(
+                    '✓ ${AppStrings.of(context, 'quotation_ready')}',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -532,7 +530,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                         CircularProgressIndicator(color: cs.primary),
                         const SizedBox(height: 16),
                         Text(
-                          'Generating PDF / पीडीएफ तैयार हो रही है…',
+                          AppStrings.of(context, 'pdf_generating'),
                           style: tt.bodyMedium,
                         ),
                       ],
@@ -566,7 +564,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        'Share sheet opened — not yet marked as shared',
+                        AppStrings.of(context, 'share_sheet_opened_note'),
                         style: tt.bodySmall?.copyWith(
                           color: cs.primary,
                           fontWeight: FontWeight.w600,
@@ -584,7 +582,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                               size: 14, color: Colors.green.shade700),
                           const SizedBox(width: 4),
                           Text(
-                            'Shared ✓',
+                            AppStrings.of(context, 'shared'),
                             style: tt.bodySmall?.copyWith(
                               color: Colors.green.shade700,
                               fontWeight: FontWeight.w700,
@@ -639,7 +637,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 4),
                               ),
-                              child: const Text('Get help'),
+                              child: Text(AppStrings.of(context, 'get_help')),
                             ),
                           ),
                         ],
@@ -650,7 +648,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   ElevatedButton.icon(
                     onPressed: _sharePdf,
                     icon: const Icon(Icons.share_rounded),
-                    label: const Text('Share PDF'),
+                    label: Text(AppStrings.of(context, 'share_pdf')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kForest,
                       foregroundColor: Colors.white,
@@ -659,20 +657,21 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   ),
                   TextButton(
                     onPressed: _editQuote,
-                    child: const Text('Edit quote'),
+                    child: Text(AppStrings.of(context, 'edit_quote')),
                   ),
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          'Saved on this phone. Editing & regenerating replaces the same file.',
+                          AppStrings.of(context, 'saved_replace_note'),
                           style: tt.bodySmall,
                         ),
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('Backup', style: TextStyle(fontSize: 12)),
+                          Text(AppStrings.of(context, 'pdf_backup'),
+                              style: const TextStyle(fontSize: 12)),
                           Switch(
                             value: _backupOptIn,
                             onChanged: _toggleBackup,

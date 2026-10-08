@@ -4,13 +4,22 @@
 // (Quote) -> totals/PDF gate -> persist (SavedQuote round-trip) -> sync
 // (idempotent save). No microphone, network, or backend required.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:contractor_quote_poc/models/extraction_models.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
-import 'package:contractor_quote_poc/parser/demo_transcripts.dart';
+import 'package:contractor_quote_poc/models/service_item.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';
 import 'package:contractor_quote_poc/storage/saved_quote.dart';
+import 'package:contractor_quote_poc/storage/service_item_repository.dart';
+import 'package:contractor_quote_poc/templates/template_data.dart';
+import 'package:contractor_quote_poc/templates/template_loader.dart';
 import 'package:contractor_quote_poc/utils/quote_ids.dart';
+
+// Demo transcript previously in lib/parser/demo_transcripts.dart
+// (file deleted; inlined here so tests don't depend on lib/).
+const kTilingDemoTranscript =
+    'Sharma ji ka flat, 850 square foot tiles labour, 45 rupaye per foot, skirting 120 running foot, 60 rupaye per foot.';
 
 // ── Fakes ────────────────────────────────────────────────────────────────
 
@@ -23,9 +32,14 @@ class FakeTranscriber {
 /// the deterministic local parser, so the client path (fromJson, rate
 /// provenance, unknowns) is exercised exactly as with a real server.
 class FakeExtractionServer {
-  static Map<String, dynamic> extract(String transcript) {
+  static Map<String, dynamic> extract(
+    String transcript, {
+    List<ServiceItem> services = const [],
+    Map<String, int>? savedRates,
+  }) {
     const parser = TranscriptParser();
-    final parsed = parser.parse(transcript);
+    final parsed =
+        parser.parse(transcript, services: services, savedRates: savedRates);
     return {
       'business_type': 'tiling',
       'requiresReview': parsed.hasWarnings,
@@ -65,14 +79,31 @@ class FakeSyncServer {
 }
 
 void main() {
+  // Pure unit test, but seeding services reads a template asset via
+  // rootBundle — needs a test binding (flutter_test provides assets).
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('voice -> extract -> review -> totals -> persist -> sync happy path',
       () async {
     // 1. Speak (fake): audio becomes the tiling demo transcript.
     final transcript = await FakeTranscriber().transcribe();
     expect(transcript, isNotEmpty);
 
+    // The universal parser matches against the user's own service list,
+    // so the fake server seeds it exactly like the app does on first use.
+    SharedPreferences.setMockInitialValues({});
+    TemplateLoader.clearCache();
+    final services =
+        await ServiceItemRepository.seedFromTemplate(BusinessType.tiling);
+    final rateMap =
+        await ServiceItemRepository.getRateMap(BusinessType.tiling);
+
     // 2. Extract (fake server): OpenAPI-shaped JSON -> typed candidates.
-    final payload = FakeExtractionServer.extract(transcript);
+    final payload = FakeExtractionServer.extract(
+      transcript,
+      services: services,
+      savedRates: rateMap,
+    );
     final items = (payload['lineItems'] as List)
         .map((raw) =>
             ExtractedItem.fromJson(Map<String, dynamic>.from(raw as Map)))

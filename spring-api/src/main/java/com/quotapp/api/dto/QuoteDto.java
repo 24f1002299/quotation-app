@@ -1,6 +1,8 @@
 package com.quotapp.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 import java.util.List;
@@ -9,6 +11,10 @@ import java.util.List;
  * Top-level Quote DTO for quotation synchronization and storage.
  * Day 15: supports optional commercial terms, offline UUID identity,
  * and server-assigned human-readable display numbers.
+ *
+ * <p>Canonical name is {@code businessType}: a free-form business slug.
+ * Legacy wire names {@code trade} and {@code business_type} are still
+ * accepted on input.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record QuoteDto(
@@ -17,7 +23,9 @@ public record QuoteDto(
     String idempotencyKey,
     String displayNumber,
     String status,
-    String trade,
+    @JsonProperty("businessType")
+    @JsonAlias({"trade", "business_type"})
+    String businessType,
     @NotBlank(message = "clientName is required")
     String clientName,
     String clientPhone,
@@ -43,7 +51,7 @@ public record QuoteDto(
             idempotencyKey,
             newDisplayNumber,
             status,
-            trade,
+            businessType,
             clientName,
             clientPhone,
             siteAddress,

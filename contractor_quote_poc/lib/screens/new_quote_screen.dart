@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_strings.dart';
 import '../screens/review_screen.dart';
 import '../screens/voice_screen.dart';
 import '../templates/template_data.dart';
@@ -26,8 +27,8 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
   void _proceed({required bool voiceMode}) {
     if (_selectedType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please choose your work first / पहले काम चुनें'),
+        SnackBar(
+          content: Text(AppStrings.of(context, 'choose_business_type')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -56,9 +57,10 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    String t(String k) => AppStrings.of(context, k);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('New Quote / नया कोटेशन')),
+      appBar: AppBar(title: Text(t('new_quote'))),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(kPagePadding),
@@ -67,7 +69,7 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
             children: [
               const SizedBox(height: 24),
 
-              Text('Choose your work / काम चुनें', style: tt.titleLarge),
+              Text(t('choose_business_type'), style: tt.titleLarge),
               const SizedBox(height: 16),
 
               BusinessTypeChips(
@@ -85,14 +87,14 @@ class _NewQuoteScreenState extends State<NewQuoteScreen> {
                     ? null
                     : () => _proceed(voiceMode: true),
                 icon: const Icon(Icons.mic_rounded),
-                label: const Text('Speak Quote / बोलें'),
+                label: Text(t('new_voice_quote')),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: _selectedType == null
                     ? null
                     : () => _proceed(voiceMode: false),
-                child: const Text('Enter Manually / खुद भरें'),
+                child: Text(t('type_manually')),
               ),
             ],
           ),

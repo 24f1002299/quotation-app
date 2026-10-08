@@ -104,7 +104,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Quotation ready'), findsOneWidget);
+    expect(find.text('कोटेशन तैयार'), findsOneWidget);
     expect(
       find.textContaining('Q-2026-A3F9'),
       findsOneWidget,

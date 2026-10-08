@@ -90,15 +90,28 @@ class FeedbackControllerTest {
     }
 
     @Test
-    @DisplayName("Day 21: feedback rejects invalid trade/field and non-hash quote id")
+    @DisplayName("Day 21: feedback accepts any business domain, rejects blank type/field and non-hash quote id")
     void testFeedbackValidation() throws Exception {
         String quoteHash = FeedbackHash.sha256Hex(UUID.randomUUID().toString());
 
-        // Bad trade.
-        FeedbackDto badTrade = new FeedbackDto(null, quoteHash, "plumbing", null, "a", "b", "description", null);
+        // Any business domain accepted (universal pivot): pest control succeeds.
+        FeedbackDto pestControl = new FeedbackDto(null, quoteHash, "pest_control", null, "a", "b", "description", null);
         mockMvc.perform(post("/api/feedback").with(user(TEST_USER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(badTrade)))
+                .content(objectMapper.writeValueAsString(pestControl)))
+            .andExpect(status().isOk());
+
+        // Legacy wire name 'trade' still binds for old clients.
+        mockMvc.perform(post("/api/feedback").with(user(TEST_USER))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"quoteIdHash\":\"" + quoteHash + "\",\"trade\":\"catering\",\"changedField\":\"rate\"}"))
+            .andExpect(status().isOk());
+
+        // Blank business type rejected.
+        FeedbackDto blankType = new FeedbackDto(null, quoteHash, "  ", null, "a", "b", "description", null);
+        mockMvc.perform(post("/api/feedback").with(user(TEST_USER))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(blankType)))
             .andExpect(status().isBadRequest());
 
         // Bad changedField.

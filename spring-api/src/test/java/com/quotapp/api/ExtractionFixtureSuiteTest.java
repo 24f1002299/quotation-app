@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Confirms:
  * <ul>
  *   <li>Valid structured output across Hindi, Marathi, Hinglish, and English for Tiling and Painting.</li>
- *   <li>Explicit unknown handling for cross-trade work, demolition, uncatalogued materials, and noise.</li>
+ *   <li>Explicit unknown handling for cross-domain work, demolition, uncatalogued materials, and noise.</li>
  *   <li>Rate memory binding and provenance invariants (RATE_MEMORY vs UNKNOWN).</li>
  *   <li>Absolute exclusion of arithmetic fields (amount, subtotal, total, gst).</li>
  *   <li>Circuit breaker fast-fail and resilient fallback behavior.</li>
@@ -82,8 +82,8 @@ class ExtractionFixtureSuiteTest {
     private LlmExtractionClient mockLlmClient;
 
     private LlmExtractionClient realLlmClient;
-    private List<CatalogItemDto> tilingCatalog;
-    private List<CatalogItemDto> paintingCatalog;
+    private List<ServiceItemDto> tilingCatalog;
+    private List<ServiceItemDto> paintingCatalog;
 
     @BeforeEach
     void setUp() {
@@ -96,20 +96,20 @@ class ExtractionFixtureSuiteTest {
         );
 
         tilingCatalog = List.of(
-            new CatalogItemDto("tile_labour", "Tile Labour / टाइल मजदूरी", "sq ft", List.of("sq ft"),
+            new ServiceItemDto("tile_labour", "Tile Labour / टाइल मजदूरी", "sq ft", List.of("sq ft"),
                 List.of("tile labour", "floor tile", "floor tiles", "टाइल लेबर", "टाइल लगाना", "चौरस फूट"), "tiling"),
-            new CatalogItemDto("skirting", "Skirting / स्कर्टिंग", "rft", List.of("rft"),
+            new ServiceItemDto("skirting", "Skirting / स्कर्टिंग", "rft", List.of("rft"),
                 List.of("skirting", "skirt", "स्कर्टिंग", "रनिंग फूट"), "tiling"),
-            new CatalogItemDto("waterproofing", "Waterproofing / वॉटरप्रूफिंग", "sq ft", List.of("sq ft"),
+            new ServiceItemDto("waterproofing", "Waterproofing / वॉटरप्रूफिंग", "sq ft", List.of("sq ft"),
                 List.of("waterproofing", "वॉटरप्रूफिंग", "waterproof", "पाणी रोखणे"), "tiling")
         );
 
         paintingCatalog = List.of(
-            new CatalogItemDto("wall_putty", "Wall Putty / वॉल पुट्टी", "sq ft", List.of("sq ft"),
+            new ServiceItemDto("wall_putty", "Wall Putty / वॉल पुट्टी", "sq ft", List.of("sq ft"),
                 List.of("wall putty", "putty", "वॉल पुट्टी", "patti", "पट्टी", "putty work"), "painting"),
-            new CatalogItemDto("primer", "Primer / प्राइमर", "sq ft", List.of("sq ft"),
+            new ServiceItemDto("primer", "Primer / प्राइमर", "sq ft", List.of("sq ft"),
                 List.of("primer", "प्राइमर", "prime coat", "priming"), "painting"),
-            new CatalogItemDto("painting", "Painting / पेंटिंग", "sq ft", List.of("sq ft"),
+            new ServiceItemDto("painting", "Painting / पेंटिंग", "sq ft", List.of("sq ft"),
                 List.of("painting", "paint", "पेंटिंग", "रंगाई", "rangai", "emulsion"), "painting")
         );
 
@@ -117,8 +117,8 @@ class ExtractionFixtureSuiteTest {
         when(mockLlmClient.extract(anyString(), anyString(), anyList(), anyList(), any()))
             .thenAnswer(inv -> {
                 String transcript = inv.getArgument(0);
-                List<CatalogItemDto> catalog = inv.getArgument(2);
-                return realLlmClient.fallbackExtract(transcript, catalog);
+                List<ServiceItemDto> services = inv.getArgument(2);
+                return realLlmClient.fallbackExtract(transcript, services);
             });
     }
 
@@ -128,8 +128,8 @@ class ExtractionFixtureSuiteTest {
         circuitBreaker.reset();
     }
 
-    private ExtractRequest makeRequest(String transcript, String trade, List<CatalogItemDto> catalog, List<RateMemoryItemDto> rates) {
-        return new ExtractRequest(transcript, trade, catalog, rates != null ? rates : Collections.emptyList(), "auto", "1.0", 1, null);
+    private ExtractRequest makeRequest(String transcript, String businessType, List<ServiceItemDto> services, List<RateMemoryItemDto> rates) {
+        return new ExtractRequest(transcript, businessType, services, rates != null ? rates : Collections.emptyList(), "auto", "1.0", 1, null);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -141,7 +141,7 @@ class ExtractionFixtureSuiteTest {
     void fixture01_tilingHindiFloorTiles() {
         ExtractResponse res = extractionService.extract(makeRequest("Master bedroom floor tile lagana 180 sq ft", "tiling", tilingCatalog, null));
         assertThat(res.lineItems()).hasSize(1);
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("tile_labour");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("tile_labour");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(180.0);
     }
 
@@ -150,7 +150,7 @@ class ExtractionFixtureSuiteTest {
     void fixture02_tilingHindiSkirting() {
         ExtractResponse res = extractionService.extract(makeRequest("Skirting 45 rft tile fitting", "tiling", tilingCatalog, null));
         assertThat(res.lineItems()).hasSize(1);
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("skirting");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("skirting");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(45.0);
     }
 
@@ -159,7 +159,7 @@ class ExtractionFixtureSuiteTest {
     void fixture03_tilingMarathiTileLabour() {
         ExtractResponse res = extractionService.extract(makeRequest("हॉल मध्ये 250 चौरस फूट टाईल लेबर काम", "tiling", tilingCatalog, null));
         assertThat(res.lineItems()).hasSize(1);
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("tile_labour");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("tile_labour");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(250.0);
     }
 
@@ -168,7 +168,7 @@ class ExtractionFixtureSuiteTest {
     void fixture04_tilingMarathiSkirting() {
         ExtractResponse res = extractionService.extract(makeRequest("स्कर्टिंग 60 रनिंग फूट काम", "tiling", tilingCatalog, null));
         assertThat(res.lineItems()).hasSize(1);
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("skirting");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("skirting");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(60.0);
     }
 
@@ -177,7 +177,7 @@ class ExtractionFixtureSuiteTest {
     void fixture05_tilingMarathiWaterproofing() {
         ExtractResponse res = extractionService.extract(makeRequest("बाथरूम वॉटरप्रूफिंग 50 sq ft", "tiling", tilingCatalog, null));
         assertThat(res.lineItems()).hasSize(1);
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("waterproofing");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("waterproofing");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(50.0);
     }
 
@@ -186,7 +186,7 @@ class ExtractionFixtureSuiteTest {
     void fixture06_tilingHinglishTwoItems() {
         ExtractResponse res = extractionService.extract(makeRequest("Balcony floor tiles 80 sq ft and skirting 20 rft", "tiling", tilingCatalog, null));
         assertThat(res.lineItems()).hasSize(2);
-        assertThat(res.lineItems()).extracting(ExtractedLineItemDto::catalogItemId).containsExactlyInAnyOrder("tile_labour", "skirting");
+        assertThat(res.lineItems()).extracting(ExtractedLineItemDto::serviceItemId).containsExactlyInAnyOrder("tile_labour", "skirting");
     }
 
     @Test
@@ -201,7 +201,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 08: Tiling Hindi - Balcony waterproofing 60 sq ft")
     void fixture08_tilingHindiWaterproofing() {
         ExtractResponse res = extractionService.extract(makeRequest("Balcony waterproofing 60 sq ft", "tiling", tilingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("waterproofing");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("waterproofing");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(60.0);
     }
 
@@ -209,7 +209,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 09: Tiling Hindi - Floor tiles 90 sq ft")
     void fixture09_tilingHindiKitchenWall() {
         ExtractResponse res = extractionService.extract(makeRequest("Floor tiles 90 sq ft lagana", "tiling", tilingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("tile_labour");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("tile_labour");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(90.0);
     }
 
@@ -217,7 +217,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 10: Tiling Hinglish - Toilet waterproofing 40 sq ft")
     void fixture10_tilingHinglishToilet() {
         ExtractResponse res = extractionService.extract(makeRequest("Toilet waterproofing 40 sq ft", "tiling", tilingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("waterproofing");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("waterproofing");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(40.0);
     }
 
@@ -229,7 +229,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 11: Painting Hindi - Wall putty 500 sq ft")
     void fixture11_paintingHindiPutty() {
         ExtractResponse res = extractionService.extract(makeRequest("Wall putty 500 sq ft karna hai", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("wall_putty");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("wall_putty");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(500.0);
     }
 
@@ -237,7 +237,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 12: Painting Hindi - Primer 500 sq ft")
     void fixture12_paintingHindiPrimer() {
         ExtractResponse res = extractionService.extract(makeRequest("Primer 500 sq ft lagao", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("primer");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("primer");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(500.0);
     }
 
@@ -245,7 +245,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 13: Painting Hindi - Patti kaam 350 sq ft")
     void fixture13_paintingHindiPatti() {
         ExtractResponse res = extractionService.extract(makeRequest("Putty work 350 sq ft", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("wall_putty");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("wall_putty");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(350.0);
     }
 
@@ -253,7 +253,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 14: Painting Marathi - वॉल पुट्टी 400 चौरस फूट")
     void fixture14_paintingMarathiPutty() {
         ExtractResponse res = extractionService.extract(makeRequest("हॉल वॉल पुट्टी 400 sq ft", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("wall_putty");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("wall_putty");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(400.0);
     }
 
@@ -261,7 +261,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 15: Painting Marathi - प्राइमर 400 चौरस फूट")
     void fixture15_paintingMarathiPrimer() {
         ExtractResponse res = extractionService.extract(makeRequest("प्राइमर 400 sq ft", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("primer");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("primer");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(400.0);
     }
 
@@ -269,7 +269,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 16: Painting Marathi - पेंटिंग 600 चौरस फूट")
     void fixture16_paintingMarathiPaint() {
         ExtractResponse res = extractionService.extract(makeRequest("पेंटिंग 600 sq ft", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("painting");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("painting");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(600.0);
     }
 
@@ -277,7 +277,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 17: Painting Hinglish - Flat painting emulsion 1200 sq ft")
     void fixture17_paintingHinglishEmulsion() {
         ExtractResponse res = extractionService.extract(makeRequest("Flat painting emulsion 1200 sq ft", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("painting");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("painting");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(1200.0);
     }
 
@@ -286,7 +286,7 @@ class ExtractionFixtureSuiteTest {
     void fixture18_paintingHinglishCombo() {
         ExtractResponse res = extractionService.extract(makeRequest("Wall putty 450 sq ft and primer 450 sq ft", "painting", paintingCatalog, null));
         assertThat(res.lineItems()).hasSize(2);
-        assertThat(res.lineItems()).extracting(ExtractedLineItemDto::catalogItemId).containsExactlyInAnyOrder("wall_putty", "primer");
+        assertThat(res.lineItems()).extracting(ExtractedLineItemDto::serviceItemId).containsExactlyInAnyOrder("wall_putty", "primer");
     }
 
     @Test
@@ -300,7 +300,7 @@ class ExtractionFixtureSuiteTest {
     @DisplayName("Fixture 20: Painting Hindi - Rangai painting 800 sq ft")
     void fixture20_paintingHindiRangai() {
         ExtractResponse res = extractionService.extract(makeRequest("Rangai painting 800 sq ft", "painting", paintingCatalog, null));
-        assertThat(res.lineItems().get(0).catalogItemId()).isEqualTo("painting");
+        assertThat(res.lineItems().get(0).serviceItemId()).isEqualTo("painting");
         assertThat(res.lineItems().get(0).quantity()).isEqualTo(800.0);
     }
 
@@ -421,8 +421,8 @@ class ExtractionFixtureSuiteTest {
         List<RateMemoryItemDto> rates = List.of(new RateMemoryItemDto("tile_labour", "sq ft", 4000L, "tiling"));
         ExtractResponse res = extractionService.extract(makeRequest("Floor tile 100 sq ft and skirting 20 rft", "tiling", tilingCatalog, rates));
 
-        ExtractedLineItemDto tile = res.lineItems().stream().filter(i -> "tile_labour".equals(i.catalogItemId())).findFirst().orElseThrow();
-        ExtractedLineItemDto skirting = res.lineItems().stream().filter(i -> "skirting".equals(i.catalogItemId())).findFirst().orElseThrow();
+        ExtractedLineItemDto tile = res.lineItems().stream().filter(i -> "tile_labour".equals(i.serviceItemId())).findFirst().orElseThrow();
+        ExtractedLineItemDto skirting = res.lineItems().stream().filter(i -> "skirting".equals(i.serviceItemId())).findFirst().orElseThrow();
 
         assertThat(tile.rateSource()).isEqualTo(RateSource.RATE_MEMORY);
         assertThat(tile.unitRatePaise()).isEqualTo(4000L);
@@ -495,10 +495,10 @@ class ExtractionFixtureSuiteTest {
             "", "", "gpt-4o-mini", 10, 1, objectMapper, circuitBreaker
         );
 
-        // When no API key is provided, client automatically falls back to catalog matcher safely
+        // When no API key is provided, client automatically falls back to service matcher safely
         var result = client.extract("Floor tile 100 sq ft", "tiling", tilingCatalog, Collections.emptyList(), "en");
         assertThat(result.items()).isNotEmpty();
-        assertThat(result.items().get(0).catalogItemId()).isEqualTo("tile_labour");
+        assertThat(result.items().get(0).serviceItemId()).isEqualTo("tile_labour");
     }
 
     @Test

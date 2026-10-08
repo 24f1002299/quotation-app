@@ -42,9 +42,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Add to my list'), findsOneWidget);
+    expect(find.text('मेरी सूची में जोड़ें'), findsOneWidget);
 
-    await tester.tap(find.text('Add to my list'));
+    await tester.tap(find.text('मेरी सूची में जोड़ें'));
     await tester.pumpAndSettle();
 
     final services = await ServiceItemRepository.getActiveForBusinessType(
@@ -54,10 +54,10 @@ void main() {
       services.any((s) => s.name == 'Balcony netting'),
       isTrue,
     );
-    expect(find.text('Saved to my services / मेरी सेवाओं में सहेजा गया'),
+    expect(find.text('मेरी सेवाओं में सेव हो गया'),
         findsOneWidget);
     // Row is now linked: the action disappears after saving.
-    expect(find.text('Add to my list'), findsNothing);
+    expect(find.text('मेरी सूची में जोड़ें'), findsNothing);
   });
 
   testWidgets('listed items show no Add to my list action', (tester) async {
@@ -79,6 +79,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Add to my list'), findsNothing);
+    expect(find.text('मेरी सूची में जोड़ें'), findsNothing);
   });
 }

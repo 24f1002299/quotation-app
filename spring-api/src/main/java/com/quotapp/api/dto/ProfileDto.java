@@ -7,7 +7,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 
 /**
- * Contractor profile data transfer object.
+ * Contractor profile data transfer object, for ANY business domain.
+ *
+ * <p>Canonical name is {@code businessType}: a free-form business slug
+ * ('tiling', 'pest_control', 'catering', ...). Legacy wire names
+ * {@code trade} and {@code business_type} are still accepted on input.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProfileDto(
@@ -25,12 +29,12 @@ public record ProfileDto(
 
     /**
      * Free-form business slug ('tiling', 'pest_control', 'catering', ...).
-     * The old tiling|painting restriction was removed. Serialized as
-     * {@code trade} for backward compatibility; also accepts
-     * {@code businessType} on input.
+     * Serialized as {@code businessType}; also accepts {@code trade} and
+     * {@code business_type} on input for backward compatibility.
      */
-    @JsonAlias("businessType")
-    String trade,
+    @JsonProperty("businessType")
+    @JsonAlias({"trade", "business_type"})
+    String businessType,
 
     String city,
     String phone,
@@ -61,8 +65,8 @@ public record ProfileDto(
     Instant updatedAt
 ) {
     public ProfileDto {
-        if (trade == null || trade.isBlank()) {
-            trade = "tiling";
+        if (businessType == null || businessType.isBlank()) {
+            businessType = "tiling";
         }
         if (schemaVersion == null) {
             schemaVersion = 1;

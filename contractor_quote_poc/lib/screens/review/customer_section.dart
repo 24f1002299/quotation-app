@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/app_strings.dart';
 import 'small_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,12 +31,12 @@ class CustomerSection extends StatelessWidget {
           children: [
             // ── Client name ──────────────────────────────────────────────
             FieldLabel(
-              label: 'Client name / ग्राहक का नाम *',
+              label: '${AppStrings.of(context, 'client_name')} *',
               child: TextField(
                 controller: nameCtrl,
                 style: tt.bodyLarge,
                 decoration: reviewInputDecoration(context,
-                    hint: 'e.g. Sharma Ji / शर्मा जी'),
+                    hint: AppStrings.of(context, 'customer_name_hint')),
                 textCapitalization: TextCapitalization.words,
               ),
             ),
@@ -43,7 +44,7 @@ class CustomerSection extends StatelessWidget {
 
             // ── Phone ────────────────────────────────────────────────────
             FieldLabel(
-              label: 'Phone / फ़ोन (optional)',
+              label: AppStrings.of(context, 'phone'),
               child: TextField(
                 controller: phoneCtrl,
                 style: tt.bodyLarge,
@@ -57,13 +58,13 @@ class CustomerSection extends StatelessWidget {
 
             // ── Site / Address ───────────────────────────────────────────
             FieldLabel(
-              label: 'Site / Address / कार्यस्थल (optional)',
+              label: AppStrings.of(context, 'site'),
               child: TextField(
                 controller: siteCtrl,
                 style: tt.bodyLarge,
                 decoration: reviewInputDecoration(
                   context,
-                  hint: 'e.g. Flat 302, Green Acres / फ्लैट ३०२, मुंबई',
+                  hint: AppStrings.of(context, 'site_hint'),
                 ),
                 textCapitalization: TextCapitalization.sentences,
               ),

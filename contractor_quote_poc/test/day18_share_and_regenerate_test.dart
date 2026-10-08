@@ -126,12 +126,12 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       // Sole primary CTA + secondary edit path (design.md §6).
-      expect(find.widgetWithText(ElevatedButton, 'Share PDF'), findsOneWidget);
-      expect(find.text('Edit quote'), findsOneWidget);
+      expect(find.widgetWithText(ElevatedButton, 'PDF भेजें'), findsOneWidget);
+      expect(find.text('बदलें'), findsOneWidget);
       // Meta line with quote number + total.
       expect(find.textContaining('Quote'), findsAtLeastNWidgets(1));
       // Local-only note + opt-in backup toggle.
-      expect(find.textContaining('Saved on this phone'), findsOneWidget);
+      expect(find.textContaining('फोन में सेव'), findsOneWidget);
       expect(find.byType(Switch), findsOneWidget);
     });
   });

@@ -31,7 +31,7 @@ Future<void> _pumpReview(
 }
 
 Future<void> _tapGenerate(WidgetTester tester) async {
-  final btn = find.text('Generate PDF / PDF बनाएं');
+  final btn = find.text('PDF बनाएं');
   await tester.ensureVisible(btn);
   await tester.tap(btn);
   await tester.pump();
@@ -52,10 +52,10 @@ void main() {
 
     expect(find.text('₹200'), findsWidgets);
 
-    await tester.tap(find.text('Edit').first);
+    await tester.tap(find.text('बदलें').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(1), '5');
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(find.text('सेव करें'));
     await tester.pumpAndSettle();
 
     expect(find.text('₹500'), findsWidgets);
@@ -73,7 +73,7 @@ void main() {
     ]);
 
     await _tapGenerate(tester);
-    expect(find.text('PDF Preview / पूर्वावलोकन'), findsNothing);
+    expect(find.text('PDF देखें'), findsNothing);
     expect(
       find.textContaining('quantity greater than 0'),
       findsAtLeastNWidgets(1),
@@ -93,7 +93,7 @@ void main() {
     ]);
 
     await _tapGenerate(tester);
-    expect(find.text('PDF Preview / पूर्वावलोकन'), findsNothing);
+    expect(find.text('PDF देखें'), findsNothing);
     expect(find.textContaining('Add a rate'), findsAtLeastNWidgets(1));
   });
 
@@ -111,13 +111,13 @@ void main() {
       ),
     ]);
 
-    expect(find.text('Needs attention (1)'), findsOneWidget);
+    expect(find.text('ध्यान दें (1)'), findsOneWidget);
     await _tapGenerate(tester);
-    expect(find.text('PDF Preview / पूर्वावलोकन'), findsNothing);
+    expect(find.text('PDF देखें'), findsNothing);
     expect(find.textContaining('Unknown item'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.text('I checked this / मैंने जांच ली'));
+    await tester.tap(find.text('मैंने जांच लिया'));
     await tester.pump();
-    expect(find.text('Needs attention (1)'), findsNothing);
+    expect(find.text('ध्यान दें (1)'), findsNothing);
   });
 }

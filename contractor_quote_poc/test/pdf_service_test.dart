@@ -147,7 +147,7 @@ void main() {
       );
 
       // Verify app bar title (Day 18: "Quotation ready" per design.md §6)
-      expect(find.text('Quotation ready'), findsOneWidget);
+      expect(find.text('कोटेशन तैयार'), findsOneWidget);
       // Verify businessType chip (generic metadata label, all types).
       expect(find.text('Tiling'), findsOneWidget);
     });
@@ -205,9 +205,9 @@ void main() {
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 500));
       }
-      expect(find.text('Quotation ready'), findsOneWidget);
+      expect(find.text('कोटेशन तैयार'), findsOneWidget);
 
-      await tester.tap(find.text('Edit quote'));
+      await tester.tap(find.text('बदलें'));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 500));
       }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../templates/template_data.dart';
 import '../../storage/saved_quote.dart';
 import '../../utils/rupee_format.dart';
@@ -48,15 +49,15 @@ class SavedQuoteCard extends StatelessWidget {
     if (quote.status == 'ready') {
       statusBg = Colors.green.shade100;
       statusFg = Colors.green.shade900;
-      statusDisplay = 'READY';
+      statusDisplay = AppStrings.of(context, 'filter_ready').toUpperCase();
     } else if (quote.status == 'shared') {
       statusBg = Colors.blue.shade100;
       statusFg = Colors.blue.shade900;
-      statusDisplay = 'SHARED';
+      statusDisplay = AppStrings.of(context, 'filter_shared').toUpperCase();
     } else if (quote.status == 'draft' || quote.status == 'needsReview') {
       statusBg = Colors.orange.shade100;
       statusFg = Colors.orange.shade900;
-      statusDisplay = 'DRAFT';
+      statusDisplay = AppStrings.of(context, 'filter_draft').toUpperCase();
     }
 
     return Card(
@@ -122,40 +123,40 @@ class SavedQuoteCard extends StatelessWidget {
                   ),
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded, size: 20),
-                    tooltip: 'Quote actions',
+                    tooltip: AppStrings.of(context, 'quote_actions'),
                     onSelected: (val) {
                       if (val == 'edit') onTap();
                       if (val == 'pdf') onViewPdf();
                       if (val == 'delete') onDelete();
                     },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
+                    itemBuilder: (menuCtx) => [
+                      PopupMenuItem(
                         value: 'edit',
                         child: Row(
                           children: [
-                            Icon(Icons.edit_outlined, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit / संपादित करें'),
+                            const Icon(Icons.edit_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Text(AppStrings.of(menuCtx, 'edit_quote')),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'pdf',
                         child: Row(
                           children: [
-                            Icon(Icons.picture_as_pdf_outlined, size: 18),
-                            SizedBox(width: 8),
-                            Text('View PDF / पीडीएफ'),
+                            const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Text(AppStrings.of(menuCtx, 'view_pdf')),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                            SizedBox(width: 8),
-                            Text('Delete / हटाएं', style: TextStyle(color: Colors.redAccent)),
+                            const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(AppStrings.of(menuCtx, 'delete'), style: const TextStyle(color: Colors.redAccent)),
                           ],
                         ),
                       ),
@@ -181,7 +182,7 @@ class SavedQuoteCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${quote.lineItems.length} items • ${dateFormat.format(quote.effectiveDate)}',
+                          '${quote.lineItems.length} ${AppStrings.of(context, 'items_word')} • ${dateFormat.format(quote.effectiveDate)}',
                           style: tt.bodySmall?.copyWith(color: const Color(0xFF757575)),
                         ),
                       ],
@@ -230,16 +231,16 @@ class HistoryEmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               hasFilters
-                  ? 'No matching quotes / कोई मेल नहीं'
-                  : 'Your quotations will appear here / आपके कोटेशन यहाँ दिखेंगे',
+                  ? AppStrings.of(context, 'no_matching_quotes')
+                  : AppStrings.of(context, 'empty_quotes'),
               style: tt.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Text(
               hasFilters
-                  ? 'Try clearing your search query or filters.'
-                  : 'Start a voice quote to generate your first professional quotation.',
+                  ? AppStrings.of(context, 'clear_search_hint')
+                  : AppStrings.of(context, 'empty_quotes_hint'),
               style: tt.bodyMedium?.copyWith(color: const Color(0xFF757575)),
               textAlign: TextAlign.center,
             ),
@@ -248,7 +249,7 @@ class HistoryEmptyState extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onNewQuote,
                 icon: const Icon(Icons.mic_none_rounded),
-                label: const Text('Create a voice quote / नया कोटेशन'),
+                label: Text(AppStrings.of(context, 'create_voice_quote')),
               ),
           ],
         ),

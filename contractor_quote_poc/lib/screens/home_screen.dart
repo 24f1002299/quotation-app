@@ -148,6 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     String t(String k) => AppStrings.of(context, k);
+    final currentLang =
+        context.getInheritedWidgetOfExactType<AppStrings>()?.languageCode ??
+            appLanguage.value;
     final initial =
         _profile.ownerName.isNotEmpty ? _profile.ownerName.characters.first : null;
 
@@ -256,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         : businessTypeLabel(
                             _businessType,
                             _profile.customBusinessType,
-                            'en',
+                            currentLang,
                           ),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
@@ -359,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     (q) => QuoteCard(
                       title: q.customerName,
                       subtitle:
-                          '${q.lineItems.length} items · ${DateFormat('dd MMM').format(q.effectiveDate)}',
+                          '${q.lineItems.length} ${t('items')} · ${DateFormat('dd MMM').format(q.effectiveDate)}',
                       amount: formatRupee(q.grandTotalRupees),
                       onTap: () => _openDraft(q),
                     ),

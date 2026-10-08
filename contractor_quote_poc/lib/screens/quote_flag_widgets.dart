@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_strings.dart';
 import '../models/quote_flags.dart';
 import '../utils/error_report.dart';
 
@@ -65,7 +66,9 @@ class QuoteFlagRow extends StatelessWidget {
             color: isBlocking
                 ? const Color(0xFFF59E0B)
                 : Theme.of(context).colorScheme.primary,
-            semanticLabel: isBlocking ? 'Needs attention' : 'Please confirm',
+            semanticLabel: isBlocking
+                ? AppStrings.of(context, 'needs_attention')
+                : AppStrings.of(context, 'please_confirm'),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -80,7 +83,7 @@ class QuoteFlagRow extends StatelessWidget {
                 ),
                 if (isBlocking)
                   Text(
-                    'PDF is paused until this is fixed. Your work is saved.',
+                    AppStrings.of(context, 'pdf_paused'),
                     style: tt.bodySmall?.copyWith(
                       color: const Color(0xFFFDE68A).withValues(alpha: 0.8),
                       fontSize: 11,
@@ -142,14 +145,14 @@ class QuoteWarningsSection extends StatelessWidget {
               const Icon(Icons.info_outline_rounded, size: 18),
               const SizedBox(width: 6),
               Text(
-                'Please confirm (${warnings.length})',
+                '${AppStrings.of(context, 'please_confirm')} (${warnings.length})',
                 style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'These do not stop the PDF, but please double-check.',
+            AppStrings.of(context, 'warnings_note'),
             style: tt.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -203,7 +206,7 @@ class SyncFailureBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Couldn\u2019t sync changes. They remain saved on this phone.',
+                  AppStrings.of(context, 'sync_failed_msg'),
                   style: tt.bodyMedium
                       ?.copyWith(fontWeight: FontWeight.w600),
                 ),
@@ -222,7 +225,7 @@ class SyncFailureBanner extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Retry'),
+                label: Text(AppStrings.of(context, 'retry')),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(0, 40),
                   visualDensity: VisualDensity.compact,
@@ -235,7 +238,7 @@ class SyncFailureBanner extends StatelessWidget {
                           area: 'Quote sync',
                           errorReportId: errorReportId,
                         ),
-                child: const Text('Get help'),
+                child: Text(AppStrings.of(context, 'get_help')),
               ),
             ],
           ),
@@ -272,14 +275,14 @@ class StaleServiceListBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.update_rounded, color: Colors.blue, size: 20),
-              SizedBox(width: 8),
+              const Icon(Icons.update_rounded, color: Colors.blue, size: 20),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Rate list may be outdated.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  AppStrings.of(context, 'rate_list_outdated'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -294,7 +297,7 @@ class StaleServiceListBanner extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: onRefresh,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Refresh'),
+              label: Text(AppStrings.of(context, 'refresh')),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 40),
                 visualDensity: VisualDensity.compact,
@@ -322,13 +325,13 @@ Future<void> showErrorHelpDialog(
   return showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Get help / सहायता'),
+      title: Text(AppStrings.of(ctx, 'get_help')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Your work is safe on this phone. Share this reference with support and they can look up what happened:',
+            AppStrings.of(ctx, 'help_body'),
             style: Theme.of(ctx).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -364,17 +367,17 @@ Future<void> showErrorHelpDialog(
             Clipboard.setData(ClipboardData(text: line));
             Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Reference copied / संदर्भ कॉपी हुआ'),
+              SnackBar(
+                content: Text(AppStrings.read(context, 'reference_copied')),
                 behavior: SnackBarBehavior.floating,
               ),
             );
           },
-          child: const Text('Copy reference'),
+          child: Text(AppStrings.of(ctx, 'copy_reference')),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Done'),
+          child: Text(AppStrings.of(ctx, 'done')),
         ),
       ],
     ),

@@ -45,9 +45,9 @@ public class ExtractionService {
     public ExtractResponse extract(ExtractRequest request) {
         RawExtractionResult rawResult = llmClient.extract(
             request.transcript(),
-            request.trade(),
-            request.catalogEntries(),
-            request.rateMemory(),
+            request.businessType(),
+            request.serviceItems(),
+            request.savedRates(),
             request.language()
         );
 
@@ -59,7 +59,7 @@ public class ExtractionService {
      */
     public ExtractionJob createJob(String userId, ExtractRequest request) {
         String jobId = UUID.randomUUID().toString();
-        ExtractionJob job = ExtractionJob.createPending(jobId, userId, request.trade(), request.transcript());
+        ExtractionJob job = ExtractionJob.createPending(jobId, userId, request.businessType(), request.transcript());
         jobRepository.save(job);
         return job;
     }
@@ -96,33 +96,33 @@ public class ExtractionService {
         List<ExplicitUnknownDto> unknowns = new ArrayList<>();
         List<SuggestedItemDto> suggestedItems = new ArrayList<>();
 
-        // Map rate memory by catalogItemId + ":" + normalizedUnit
+        // Map saved rates by serviceItemId + ":" + normalizedUnit
         Map<String, Long> rateMemoryMap = new HashMap<>();
-        if (request.rateMemory() != null) {
-            for (RateMemoryItemDto rm : request.rateMemory()) {
+        if (request.savedRates() != null) {
+            for (RateMemoryItemDto rm : request.savedRates()) {
                 String normUnit = ContractorUnit.normalize(rm.unit());
-                rateMemoryMap.put(rm.catalogItemId().toLowerCase(Locale.ROOT) + ":" + normUnit, rm.unitRatePaise());
+                rateMemoryMap.put(rm.serviceItemId().toLowerCase(Locale.ROOT) + ":" + normUnit, rm.unitRatePaise());
             }
         }
 
-        // Map catalog items by ID for O(1) lookup
-        Map<String, CatalogItemDto> catalogMap = new HashMap<>();
-        for (CatalogItemDto item : request.catalogEntries()) {
+        // Map service items by ID for O(1) lookup
+        Map<String, ServiceItemDto> catalogMap = new HashMap<>();
+        for (ServiceItemDto item : request.serviceItems()) {
             catalogMap.put(item.id().toLowerCase(Locale.ROOT), item);
         }
 
         // Process raw items
         if (rawResult.items() != null) {
             for (RawExtractedItem rawItem : rawResult.items()) {
-                String catId = rawItem.catalogItemId() != null ? rawItem.catalogItemId().toLowerCase(Locale.ROOT) : "";
-                CatalogItemDto catalogItem = catalogMap.get(catId);
+                String catId = rawItem.serviceItemId() != null ? rawItem.serviceItemId().toLowerCase(Locale.ROOT) : "";
+                ServiceItemDto catalogItem = catalogMap.get(catId);
 
                 if (catalogItem == null) {
                     // Item ID not found in the user's service list -> isolate into explicit unknowns
                     unknowns.add(new ExplicitUnknownDto(
                         rawItem.sourceSpan() != null ? rawItem.sourceSpan() : catId,
                         catId,
-                        "Item not found in " + request.trade() + " service list",
+                        "Item not found in " + request.businessType() + " service list",
                         0.2
                     ));
                     continue;
@@ -130,17 +130,17 @@ public class ExtractionService {
 
                 String unit = rawItem.unit() != null && ContractorUnit.isRecognized(rawItem.unit())
                     ? ContractorUnit.normalize(rawItem.unit())
-                    : catalogItem.defaultUnit();
+                    : catalogItem.unit();
 
                 String rateKey = catalogItem.id().toLowerCase(Locale.ROOT) + ":" + ContractorUnit.normalize(unit);
                 Long ratePaise = rateMemoryMap.get(rateKey);
                 RateSource rateSource = ratePaise != null ? RateSource.RATE_MEMORY : RateSource.UNKNOWN;
 
-                SourceSpan span = new SourceSpan(rawItem.sourceSpan() != null ? rawItem.sourceSpan() : catalogItem.displayName());
+                SourceSpan span = new SourceSpan(rawItem.sourceSpan() != null ? rawItem.sourceSpan() : catalogItem.name());
 
                 ExtractedLineItemDto item = new ExtractedLineItemDto(
                     catalogItem.id(),
-                    catalogItem.displayName(),
+                    catalogItem.name(),
                     rawItem.quantity() != null && rawItem.quantity() > 0 ? rawItem.quantity() : 1.0,
                     unit,
                     ratePaise,
@@ -204,7 +204,7 @@ public class ExtractionService {
 
         return new ExtractResponse(
             request.schemaVersion() != null ? request.schemaVersion() : "1.0",
-            request.trade(),
+            request.businessType(),
             lineItems,
             unknowns,
             suggestedItems,

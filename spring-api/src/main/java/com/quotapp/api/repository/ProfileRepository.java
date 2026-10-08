@@ -38,7 +38,7 @@ public class ProfileRepository {
             userId,
             profile.name() != null ? profile.name() : (existing != null ? existing.name() : ""),
             profile.businessName() != null ? profile.businessName() : (existing != null ? existing.businessName() : ""),
-            profile.trade() != null ? profile.trade() : (existing != null ? existing.trade() : "tiling"),
+            profile.businessType() != null ? profile.businessType() : (existing != null ? existing.businessType() : "tiling"),
             profile.city() != null ? profile.city() : (existing != null ? existing.city() : ""),
             profile.phone() != null ? profile.phone() : (existing != null ? existing.phone() : ""),
             profile.gstin() != null ? profile.gstin() : (existing != null ? existing.gstin() : null),

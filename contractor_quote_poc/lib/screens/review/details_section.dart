@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../utils/quote_ids.dart';
 import 'small_widgets.dart';
 
@@ -78,14 +79,14 @@ class MoreDetailsSection extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'More quote details / अतिरिक्त विवरण',
+                          AppStrings.of(context, 'more_details'),
                           style: tt.titleSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '$displayNumber • ${validityDays}d validity • '
-                          '${gstPercent == null ? "No GST" : "GST $gstPercent%"}',
+                          '$displayNumber • ${AppStrings.of(context, 'validity_days').replaceAll('{n}', '$validityDays')} • '
+                          '${gstPercent == null ? AppStrings.of(context, 'no_gst') : "GST $gstPercent%"}',
                           style: tt.bodySmall?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.65),
                           ),
@@ -101,7 +102,8 @@ class MoreDetailsSection extends StatelessWidget {
                           : Icons.keyboard_arrow_down_rounded,
                       size: 20,
                     ),
-                    label: Text(isExpanded ? 'Hide' : 'Expand'),
+                    label: Text(AppStrings.of(
+                        context, isExpanded ? 'hide' : 'expand')),
                   ),
                 ],
               ),
@@ -123,7 +125,7 @@ class MoreDetailsSection extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Quote Number / कोटेशन संख्या',
+                            Text(AppStrings.of(context, 'quote_number'),
                                 style: tt.bodySmall),
                             const SizedBox(height: 4),
                             Text(
@@ -148,7 +150,8 @@ class MoreDetailsSection extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('Offline ID / पहचान', style: tt.labelSmall),
+                            Text(AppStrings.of(context, 'offline_id'),
+                                style: tt.labelSmall),
                             Text(
                               shortId(quoteId),
                               style: tt.bodySmall?.copyWith(
@@ -165,7 +168,7 @@ class MoreDetailsSection extends StatelessWidget {
 
                   // ── 2. Quotation Date ─────────────────────────────────────
                   FieldLabel(
-                    label: 'Quote Date / दिनांक',
+                    label: AppStrings.of(context, 'quote_date'),
                     child: OutlinedButton.icon(
                       onPressed: () async {
                         final picked = await showDatePicker(
@@ -190,7 +193,7 @@ class MoreDetailsSection extends StatelessWidget {
 
                   // ── 3. Validity ───────────────────────────────────────────
                   FieldLabel(
-                    label: 'Validity / मान्यता (दिन)',
+                    label: AppStrings.of(context, 'validity'),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -199,7 +202,8 @@ class MoreDetailsSection extends StatelessWidget {
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
-                              label: Text('$days days'),
+                              label: Text(
+                                  '$days ${AppStrings.of(context, 'days')}'),
                               selected: selected,
                               onSelected: (_) => onValidityChanged(days),
                               selectedColor: cs.primary,
@@ -219,7 +223,7 @@ class MoreDetailsSection extends StatelessWidget {
 
                   // ── 4. GST Toggle / Rate ───────────────────────────────────
                   FieldLabel(
-                    label: 'GST / जीएसटी कर',
+                    label: AppStrings.of(context, 'gst'),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -227,7 +231,8 @@ class MoreDetailsSection extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
-                              label: const Text('No GST (0%)'),
+                              label: Text(
+                                  '${AppStrings.of(context, 'no_gst')} (0%)'),
                               selected: gstPercent == null,
                               onSelected: (_) => onGstChanged(null),
                               selectedColor: cs.primary,
@@ -266,7 +271,7 @@ class MoreDetailsSection extends StatelessWidget {
 
                   // ── 5. Advance percentage & text ──────────────────────────
                   FieldLabel(
-                    label: 'Advance / अग्रिम भुगतान (optional)',
+                    label: AppStrings.of(context, 'advance'),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -275,7 +280,8 @@ class MoreDetailsSection extends StatelessWidget {
                           child: Row(
                             children: [
                               ChoiceChip(
-                                label: const Text('None'),
+                                label:
+                                    Text(AppStrings.of(context, 'none')),
                                 selected:
                                     advancePercentCtrl.text.trim().isEmpty,
                                 onSelected: (_) =>
@@ -301,8 +307,7 @@ class MoreDetailsSection extends StatelessWidget {
                           style: tt.bodyLarge,
                           decoration: reviewInputDecoration(
                             context,
-                            hint:
-                                'e.g. 50% advance before tile delivery / ५०% अग्रिम',
+                            hint: AppStrings.of(context, 'advance_hint'),
                           ),
                         ),
                       ],
@@ -312,13 +317,13 @@ class MoreDetailsSection extends StatelessWidget {
 
                   // ── 6. Notes ──────────────────────────────────────────────
                   FieldLabel(
-                    label: 'Notes / टिप्पणी (optional)',
+                    label: AppStrings.of(context, 'notes'),
                     child: TextField(
                       controller: notesCtrl,
                       style: tt.bodyLarge,
                       decoration: reviewInputDecoration(
                         context,
-                        hint: 'Payment terms, special conditions…',
+                        hint: AppStrings.of(context, 'notes_hint'),
                       ),
                       maxLines: 2,
                     ),
@@ -331,14 +336,14 @@ class MoreDetailsSection extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'Terms & Conditions / नियम व शर्तें',
+                          AppStrings.of(context, 'terms_title'),
                           style: tt.bodyMedium
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                       TextButton(
                         onPressed: onResetTerms,
-                        child: const Text('Reset defaults / डिफ़ॉल्ट'),
+                        child: Text(AppStrings.of(context, 'reset_defaults')),
                       ),
                     ],
                   ),
@@ -348,7 +353,7 @@ class MoreDetailsSection extends StatelessWidget {
                     style: tt.bodyMedium,
                     decoration: reviewInputDecoration(
                       context,
-                      hint: 'Enter terms (one condition per line)',
+                      hint: AppStrings.of(context, 'terms_hint'),
                     ),
                     maxLines: 4,
                   ),

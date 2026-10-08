@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_strings.dart';
 import '../storage/auth_repository.dart';
 import '../theme.dart';
 
@@ -33,7 +34,8 @@ class _SignInScreenState extends State<SignInScreen> {
   Future<void> _sendOtp() async {
     final raw = _phoneCtrl.text.trim();
     if (!AuthRepository.isValidIndianPhone(raw)) {
-      setState(() => _error = 'Enter a valid 10-digit mobile number / 10 अंक का मोबाइल नंबर लिखें');
+      if (!mounted) return;
+      setState(() => _error = AppStrings.read(context, 'invalid_phone'));
       return;
     }
     setState(() {
@@ -51,7 +53,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'Could not send OTP. Check internet and retry. / OTP नहीं भेजा गया — पुनः प्रयास करें';
+        _error = AppStrings.read(context, 'otp_send_failed');
       });
     }
   }
@@ -60,7 +62,7 @@ class _SignInScreenState extends State<SignInScreen> {
     final phone = AuthRepository.normalizeToE164(_phoneCtrl.text.trim());
     final token = _otpCtrl.text.trim();
     if (token.length < 4) {
-      setState(() => _error = 'Enter the OTP sent to your phone / फोन पर आया OTP लिखें');
+      setState(() => _error = AppStrings.read(context, 'enter_otp'));
       return;
     }
     setState(() {
@@ -72,8 +74,8 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Signed in / साइन इन हो गया ✓'),
+        SnackBar(
+          content: Text(AppStrings.read(context, 'signed_in')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -81,7 +83,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'Wrong or expired OTP. Try again. / गलत OTP — दोबारा कोशिश करें';
+        _error = AppStrings.read(context, 'wrong_otp');
       });
     }
   }
@@ -90,27 +92,28 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in / साइन इन')),
+      appBar: AppBar(title: Text(AppStrings.of(context, 'sign_in'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(kPagePadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Login with mobile number', style: tt.titleLarge),
+              Text(AppStrings.of(context, 'login_mobile'),
+                  style: tt.titleLarge),
               const SizedBox(height: 6),
               Text(
-                'OTP आएगा — We send an SMS code. Your quotes stay on this phone even offline.',
+                AppStrings.of(context, 'otp_info'),
                 style: tt.bodyMedium,
               ),
               const SizedBox(height: 24),
               TextFormField(
                 controller: _phoneCtrl,
                 enabled: !_otpSent,
-                decoration: const InputDecoration(
-                  labelText: 'Mobile number / मोबाइल नंबर *',
+                decoration: InputDecoration(
+                  labelText: AppStrings.of(context, 'mobile_number'),
                   hintText: 'e.g. 98765 43210',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                  prefixIcon: const Icon(Icons.phone_outlined),
                   prefixText: '+91 ',
                 ),
                 keyboardType: TextInputType.phone,
@@ -122,10 +125,10 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _otpCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'OTP / ओटीपी *',
+                  decoration: InputDecoration(
+                    labelText: AppStrings.of(context, 'otp_label'),
                     hintText: 'e.g. 123456',
-                    prefixIcon: Icon(Icons.sms_outlined),
+                    prefixIcon: const Icon(Icons.sms_outlined),
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -147,7 +150,9 @@ class _SignInScreenState extends State<SignInScreen> {
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(_otpSent ? 'Verify OTP / सत्यापित करें' : 'Send OTP / OTP भेजें'),
+                    : Text(_otpSent
+                        ? AppStrings.of(context, 'verify_otp')
+                        : AppStrings.of(context, 'send_otp')),
               ),
               if (_otpSent) ...[
                 const SizedBox(height: 8),
@@ -158,7 +163,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             _otpSent = false;
                             _otpCtrl.clear();
                           }),
-                  child: const Text('Change number / नंबर बदलें'),
+                  child: Text(AppStrings.of(context, 'change_number')),
                 ),
               ],
               // Dev bypass: only when Supabase keys are absent.

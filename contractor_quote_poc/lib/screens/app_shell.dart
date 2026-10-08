@@ -13,7 +13,8 @@ import '../widgets/business_type_chips.dart';
 import 'voice_screen.dart';
 
 /// Bottom-navigation shell: Home · New Quote (centre action) · Quotes.
-/// The centre tab opens a businessType sheet (Speak first, Type second) per design.md.
+/// The centre tab opens a sheet that starts recording for the user's current
+/// business in one tap; switching business is an optional expander.
 class AppShell extends StatefulWidget {
   final String languageCode;
   final ValueChanged<String> onLanguageChanged;
@@ -111,7 +112,8 @@ class _AppShellState extends State<AppShell> {
 }
 
 /// Bottom sheet content for the centre New action.
-/// Speak first (primary), Type second — businessType chips remember last use.
+/// Speak first (primary), Type second — defaults to the user's current
+/// business; the type switcher is an optional expander, never a gate.
 class _NewQuoteSheet extends StatefulWidget {
   final String languageCode;
   final ValueChanged<BusinessType> onSpeak;

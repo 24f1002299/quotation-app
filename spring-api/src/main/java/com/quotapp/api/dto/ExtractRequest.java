@@ -2,6 +2,7 @@ package com.quotapp.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -11,13 +12,15 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Extraction endpoint request payload.
+ * Extraction endpoint request payload for ANY business domain.
  *
- * <p>Canonical names are {@code businessType} and {@code serviceItems}
- * (the user's own service list for any business domain). Legacy wire names
- * are still accepted: {@code trade} for {@code businessType},
- * {@code catalogEntries} for {@code serviceItems}, and {@code rateMemory}
- * for {@code savedRates}.
+ * <p>Canonical names are {@code businessType} (free-form business slug),
+ * {@code serviceItems} (the user's own service list) and {@code savedRates}.
+ * Legacy wire names are still accepted on input: {@code trade} for
+ * {@code businessType}, {@code catalogEntries} for {@code serviceItems}, and
+ * {@code rateMemory} for {@code savedRates}. Legacy item keys
+ * ({@code displayName}/{@code defaultUnit}/{@code synonyms}) also bind via
+ * {@link ServiceItemDto} aliases.
  *
  * <p>Use {@link #resolvedBusinessType()} and {@link #resolvedServiceItems()}
  * in new code: they expose the canonical names regardless of which wire
@@ -32,16 +35,19 @@ public record ExtractRequest(
     String transcript,
 
     @NotBlank(message = "Business type is required")
-    @JsonAlias("businessType")
-    String trade,
+    @JsonProperty("businessType")
+    @JsonAlias({"trade", "business_type"})
+    String businessType,
 
     @Valid
-    @JsonAlias("serviceItems")
-    List<CatalogItemDto> catalogEntries,
+    @JsonProperty("serviceItems")
+    @JsonAlias({"catalogEntries", "catalog_entries"})
+    List<ServiceItemDto> serviceItems,
 
     @Valid
-    @JsonAlias("savedRates")
-    List<RateMemoryItemDto> rateMemory,
+    @JsonProperty("savedRates")
+    @JsonAlias({"rateMemory", "rate_memory"})
+    List<RateMemoryItemDto> savedRates,
 
     @Pattern(regexp = "^(hi|mr|en|auto)?$", message = "Language hint must be 'hi', 'mr', 'en', or 'auto'")
     String language,
@@ -54,11 +60,11 @@ public record ExtractRequest(
     String idempotencyKey
 ) {
     public ExtractRequest {
-        if (catalogEntries == null) {
-            catalogEntries = Collections.emptyList();
+        if (serviceItems == null) {
+            serviceItems = Collections.emptyList();
         }
-        if (rateMemory == null) {
-            rateMemory = Collections.emptyList();
+        if (savedRates == null) {
+            savedRates = Collections.emptyList();
         }
         if (version == null) {
             version = 1;
@@ -70,11 +76,11 @@ public record ExtractRequest(
 
     /** Canonical business-type slug, regardless of which wire key was sent. */
     public String resolvedBusinessType() {
-        return trade;
+        return businessType;
     }
 
-    /** Canonical service-list view of the legacy catalog entries. */
+    /** Canonical service-list view, regardless of which wire key was sent. */
     public List<ServiceItemDto> resolvedServiceItems() {
-        return catalogEntries.stream().map(ServiceItemDto::fromCatalog).toList();
+        return serviceItems;
     }
 }

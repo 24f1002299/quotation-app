@@ -58,7 +58,7 @@ public class QuoteController {
                 effectiveIdempotencyKey,
                 quote.displayNumber(),
                 quote.status(),
-                quote.trade(),
+                quote.businessType(),
                 quote.clientName(),
                 quote.clientPhone(),
                 quote.siteAddress(),

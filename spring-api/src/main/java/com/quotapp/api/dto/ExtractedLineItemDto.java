@@ -13,6 +13,9 @@ import jakarta.validation.constraints.Positive;
 /**
  * Extracted candidate line item.
  *
+ * <p>Canonical id field is {@code serviceItemId} (the user's own service
+ * id); the legacy {@code catalogItemId} name is still accepted on input.
+ *
  * <p>STRICT INVARIANT: This contract strictly excludes all calculated arithmetic fields
  * (such as {@code amount}, {@code lineTotal}, {@code subtotal}, {@code grandTotal}, or {@code gst}).
  * Quotation arithmetic is performed deterministically by the client calculation engine,
@@ -21,9 +24,9 @@ import jakarta.validation.constraints.Positive;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExtractedLineItemDto(
-    @NotBlank(message = "catalogItemId is required")
-    @JsonAlias("serviceItemId")
-    String catalogItemId,
+    @NotBlank(message = "serviceItemId is required")
+    @JsonAlias({"catalogItemId", "catalog_item_id"})
+    String serviceItemId,
 
     @NotBlank(message = "description is required")
     String description,

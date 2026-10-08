@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_strings.dart';
 import '../models/quote.dart';
 import '../screens/quote_flag_widgets.dart';
 import '../theme.dart';
@@ -29,8 +30,10 @@ class QuoteTotalsBar extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Subtotal / कुल', style: tt.titleMedium),
-                    Text('(excl. GST)', style: tt.bodyMedium),
+                    Text(AppStrings.of(context, 'subtotal'),
+                        style: tt.titleMedium),
+                    Text(AppStrings.of(context, 'excl_gst'),
+                        style: tt.bodyMedium),
                   ],
                 ),
                 Text(
@@ -44,7 +47,8 @@ class QuoteTotalsBar extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Subtotal / उप-योग', style: tt.bodyMedium),
+                    Text(AppStrings.of(context, 'subtotal'),
+                        style: tt.bodyMedium),
                     Text(
                       formatRupeePaise(totals.subtotalPaise),
                       style:
@@ -56,7 +60,8 @@ class QuoteTotalsBar extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('GST / कर', style: tt.bodyMedium),
+                    Text(AppStrings.of(context, 'gst'),
+                        style: tt.bodyMedium),
                     Text(
                       formatRupeePaise(totals.gstPaise),
                       style:
@@ -68,7 +73,8 @@ class QuoteTotalsBar extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total / कुल राशि', style: tt.titleMedium),
+                    Text(AppStrings.of(context, 'total'),
+                        style: tt.titleMedium),
                     Text(
                       formatRupeePaise(totals.grandTotalPaise),
                       style: tt.displaySmall?.copyWith(color: cs.primary),
@@ -130,7 +136,7 @@ class ReviewBottomActions extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total', style: tt.bodyMedium),
+              Text(AppStrings.of(context, 'total'), style: tt.bodyMedium),
               Text(
                 formatRupeePaise(grandTotalPaise),
                 style: tt.titleMedium?.copyWith(color: cs.primary),
@@ -170,7 +176,7 @@ class ReviewBottomActions extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                 ),
-                child: const Text('Get help'),
+                child: Text(AppStrings.of(context, 'get_help')),
               ),
             ),
           ] else if (warningCount > 0) ...[
@@ -189,7 +195,8 @@ class ReviewBottomActions extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                 ),
-                child: Text('Get help · $warningCount to confirm'),
+                child: Text(AppStrings.read(context, 'get_help_count')
+                    .replaceAll('{n}', '$warningCount')),
               ),
             ),
           ],
@@ -197,12 +204,12 @@ class ReviewBottomActions extends StatelessWidget {
           ElevatedButton.icon(
             onPressed: onGeneratePdf,
             icon: const Icon(Icons.picture_as_pdf_rounded),
-            label: const Text('Generate PDF / PDF बनाएं'),
+            label: Text(AppStrings.of(context, 'generate_pdf')),
           ),
           const SizedBox(height: 10),
           OutlinedButton(
             onPressed: onBack,
-            child: const Text('Back to Home / होम पर जाएं'),
+            child: Text(AppStrings.of(context, 'back_home')),
           ),
         ],
       ),

@@ -73,59 +73,59 @@ void main() {
 
     // Initial wrong total: 450+300+600+2400+3600 = ₹7,350.
     expect(find.text('₹7,350'), findsNWidgets(2));
-    expect(find.text('Needs attention (1)'), findsOneWidget);
-    expect(find.text('Fix now'), findsOneWidget);
+    expect(find.text('ध्यान दें (1)'), findsOneWidget);
+    expect(find.text('अभी ठीक करें'), findsOneWidget);
 
     // ── Fix 1: Tile Labour qty 10 → 100. New total ₹11,400. ──
-    await tester.tap(find.text('Edit').at(0));
+    await tester.tap(find.text('बदलें').at(0));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(1), '100');
     // Sheet shows live read-only amount preview (Day 5 engine).
-    expect(find.textContaining('Amount / राशि'), findsAtLeastNWidgets(1));
-    await tester.tap(find.text('Save changes'));
+    expect(find.textContaining('रकम'), findsAtLeastNWidgets(1));
+    await tester.tap(find.text('सेव करें'));
     await tester.pumpAndSettle();
     expect(find.text('₹11,400'), findsNWidgets(2));
 
     // ── Fix 2: Skirting rate 6 → 60. New total ₹14,100. ──
-    await tester.ensureVisible(find.text('Edit').at(1));
-    await tester.tap(find.text('Edit').at(1));
+    await tester.ensureVisible(find.text('बदलें').at(1));
+    await tester.tap(find.text('बदलें').at(1));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(3), '60');
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(find.text('सेव करें'));
     await tester.pumpAndSettle();
     expect(find.text('₹14,100'), findsNWidgets(2));
 
     // ── Fix 3: Waterproofing qty 20 → 200. New total ₹19,500. ──
-    await tester.ensureVisible(find.text('Edit').at(2));
-    await tester.tap(find.text('Edit').at(2));
+    await tester.ensureVisible(find.text('बदलें').at(2));
+    await tester.tap(find.text('बदलें').at(2));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(1), '200');
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(find.text('सेव करें'));
     await tester.pumpAndSettle();
     expect(find.text('₹19,500'), findsNWidgets(2));
 
     // ── Fix 4: Wall Putty rate 8 → 18. New total ₹22,500. ──
-    await tester.ensureVisible(find.text('Edit').at(3));
-    await tester.tap(find.text('Edit').at(3));
+    await tester.ensureVisible(find.text('बदलें').at(3));
+    await tester.tap(find.text('बदलें').at(3));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(3), '18');
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(find.text('सेव करें'));
     await tester.pumpAndSettle();
     expect(find.text('₹22,500'), findsNWidgets(2));
 
     // ── Fix 5: low-confidence Painting via "Fix now" → Save changes. ──
-    await tester.ensureVisible(find.text('Fix now'));
-    await tester.tap(find.text('Fix now'));
+    await tester.ensureVisible(find.text('अभी ठीक करें'));
+    await tester.tap(find.text('अभी ठीक करें'));
     await tester.pumpAndSettle();
-    expect(find.text('Edit Item / मद बदलें'), findsOneWidget);
-    await tester.tap(find.text('Save changes'));
+    expect(find.text('काम बदलें'), findsOneWidget);
+    await tester.tap(find.text('सेव करें'));
     await tester.pumpAndSettle();
 
     // All resolved: banner gone, total holds, PDF no longer blocked.
     // (Fix-now via Edit marks the item resolved: requiresReview=false, so no
     // "Checked" chip remains — the attention banner disappearing is the signal.)
-    expect(find.text('Needs attention (1)'), findsNothing);
-    expect(find.text('Fix now'), findsNothing);
+    expect(find.text('ध्यान दें (1)'), findsNothing);
+    expect(find.text('अभी ठीक करें'), findsNothing);
     expect(find.text('₹22,500'), findsNWidgets(2));
   });
 

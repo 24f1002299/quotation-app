@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_strings.dart';
 import '../theme/colors.dart';
 import '../theme/dimensions.dart';
 
@@ -65,7 +66,9 @@ class _MicButtonState extends State<MicButton>
     final bg = widget.isRecording ? kError : kForest;
     return Semantics(
       button: true,
-      label: widget.isRecording ? 'Stop recording' : 'Tap to speak',
+      label: widget.isRecording
+          ? AppStrings.of(context, 'stop_recording')
+          : AppStrings.of(context, 'tap_to_speak'),
       child: GestureDetector(
         onTapDown: (_) => HapticFeedback.lightImpact(),
         onTap: () {

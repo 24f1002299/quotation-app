@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../models/service_item.dart';
 import '../../storage/service_item_repository.dart';
 import '../../templates/template_data.dart';
@@ -140,15 +141,16 @@ class _AddItemSheetState extends State<AddItemSheet> {
 
               Text(
                 widget.initialItem == null
-                    ? 'Add Item / मद जोड़ें'
-                    : 'Edit Item / मद बदलें',
+                    ? AppStrings.of(context, 'add_item')
+                    : AppStrings.of(context, 'edit_item'),
                 style: tt.titleLarge,
               ),
 
               // ── The user's own service list (only when type is known) ─────
               if (widget.businessType != null) ...[
                 const SizedBox(height: 14),
-                Text('My services / मेरी सेवाएं', style: tt.bodyMedium),
+                Text(AppStrings.of(context, 'my_services'),
+                    style: tt.bodyMedium),
                 const SizedBox(height: 8),
                 FutureBuilder<List<ServiceItem>>(
                   future: ServiceItemRepository
@@ -157,7 +159,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                     final services = snap.data ?? const <ServiceItem>[];
                     if (services.isEmpty) {
                       return Text(
-                        'No services yet — type the item below.',
+                        AppStrings.of(context, 'services_empty'),
                         style: tt.bodyMedium,
                       );
                     }
@@ -187,18 +189,19 @@ class _AddItemSheetState extends State<AddItemSheet> {
 
               // ── Description ─────────────────────────────────────────────
               FieldLabel(
-                label: 'Item name / मद का नाम',
+                label: AppStrings.of(context, 'item_name'),
                 child: TextFormField(
                   controller: _descCtrl,
                   // Skip autofocus when catalog chips are present — keyboard
                   // would hide them before the user can tap a chip.
                   autofocus: widget.businessType == null,
                   style: tt.bodyLarge,
-                  decoration:
-                      reviewInputDecoration(context, hint: 'e.g. Skirting'),
+                  decoration: reviewInputDecoration(context,
+                      hint: AppStrings.of(context, 'item_name_hint')),
                   textCapitalization: TextCapitalization.words,
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? AppStrings.text(appLanguage.value, 'required')
+                      : null,
                 ),
               ),
               const SizedBox(height: 12),
@@ -209,7 +212,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                   Expanded(
                     flex: 2,
                     child: FieldLabel(
-                      label: 'Qty / मात्रा',
+                      label: AppStrings.of(context, 'quantity'),
                       child: TextFormField(
                         controller: _qtyCtrl,
                         style: tt.bodyLarge,
@@ -220,7 +223,10 @@ class _AddItemSheetState extends State<AddItemSheet> {
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (v == null || v.trim().isEmpty) {
+                            return AppStrings.text(
+                                appLanguage.value, 'required');
+                          }
                           if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
                           return null;
                         },
@@ -231,14 +237,15 @@ class _AddItemSheetState extends State<AddItemSheet> {
                   Expanded(
                     flex: 2,
                     child: FieldLabel(
-                      label: 'Unit',
+                      label: AppStrings.of(context, 'unit'),
                       child: TextFormField(
                         controller: _unitCtrl,
                         style: tt.bodyLarge,
                         decoration: reviewInputDecoration(context,
                             hint: 'sq ft'),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? AppStrings.text(appLanguage.value, 'required')
+                            : null,
                       ),
                     ),
                   ),
@@ -248,7 +255,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
 
               // ── Rate ─────────────────────────────────────────────────────
               FieldLabel(
-                label: 'Rate (₹) / दर',
+                label: AppStrings.of(context, 'rate'),
                 child: TextFormField(
                   controller: _rateCtrl,
                   style: tt.bodyLarge,
@@ -256,7 +263,9 @@ class _AddItemSheetState extends State<AddItemSheet> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Required';
+                    if (v == null || v.trim().isEmpty) {
+                      return AppStrings.text(appLanguage.value, 'required');
+                    }
                     if ((int.tryParse(v) ?? 0) <= 0) return '> 0';
                     return null;
                   },
@@ -278,7 +287,8 @@ class _AddItemSheetState extends State<AddItemSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Amount / राशि', style: tt.bodyMedium),
+                    Text(AppStrings.of(context, 'amount'),
+                        style: tt.bodyMedium),
                     Text(
                       formatRupeePaise(_previewAmountPaise),
                       style: tt.titleMedium?.copyWith(
@@ -296,7 +306,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
+                      child: Text(AppStrings.of(context, 'cancel')),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -305,8 +315,8 @@ class _AddItemSheetState extends State<AddItemSheet> {
                       onPressed: _submit,
                       icon: const Icon(Icons.check_rounded),
                       label: Text(widget.initialItem == null
-                          ? 'Add'
-                          : 'Save changes'),
+                          ? AppStrings.of(context, 'add')
+                          : AppStrings.of(context, 'save_changes')),
                     ),
                   ),
                 ],

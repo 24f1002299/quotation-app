@@ -108,20 +108,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete my data?'),
-        content: const Text(
-          'This removes all quotes, drafts and profile data on '
-          'this phone. Cloud copies need per-quote delete while signed in.',
+        title: Text('${AppStrings.of(ctx, 'delete_my_data')}?'),
+        content: Text(
+          AppStrings.of(ctx, 'delete_data_info'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(AppStrings.of(ctx, 'cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: kError),
-            child: const Text('Delete everything'),
+            child: Text(AppStrings.of(ctx, 'delete_everything')),
           ),
         ],
       ),
@@ -136,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Deleted $summary from this phone'),
+        content: Text('${AppStrings.read(context, 'deleted_from_phone')}: $summary'),
         behavior: SnackBarBehavior.floating,
       ),
     );

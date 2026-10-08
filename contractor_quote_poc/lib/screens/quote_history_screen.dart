@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../l10n/app_strings.dart';
 import '../storage/quote_repository.dart';
 import '../storage/quote_sync_service.dart';
 import '../storage/saved_quote.dart';
@@ -78,15 +79,15 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
   }
 
   /// Phase 5: relative-date bucket for group headers in the list.
-  static String _dateGroupLabel(DateTime date) {
+  static String _dateGroupLabel(BuildContext context, DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final day = DateTime(date.year, date.month, date.day);
     final diff = today.difference(day).inDays;
-    if (diff <= 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    if (diff < 7) return 'This week';
-    return 'Older';
+    if (diff <= 0) return AppStrings.of(context, 'date_today');
+    if (diff == 1) return AppStrings.of(context, 'date_yesterday');
+    if (diff < 7) return AppStrings.of(context, 'date_this_week');
+    return AppStrings.of(context, 'date_older');
   }
 
   Future<void> _checkForConflictsAndSync() async {
@@ -115,7 +116,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
             ? ''
             : (failed.first.lastError?.trim().isNotEmpty == true
                 ? failed.first.lastError!.trim()
-                : '${failed.length} change(s) waiting for network');
+                : '${failed.length} ${AppStrings.text(appLanguage.value, 'changes_waiting')}');
       });
     } catch (_) {}
   }
@@ -135,8 +136,8 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       SnackBar(
         content: Text(
           _failedSyncCount > 0
-              ? 'Still offline — $_failedSyncCount change(s) safe on this phone.'
-              : 'Sync finished / सिंक हो गया ✓',
+              ? '${AppStrings.read(context, 'sync_still_offline')} ($_failedSyncCount)'
+              : AppStrings.read(context, 'sync_finished'),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -193,20 +194,19 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Row(
-          children: const [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            SizedBox(width: 8),
-            Expanded(child: Text('Version Conflict / टकराव')),
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(child: Text(AppStrings.of(ctx, 'conflict_title'))),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'This quote was edited on another device while you were offline.\n\n'
-              'यह कोटेशन किसी अन्य फोन पर भी बदला गया था। कौन सा संस्करण रखना चाहते हैं?',
-              style: TextStyle(fontSize: 14),
+            Text(
+              AppStrings.of(ctx, 'conflict_body'),
+              style: const TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 16),
             Container(
@@ -219,16 +219,16 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '📱 This Phone (v${conflict.localQuote.version}):',
+                    '📱 ${AppStrings.of(ctx, 'conflict_this_phone')} (v${conflict.localQuote.version}):',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  Text('${conflict.localQuote.customerName} • ${conflict.localQuote.lineItems.length} items • ₹${conflict.localQuote.grandTotalRupees}'),
+                  Text('${conflict.localQuote.customerName} • ${conflict.localQuote.lineItems.length} ${AppStrings.of(ctx, 'items_word')} • ₹${conflict.localQuote.grandTotalRupees}'),
                   const Divider(height: 16),
                   Text(
-                    '☁️ Server / Other Device (v${conflict.serverQuote.version}):',
+                    '☁️ ${AppStrings.of(ctx, 'conflict_server')} (v${conflict.serverQuote.version}):',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  Text('${conflict.serverQuote.customerName} • ${conflict.serverQuote.lineItems.length} items • ₹${conflict.serverQuote.grandTotalRupees}'),
+                  Text('${conflict.serverQuote.customerName} • ${conflict.serverQuote.lineItems.length} ${AppStrings.of(ctx, 'items_word')} • ₹${conflict.serverQuote.grandTotalRupees}'),
                 ],
               ),
             ),
@@ -243,11 +243,11 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
               _fetchQuotes(page: 0);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Kept server version / सर्वर संस्करण रखा गया')),
+                  SnackBar(content: Text(AppStrings.read(context, 'conflict_kept_server'))),
                 );
               }
             },
-            child: const Text('Keep Server / सर्वर का रखें'),
+            child: Text(AppStrings.of(ctx, 'conflict_keep_server')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -257,11 +257,11 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
               _fetchQuotes(page: 0);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Kept this phone\'s version / इस फोन का संस्करण रखा गया')),
+                  SnackBar(content: Text(AppStrings.read(context, 'conflict_kept_phone'))),
                 );
               }
             },
-            child: const Text('Keep This Phone / इस फोन का रखें'),
+            child: Text(AppStrings.of(ctx, 'conflict_keep_phone')),
           ),
         ],
       ),
@@ -272,21 +272,21 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Quote / कोटेशन हटाएं?'),
+        title: Text(AppStrings.of(ctx, 'delete_quote')),
         content: Text(
-          'Are you sure you want to delete the quote for "${quote.customerName}"?',
+          '${AppStrings.of(ctx, 'delete_quote_confirm')} "${quote.customerName}"?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel / रद्द करें'),
+            child: Text(AppStrings.of(ctx, 'cancel')),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete / हटाएं'),
+            child: Text(AppStrings.of(ctx, 'delete')),
           ),
         ],
       ),
@@ -297,8 +297,8 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       _fetchQuotes(page: 0);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Quote deleted / कोटेशन हटा दिया गया'),
+          SnackBar(
+            content: Text(AppStrings.read(context, 'quote_deleted')),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -371,11 +371,11 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Quote History / पुराने कोटेशन'),
+        title: Text(AppStrings.of(context, 'quote_history')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh & Sync / ताज़ा करें',
+            tooltip: AppStrings.of(context, 'refresh_sync'),
             onPressed: () {
               _checkForConflictsAndSync();
               _fetchQuotes(page: 0);
@@ -400,7 +400,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '${_conflicts.length} conflict(s) detected with another device. Tap to resolve.',
+                            '${_conflicts.length} ${AppStrings.of(context, 'conflicts_banner')}',
                             style: const TextStyle(
                               color: Colors.brown,
                               fontWeight: FontWeight.w600,
@@ -410,7 +410,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                         ),
                         TextButton(
                           onPressed: () => _showConflictDialog(_conflicts.first),
-                          child: const Text('Resolve'),
+                          child: Text(AppStrings.of(context, 'resolve')),
                         ),
                       ],
                     ),
@@ -422,13 +422,13 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 color: Colors.grey.shade300,
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.cloud_off_rounded, size: 16, color: Colors.black54),
-                    SizedBox(width: 8),
+                    const Icon(Icons.cloud_off_rounded, size: 16, color: Colors.black54),
+                    const SizedBox(width: 8),
                     Text(
-                      'Offline — drafts are safe on this phone',
-                      style: TextStyle(fontSize: 12, color: Colors.black87),
+                      AppStrings.of(context, 'offline_saved'),
+                      style: const TextStyle(fontSize: 12, color: Colors.black87),
                     ),
                   ],
                 ),
@@ -441,7 +441,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                     kPagePadding, 8, kPagePadding, 0),
                 child: SyncFailureBanner(
                   detail:
-                      '$_failedSyncCount change(s) waiting. $_failedSyncDetail',
+                      '$_failedSyncCount ${AppStrings.of(context, 'changes_waiting')}. $_failedSyncDetail',
                   errorReportId: _historyErrorId,
                   onRetry: _syncRetrying ? () {} : _retryFailedSync,
                 ),
@@ -454,12 +454,12 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                 controller: _searchCtrl,
                 onChanged: _onSearchChanged,
                 decoration: InputDecoration(
-                  hintText: 'Search client or quote number / खोजें...',
+                  hintText: AppStrings.of(context, 'search_customer'),
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _searchCtrl.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear_rounded),
-                          tooltip: 'Clear search',
+                           tooltip: AppStrings.of(context, 'clear_search'),
                           onPressed: () {
                             _searchCtrl.clear();
                             _onSearchChanged('');
@@ -489,11 +489,18 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                 children: [
                   ...['All', 'Draft', 'Ready', 'Shared'].map((status) {
                     final isSelected = _selectedStatus == status;
+                    final String labelKey = status == 'All'
+                        ? 'filter_all'
+                        : status == 'Draft'
+                            ? 'filter_draft'
+                            : status == 'Shared'
+                                ? 'filter_shared'
+                                : 'filter_ready';
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
                         selected: isSelected,
-                        label: Text(status),
+                        label: Text(AppStrings.of(context, labelKey)),
                         onSelected: (selected) {
                           setState(() {
                             _selectedStatus = status;
@@ -514,7 +521,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                     label: Text(
                       _selectedDate != null
                           ? DateFormat('dd MMM').format(_selectedDate!)
-                          : 'Date / तारीख',
+                          : AppStrings.of(context, 'filter_date'),
                     ),
                     selected: _selectedDate != null,
                     onPressed: _pickDate,
@@ -560,7 +567,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                                         ? const CircularProgressIndicator()
                                         : TextButton(
                                             onPressed: _loadMore,
-                                            child: const Text('Load more / और देखें'),
+                                            child: Text(AppStrings.of(context, 'load_more')),
                                           ),
                                   ),
                                 );
@@ -568,9 +575,10 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
                               // Phase 5: relative-date group headers
                               // (Today / Yesterday / This week / Older).
                               final group =
-                                  _dateGroupLabel(_quotes[i].effectiveDate);
+                                  _dateGroupLabel(context, _quotes[i].effectiveDate);
                               final showHeader = i == 0 ||
                                   _dateGroupLabel(
+                                          context,
                                           _quotes[i - 1].effectiveDate) !=
                                       group;
                               return Column(

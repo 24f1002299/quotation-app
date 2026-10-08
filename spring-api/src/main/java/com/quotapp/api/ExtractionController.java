@@ -94,7 +94,7 @@ public class ExtractionController {
         }
 
         log.info("Processing extraction for user={}, businessType={}, transcriptLength={}, serviceCount={}",
-            userId, request.trade(), request.transcript().length(), request.catalogEntries().size());
+            userId, request.businessType(), request.transcript().length(), request.serviceItems().size());
 
         // Create job record
         ExtractionJob job = extractionService.createJob(userId, request);

@@ -4,11 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/models/quote.dart';
-import 'package:contractor_quote_poc/parser/demo_transcripts.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';
 import 'package:contractor_quote_poc/screens/review_screen.dart';
 import 'package:contractor_quote_poc/storage/service_item_repository.dart';
 import 'package:contractor_quote_poc/templates/template_loader.dart';
+
+// Demo transcripts previously in lib/parser/demo_transcripts.dart
+// (file deleted; inlined here so tests don't depend on lib/).
+const kTilingDemoTranscript =
+    'Sharma ji ka flat, 850 square foot tiles labour, 45 rupaye per foot, skirting 120 running foot, 60 rupaye per foot.';
+const kPaintingDemoTranscript =
+    'Verma ji ka flat, 1200 square foot wall putty, 18 rupaye per foot, painting 1200 square foot, 12 rupaye per foot.';
 
 void main() {
   const parser = TranscriptParser();
@@ -50,10 +56,10 @@ void main() {
     );
 
     // Verify BusinessType chip in app bar (generic metadata label)
-    expect(find.text('Tiling'), findsOneWidget);
+    expect(find.text('टाइलिंग'), findsOneWidget);
 
     // Verify Spoken Note card is present and displays the transcript
-    expect(find.text('Spoken Note / मूल आवाज़'), findsOneWidget);
+    expect(find.text('बोली गई बात'), findsOneWidget);
     expect(find.text('“$kTilingDemoTranscript”'), findsOneWidget);
 
     // Verify items are rendered (user's service names from the template)
@@ -64,7 +70,7 @@ void main() {
     expect(find.text('₹45,450'), findsNWidgets(2));
 
     // No warning banner should be displayed
-    expect(find.text('Please Review / ध्यान दें'), findsNothing);
+    expect(find.text('ध्यान दें'), findsNothing);
   });
 
   // ── 2. Painting Demo Flow ─────────────────────────────────────────────────
@@ -103,10 +109,10 @@ void main() {
     );
 
     // Verify BusinessType chip in app bar (generic metadata label)
-    expect(find.text('Painting'), findsOneWidget);
+    expect(find.text('पेंटिंग'), findsOneWidget);
 
     // Verify Spoken Note card
-    expect(find.text('Spoken Note / मूल आवाज़'), findsOneWidget);
+    expect(find.text('बोली गई बात'), findsOneWidget);
     expect(find.text('“$kPaintingDemoTranscript”'), findsOneWidget);
 
     // Verify items (user's service names from the template)
@@ -140,20 +146,20 @@ void main() {
     );
 
     // Spoken note is preserved
-    expect(find.text('Spoken Note / मूल आवाज़'), findsOneWidget);
+    expect(find.text('बोली गई बात'), findsOneWidget);
     expect(find.text('“$rawText”'), findsOneWidget);
 
     // Warning banner is displayed
-    expect(find.text('Please Review / ध्यान दें'), findsOneWidget);
+    expect(find.text('ध्यान दें'), findsOneWidget);
     expect(find.textContaining('No services in your list match'), findsOneWidget);
 
     // Empty items hint tailored for voice
-    expect(find.text('No items auto-detected from voice'), findsOneWidget);
+    expect(find.text('आवाज़ से कोई काम नहीं मिला'), findsOneWidget);
 
     // Dismissing warning banner works
-    await tester.tap(find.byTooltip('Dismiss warning'));
+    await tester.tap(find.byTooltip('हटाएं'));
     await tester.pump();
-    expect(find.text('Please Review / ध्यान दें'), findsNothing);
+    expect(find.text('ध्यान दें'), findsNothing);
   });
 
   // ── 4. Transcript Expansion Toggle ────────────────────────────────────────
@@ -173,12 +179,12 @@ void main() {
     expect(find.text('“$kTilingDemoTranscript”'), findsOneWidget);
 
     // Tap to collapse
-    await tester.tap(find.text('Spoken Note / मूल आवाज़'));
+    await tester.tap(find.text('बोली गई बात'));
     await tester.pump();
     expect(find.text('“$kTilingDemoTranscript”'), findsNothing);
 
     // Tap again to re-expand
-    await tester.tap(find.text('Spoken Note / मूल आवाज़'));
+    await tester.tap(find.text('बोली गई बात'));
     await tester.pump();
     expect(find.text('“$kTilingDemoTranscript”'), findsOneWidget);
   });

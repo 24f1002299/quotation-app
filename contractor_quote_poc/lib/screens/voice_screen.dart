@@ -21,6 +21,7 @@ import 'package:record/record.dart';
 
 import '../templates/template_data.dart';
 import '../config/api_config.dart';
+import '../l10n/app_strings.dart';
 import '../models/quote.dart';
 import '../models/transcript_draft.dart';
 import '../screens/review_screen.dart';
@@ -74,7 +75,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   // Extraction incremental status
   String _extractionStatusMessage =
-      'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
+      AppStrings.text(appLanguage.value, 'extracting_items');
   Timer? _extractionTimer;
 
   @override
@@ -461,7 +462,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     setState(() {
       _state = _RecordState.extracting;
       _extractionStatusMessage =
-          'Extracting items... / काम और मात्रा ढूंढ रहे हैं...';
+          AppStrings.read(context, 'extracting_items');
       _errorMessage = null;
     });
 
@@ -476,10 +477,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
       setState(() {
         if (step == 1) {
           _extractionStatusMessage =
-              'Checking catalog... / कैटलॉग से मिला रहे हैं...';
+              AppStrings.read(context, 'checking_catalog');
         } else if (step >= 2) {
           _extractionStatusMessage =
-              'Applying saved rates... / दरें जोड़ रहे हैं...';
+              AppStrings.read(context, 'applying_rates');
         }
       });
     });
@@ -620,12 +621,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     ElevatedButton.icon(
                       onPressed: _createQuote,
                       icon: const Icon(Icons.arrow_forward_rounded),
-                      label: const Text('Create Quote / कोटेशन बनाएं'),
+                      label: Text(AppStrings.of(context, 'create_quote')),
                     ),
                     TextButton(
                       onPressed: _createManually,
                       child:
-                          const Text('Type quote instead / लिखकर बनाएं'),
+                          Text(AppStrings.of(context, 'type_instead')),
                     ),
                   ],
                 ),
@@ -711,7 +712,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Recording… / रिकॉर्ड हो रहा…',
+                  AppStrings.of(context, 'recording'),
                   style: tt.titleMedium,
                 ),
               ],
@@ -734,15 +735,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
           children: [
             const SizedBox(height: 8),
             Text(
-              'Tell us the work and quantities',
+              AppStrings.of(context, 'tell_work'),
               style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Text(
-              widget.businessType == BusinessType.tiling
-                  ? 'Example: “Kitchen wall tiles, 120 square feet.”'
-                  : 'Example: “Wall putty, 1200 square feet.”',
+              AppStrings.of(context, 'voice_example'),
               style: tt.bodyMedium?.copyWith(
                 color: cs.onSurface.withValues(alpha: 0.65),
               ),
@@ -752,7 +751,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             MicButton(onTap: _startRecording),
             const SizedBox(height: 12),
             Text(
-              'Tap to speak / बोलने के लिए टैप करें',
+              AppStrings.of(context, 'tap_to_speak'),
               style: tt.titleMedium,
               textAlign: TextAlign.center,
             ),
@@ -795,11 +794,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
             ElevatedButton.icon(
               onPressed: _stopRecording,
               icon: const Icon(Icons.stop_rounded),
-              label: const Text('Stop & Process / रोकें और आगे बढ़ें'),
+              label: Text(AppStrings.of(context, 'stop_process')),
             ),
             TextButton(
               onPressed: _cancelRecording,
-              child: const Text('Cancel / रद्द करें'),
+              child: Text(AppStrings.of(context, 'cancel')),
             ),
           ],
         );
@@ -809,7 +808,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             TextButton.icon(
               onPressed: _createManually,
               icon: const Icon(Icons.edit_note_rounded, size: 18),
-              label: const Text('Type quote instead / लिखकर बनाएं'),
+              label: Text(AppStrings.of(context, 'type_instead')),
             ),
             TextButton(
               onPressed: _useDemo,
@@ -818,7 +817,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
               child: Text(
-                'Use sample / नमूना आज़माएं',
+                AppStrings.of(context, 'use_sample'),
                 style: TextStyle(
                   fontSize: 12,
                   color: cs.onSurface.withValues(alpha: 0.5),
@@ -826,7 +825,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
               ),
             ),
             Text(
-              'Mic runs only while recording. Audio is deleted after transcription. / माइक सिर्फ रिकॉर्डिंग में चलता है।',
+              AppStrings.of(context, 'mic_privacy_note'),
               style: tt.bodySmall?.copyWith(
                 color: cs.onSurface.withValues(alpha: 0.5),
               ),
@@ -939,7 +938,7 @@ class _TranscriptEditor extends StatelessWidget {
           children: [
             Flexible(
               child: Text(
-                'Transcript / प्रतिलेख',
+                AppStrings.of(context, 'transcript'),
                 style: tt.titleMedium,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -976,7 +975,7 @@ class _TranscriptEditor extends StatelessWidget {
             TextButton.icon(
               onPressed: onReRecord,
               icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Re-record'),
+              label: Text(AppStrings.of(context, 'rerecord')),
             ),
           ],
         ),
@@ -989,7 +988,7 @@ class _TranscriptEditor extends StatelessWidget {
             textAlignVertical: TextAlignVertical.top,
             style: tt.bodyLarge,
             decoration: InputDecoration(
-              hintText: 'Edit the transcript if needed… / यहाँ सुधार करें',
+              hintText: AppStrings.of(context, 'transcript_hint'),
               filled: true,
               fillColor: cs.surface,
               border: OutlineInputBorder(

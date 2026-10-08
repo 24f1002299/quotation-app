@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../utils/rupee_format.dart';
 import 'editable_item.dart';
 import 'small_widgets.dart';
@@ -47,13 +48,14 @@ class LineItemCard extends StatelessWidget {
     final needsAttention = item.requiresReview && !item.acknowledged;
 
     final description = item.description.text.trim().isEmpty
-        ? 'Unnamed item'
+        ? AppStrings.of(context, 'unnamed_item')
         : item.description.text.trim();
     final qtyText = item.quantity.text.trim().isEmpty
         ? '—'
         : item.quantity.text.trim();
-    final unitText =
-        item.unit.text.trim().isEmpty ? 'unit' : item.unit.text.trim();
+    final unitText = item.unit.text.trim().isEmpty
+        ? AppStrings.of(context, 'unit')
+        : item.unit.text.trim();
     final rateText =
         item.rate.text.trim().isEmpty ? '—' : '₹${item.rate.text.trim()}';
 
@@ -77,7 +79,8 @@ class LineItemCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Item ${index + 1} / मद ${index + 1}',
+                      AppStrings.of(context, 'item_number')
+                          .replaceAll('{n}', '${index + 1}'),
                       style: tt.bodyMedium?.copyWith(
                         color: cs.primary,
                         fontWeight: FontWeight.w700,
@@ -85,10 +88,11 @@ class LineItemCard extends StatelessWidget {
                     ),
                   ),
                   if (needsAttention)
-                    const Icon(
+                    Icon(
                       Icons.warning_amber_rounded,
-                      color: Color(0xFFB45309),
-                      semanticLabel: 'Needs attention',
+                      color: const Color(0xFFB45309),
+                      semanticLabel:
+                          AppStrings.of(context, 'needs_attention'),
                     ),
                 ],
               ),
@@ -115,7 +119,7 @@ class LineItemCard extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: AmountChip(
-                  label: 'Amount / राशि',
+                  label: AppStrings.of(context, 'amount'),
                   value: formatRupeePaise(amountPaise),
                 ),
               ),
@@ -130,13 +134,14 @@ class LineItemCard extends StatelessWidget {
                     ElevatedButton.icon(
                       onPressed: onEdit,
                       icon: const Icon(Icons.build_outlined, size: 18),
-                      label: const Text('Fix now'),
+                      label: Text(AppStrings.of(context, 'fix_now')),
                     ),
                     if (onAddToList != null)
                       OutlinedButton.icon(
                         onPressed: onAddToList,
                         icon: const Icon(Icons.playlist_add_rounded, size: 18),
-                        label: const Text('Add to my list'),
+                        label:
+                            Text(AppStrings.of(context, 'add_to_my_list')),
                       ),
                     OutlinedButton.icon(
                       onPressed: onAcknowledge,
@@ -145,8 +150,8 @@ class LineItemCard extends StatelessWidget {
                           size: 18),
                       label: Text(
                         item.isUnknown
-                            ? 'I checked this / मैंने जांच ली'
-                            : 'Mark as checked / जांच ली',
+                            ? AppStrings.of(context, 'i_checked_this')
+                            : AppStrings.of(context, 'mark_as_checked'),
                       ),
                     ),
                   ],
@@ -161,7 +166,8 @@ class LineItemCard extends StatelessWidget {
                       color: cs.primary,
                     ),
                     const SizedBox(width: 6),
-                    Text('Checked / जांच ली गई', style: tt.bodySmall),
+                    Text(AppStrings.of(context, 'checked'),
+                        style: tt.bodySmall),
                   ],
                 ),
               ],
@@ -177,7 +183,7 @@ class LineItemCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
                     icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit'),
+                    label: Text(AppStrings.of(context, 'edit')),
                   ),
                   TextButton.icon(
                     onPressed: onDuplicate,
@@ -186,18 +192,20 @@ class LineItemCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
                     icon: const Icon(Icons.copy_outlined, size: 16),
-                    label: const Text('Duplicate'),
+                    label: Text(AppStrings.of(context, 'duplicate')),
                   ),
                   IconButton(
                     onPressed: onMoveUp,
                     icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                    tooltip: 'Move item ${index + 1} up',
+                    tooltip: AppStrings.of(context, 'move_up')
+                        .replaceAll('{n}', '${index + 1}'),
                     visualDensity: VisualDensity.compact,
                   ),
                   IconButton(
                     onPressed: onMoveDown,
                     icon: const Icon(Icons.arrow_downward_rounded, size: 20),
-                    tooltip: 'Move item ${index + 1} down',
+                    tooltip: AppStrings.of(context, 'move_down')
+                        .replaceAll('{n}', '${index + 1}'),
                     visualDensity: VisualDensity.compact,
                   ),
                   TextButton.icon(
@@ -210,7 +218,7 @@ class LineItemCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
                     icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                    label: const Text('Delete'),
+                    label: Text(AppStrings.of(context, 'delete_item')),
                   ),
                 ],
               ),
@@ -234,10 +242,14 @@ class UncertaintyNotice extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final note = item.uncertaintyNote?.trim();
     final message = item.isUnknown
-        ? 'Unknown item: ${note == null || note.isEmpty ? 'check this work and add its details' : note}'
+        ? AppStrings.of(context, 'unknown_item').replaceAll('{note}',
+            note == null || note.isEmpty
+                ? AppStrings.of(context, 'check_work_details')
+                : note)
         : note == null || note.isEmpty
-        ? 'Please check this item before creating the PDF.'
-        : 'Please check: $note';
+        ? AppStrings.of(context, 'check_before_pdf')
+        : AppStrings.of(context, 'please_check')
+            .replaceAll('{note}', note);
 
     return Container(
       width: double.infinity,

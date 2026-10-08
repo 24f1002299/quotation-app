@@ -1,11 +1,13 @@
 package com.quotapp.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Instant;
 
 /**
- * Minimal extraction job record.
+ * Minimal extraction job record, for ANY business domain.
  *
  * <p>Invariant: Contains only a redacted transcript snippet (max 40 chars).
  * Raw audio or full transcripts are never persisted in job records.
@@ -15,29 +17,31 @@ public record ExtractionJob(
     String jobId,
     String userId,
     ExtractionJobStatus status,
-    String trade,
+    @JsonProperty("businessType")
+    @JsonAlias({"trade", "business_type"})
+    String businessType,
     String transcriptSnippet,
     ExtractResponse response,
     String errorMessage,
     Instant createdAt,
     Instant updatedAt
 ) {
-    public static ExtractionJob createPending(String jobId, String userId, String trade, String transcript) {
+    public static ExtractionJob createPending(String jobId, String userId, String businessType, String transcript) {
         String snippet = sanitizeSnippet(transcript);
         Instant now = Instant.now();
-        return new ExtractionJob(jobId, userId, ExtractionJobStatus.PENDING, trade, snippet, null, null, now, now);
+        return new ExtractionJob(jobId, userId, ExtractionJobStatus.PENDING, businessType, snippet, null, null, now, now);
     }
 
     public ExtractionJob complete(ExtractResponse response) {
         return new ExtractionJob(
-            this.jobId, this.userId, ExtractionJobStatus.COMPLETED, this.trade, this.transcriptSnippet,
+            this.jobId, this.userId, ExtractionJobStatus.COMPLETED, this.businessType, this.transcriptSnippet,
             response, null, this.createdAt, Instant.now()
         );
     }
 
     public ExtractionJob fail(String errorMessage) {
         return new ExtractionJob(
-            this.jobId, this.userId, ExtractionJobStatus.FAILED, this.trade, this.transcriptSnippet,
+            this.jobId, this.userId, ExtractionJobStatus.FAILED, this.businessType, this.transcriptSnippet,
             null, errorMessage, this.createdAt, Instant.now()
         );
     }

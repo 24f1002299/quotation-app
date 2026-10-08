@@ -87,8 +87,8 @@ class ExtractionContractTest {
         UserContext.clear();
     }
 
-    private CatalogItemDto sampleCatalogItem(String id, String name, String unit) {
-        return new CatalogItemDto(id, name, unit, List.of(unit), List.of(name.toLowerCase()), "tiling");
+    private ServiceItemDto sampleCatalogItem(String id, String name, String unit) {
+        return new ServiceItemDto(id, name, unit, List.of(unit), List.of(name.toLowerCase()), "tiling");
     }
 
     // ─── 1. Malformed JSON Rejection ──────────────────────────────────────────
@@ -315,8 +315,8 @@ class ExtractionContractTest {
     @Test
     @DisplayName("Rates originate strictly from rate memory (RATE_MEMORY) or UNKNOWN")
     void testRateProvenanceGuaranteed() throws Exception {
-        CatalogItemDto tileItem = sampleCatalogItem("tile_labour", "Tile Labour", "sq ft");
-        CatalogItemDto skirtingItem = sampleCatalogItem("skirting", "Skirting", "rft");
+        ServiceItemDto tileItem = sampleCatalogItem("tile_labour", "Tile Labour", "sq ft");
+        ServiceItemDto skirtingItem = sampleCatalogItem("skirting", "Skirting", "rft");
 
         // Provide rate memory only for tile_labour (₹40.00 = 4000 paise)
         RateMemoryItemDto tileRate = new RateMemoryItemDto("tile_labour", "sq ft", 4000L, "tiling");
@@ -346,14 +346,14 @@ class ExtractionContractTest {
 
         // Find tile labour: must have RATE_MEMORY
         ExtractedLineItemDto extractedTile = response.lineItems().stream()
-            .filter(i -> "tile_labour".equals(i.catalogItemId()))
+            .filter(i -> "tile_labour".equals(i.serviceItemId()))
             .findFirst().orElseThrow();
         assertThat(extractedTile.rateSource()).isEqualTo(RateSource.RATE_MEMORY);
         assertThat(extractedTile.unitRatePaise()).isEqualTo(4000L);
 
         // Find skirting: must be UNKNOWN rate
         ExtractedLineItemDto extractedSkirting = response.lineItems().stream()
-            .filter(i -> "skirting".equals(i.catalogItemId()))
+            .filter(i -> "skirting".equals(i.serviceItemId()))
             .findFirst().orElseThrow();
         assertThat(extractedSkirting.rateSource()).isEqualTo(RateSource.UNKNOWN);
         assertThat(extractedSkirting.unitRatePaise()).isNull();

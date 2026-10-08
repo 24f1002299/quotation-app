@@ -131,7 +131,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify screen title
-      expect(find.text('Quote History / पुराने कोटेशन'), findsOneWidget);
+      expect(find.text('पुराने कोटेशन'), findsOneWidget);
 
       // Verify seed customer cards are displayed
       expect(find.text('Sharma Ji / शर्मा जी'), findsOneWidget);

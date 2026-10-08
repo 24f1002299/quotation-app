@@ -30,8 +30,8 @@ public class FeedbackRepository {
         FeedbackDto saved = new FeedbackDto(
             id,
             feedback.quoteIdHash().trim().toLowerCase(),
-            feedback.trade().trim().toLowerCase(),
-            feedback.catalogItemId(),
+            feedback.businessType().trim().toLowerCase(),
+            feedback.serviceItemId(),
             feedback.modelResult(),
             feedback.finalValue(),
             feedback.changedField().trim().toLowerCase(),
@@ -75,7 +75,7 @@ public class FeedbackRepository {
 
     /**
      * Anonymisation alternative (for exports/retention): redacts model/final
-     * values while keeping trade + changed-field counts.
+     * values while keeping business-type + changed-field counts.
      */
     public int anonymizeByQuoteHash(String userId, String quoteIdHash) {
         if (userId == null || quoteIdHash == null) return 0;
@@ -86,7 +86,7 @@ public class FeedbackRepository {
             FeedbackDto f = e.getValue();
             if (quoteIdHash.equalsIgnoreCase(f.quoteIdHash())) {
                 map.put(e.getKey(), new FeedbackDto(
-                    f.id(), f.quoteIdHash(), f.trade(), f.catalogItemId(),
+                    f.id(), f.quoteIdHash(), f.businessType(), f.serviceItemId(),
                     "[redacted]", "[redacted]", f.changedField(), f.createdAt()));
                 count++;
             }

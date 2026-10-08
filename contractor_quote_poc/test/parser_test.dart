@@ -2,10 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:contractor_quote_poc/models/quote.dart';
 import 'package:contractor_quote_poc/models/service_item.dart';
-import 'package:contractor_quote_poc/parser/demo_transcripts.dart';
 import 'package:contractor_quote_poc/parser/transcript_parser.dart';
 import 'package:contractor_quote_poc/templates/template_data.dart';
 import 'package:contractor_quote_poc/templates/template_loader.dart';
+
+/// Demo transcripts previously in lib/parser/demo_transcripts.dart
+/// (file deleted; inlined here so tests don't depend on lib/).
+const kTilingDemoTranscript =
+    'Sharma ji ka flat, 850 square foot tiles labour, 45 rupaye per foot, skirting 120 running foot, 60 rupaye per foot.';
+const kPaintingDemoTranscript =
+    'Verma ji ka flat, 1200 square foot wall putty, 18 rupaye per foot, painting 1200 square foot, 12 rupaye per foot.';
 
 /// The parser matches only what the user sells, so these tests run it against
 /// the starter service lists a fresh install would be seeded with.

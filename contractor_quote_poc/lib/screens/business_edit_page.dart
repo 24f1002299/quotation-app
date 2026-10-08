@@ -94,8 +94,8 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved / सुरक्षित हो गया'),
+      SnackBar(
+        content: Text(AppStrings.read(context, 'saved')),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -121,7 +121,7 @@ class _BusinessEditPageState extends State<BusinessEditPage> {
               keyboard: TextInputType.phone),
           _field(t('site'), _cityCtrl),
           _field('GSTIN', _gstinCtrl),
-          _field('Terms', _termsCtrl, maxLines: 3),
+          _field(t('terms'), _termsCtrl, maxLines: 3),
           const SizedBox(height: 8),
           Text(
             t('business_type'),

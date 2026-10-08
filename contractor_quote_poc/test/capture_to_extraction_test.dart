@@ -441,7 +441,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Type quote instead / लिखकर बनाएं'), findsOneWidget);
+      expect(find.text('खुद लिखें'), findsOneWidget);
     });
 
     testWidgets('VoiceScreen provides "Type quote instead" button when transcript is present', (WidgetTester tester) async {
@@ -457,12 +457,12 @@ void main() {
       );
 
       // Tap demo button to populate transcript
-      await tester.tap(find.text('Use Tiling Demo / टाइलिंग डेमो'));
+      await tester.tap(find.text('नमूना आज़माएं'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Create Quote / कोटेशन बनाएं'), findsOneWidget);
-      expect(find.text('Type quote instead / लिखकर बनाएं'), findsOneWidget);
+      expect(find.text('कोटेशन बनाएं'), findsOneWidget);
+      expect(find.text('खुद लिखें'), findsOneWidget);
     });
 
     testWidgets('ReviewScreen renders needsReview items and allows manual editing', (WidgetTester tester) async {

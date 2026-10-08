@@ -5,7 +5,8 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Recognized trade units supported in contractor speech, catalogs, and quotes.
+ * Recognized units supported in contractor speech, service lists, and quotes
+ * across all business domains.
  *
  * <p>Enforces strict domain validation against unrecognized units (e.g. unknown metric or arbitrary units).
  */

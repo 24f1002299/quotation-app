@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_strings.dart';
 import '../templates/template_data.dart';
 import '../models/quote.dart';
 import '../models/quote_flags.dart';
@@ -278,7 +279,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ? ''
             : (failed.first.lastError?.trim().isNotEmpty == true
                 ? failed.first.lastError!.trim()
-                : 'Retry ${failed.first.retryCount} · waiting for network');
+                : AppStrings.text(appLanguage.value, 'sync_retry_waiting')
+                    .replaceAll('{n}', '${failed.first.retryCount}'));
       });
     } catch (_) {}
     try {
@@ -312,8 +314,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       SnackBar(
         content: Text(
           _hasSyncFailure
-              ? 'Still offline — your draft is safe on this phone. Try again later.'
-              : 'Sync finished / सिंक हो गया ✓',
+              ? AppStrings.read(context, 'sync_still_offline')
+              : AppStrings.read(context, 'sync_done'),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -335,8 +337,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _serviceListStaleDetail = '';
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Rate list checked / दर सूची जांच ली ✓'),
+      SnackBar(
+        content: Text(AppStrings.read(context, 'rate_list_checked')),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -349,24 +351,24 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add customer / ग्राहक जोड़ें'),
+        title: Text(AppStrings.of(ctx, 'add_customer')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Sharma Ji / शर्मा जी',
+          decoration: InputDecoration(
+            hintText: AppStrings.of(ctx, 'customer_name_hint'),
           ),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Later'),
+            child: Text(AppStrings.of(ctx, 'later')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Save'),
+            child: Text(AppStrings.of(ctx, 'save')),
           ),
         ],
       ),
@@ -449,21 +451,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete item / मद हटाएं?'),
+        title: Text(AppStrings.read(dialogContext, 'delete_item')),
         content: Text(
-          'Remove "${_items[index].description.text.trim().isEmpty ? 'this item' : _items[index].description.text.trim()}" from the quote?',
+          AppStrings.read(dialogContext, 'delete_item_confirm').replaceAll(
+            '{name}',
+            _items[index].description.text.trim().isEmpty
+                ? AppStrings.read(dialogContext, 'this_item')
+                : _items[index].description.text.trim(),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel / रद्द करें'),
+            child: Text(AppStrings.read(dialogContext, 'cancel')),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete / हटाएं'),
+            child: Text(AppStrings.read(dialogContext, 'delete_item')),
           ),
         ],
       ),
@@ -532,8 +539,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     _attachListeners(linked);
     setState(() => _items[index] = linked);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved to my services / मेरी सेवाओं में सहेजा गया'),
+      SnackBar(
+        content: Text(AppStrings.read(context, 'saved_to_services')),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -655,10 +662,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Future<void> _saveDraft() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please add at least one item before saving / कम से कम एक मद जोड़ें',
-          ),
+        SnackBar(
+          content: Text(AppStrings.read(context, 'add_item_first')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -704,10 +709,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Draft saved to History / ड्राफ्ट सहेजा गया'),
+        content: Text(AppStrings.read(context, 'draft_saved')),
         behavior: SnackBarBehavior.floating,
         action: SnackBarAction(
-          label: 'View History',
+          label: AppStrings.read(context, 'quote_history'),
           onPressed: () => Navigator.pushNamed(context, '/history'),
         ),
       ),
@@ -729,7 +734,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         : Chip(
             label: Text(
               quoteBusinessLabel(
-                  widget.businessType, _customLabel, 'en'),
+                  widget.businessType, _customLabel, appLanguage.value),
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             backgroundColor: cs.primary.withValues(alpha: 0.15),
@@ -741,8 +746,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            const Flexible(
-              child: Text('Review Quote', overflow: TextOverflow.ellipsis),
+            Flexible(
+              child: Text(AppStrings.of(context, 'review_quote'),
+                  overflow: TextOverflow.ellipsis),
             ),
             if (businessTypeBadge != null) ...[
               const SizedBox(width: 8),
@@ -753,12 +759,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.bookmark_outline_rounded),
-            tooltip: 'Save Draft / ड्राफ्ट सहेजें',
+            tooltip: AppStrings.of(context, 'save_draft'),
             onPressed: _saveDraft,
           ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline_rounded),
-            tooltip: 'Add item / मद जोड़ें',
+            tooltip: AppStrings.of(context, 'add_item'),
             onPressed: _showAddItemSheet,
           ),
         ],
@@ -824,11 +830,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
                   // ── Section: Line items ───────────────────────────────
                   SectionHeader(
-                    label: 'Items / मद',
+                    label: AppStrings.of(context, 'items'),
                     trailing: TextButton.icon(
                       onPressed: _showAddItemSheet,
                       icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Add item'),
+                      label: Text(AppStrings.of(context, 'add_item')),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -881,7 +887,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   const SizedBox(height: 20),
 
                   // ── Section: Customer details ─────────────────────────
-                  SectionHeader(label: 'Customer / ग्राहक'),
+                  SectionHeader(label: AppStrings.of(context, 'customer')),
                   const SizedBox(height: 12),
                   CustomerSection(
                     nameCtrl: _customerNameCtrl,

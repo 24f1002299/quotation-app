@@ -7,13 +7,17 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * Contractor's saved per-item rate memory passed to the extraction endpoint.
- * Accepts {@code serviceItemId} (new clients) or {@code catalogItemId} (legacy).
+ * Saved per-item rate passed to the extraction endpoint, for ANY business
+ * domain.
+ *
+ * <p>Canonical names are {@code serviceItemId} (the user's own service id)
+ * and {@code businessType} (free-text slug). Legacy wire names
+ * {@code catalogItemId} and {@code trade} are still accepted on input.
  */
 public record RateMemoryItemDto(
-    @NotBlank(message = "catalogItemId is required in rate memory")
-    @JsonAlias("serviceItemId")
-    String catalogItemId,
+    @NotBlank(message = "serviceItemId is required in rate memory")
+    @JsonAlias({"catalogItemId", "catalog_item_id"})
+    String serviceItemId,
 
     @NotBlank(message = "unit is required in rate memory")
     @ValidContractorUnit(message = "unit in rateMemory must be a recognized contractor unit")
@@ -23,6 +27,6 @@ public record RateMemoryItemDto(
     @Min(value = 0, message = "unitRatePaise cannot be negative")
     Long unitRatePaise,
 
-    @JsonAlias("businessType")
-    String trade
+    @JsonAlias({"trade", "business_type"})
+    String businessType
 ) {}

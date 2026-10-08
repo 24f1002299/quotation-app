@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Small shared review widgets + the shared light input decoration.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,16 +99,16 @@ class EmptyItemsHint extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   hasVoiceTranscript
-                      ? 'No items auto-detected from voice'
-                      : 'No items yet — tap to add one',
+                      ? AppStrings.of(context, 'no_items_from_voice')
+                      : AppStrings.of(context, 'no_items_yet'),
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   hasVoiceTranscript
-                      ? 'Tap here or "+ Add item" to add manually'
-                      : 'Add materials, labour, or custom rates',
+                      ? AppStrings.of(context, 'tap_to_add_manually')
+                      : AppStrings.of(context, 'add_materials_hint'),
                   style: tt.bodySmall,
                   textAlign: TextAlign.center,
                 ),

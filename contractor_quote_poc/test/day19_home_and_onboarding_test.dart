@@ -67,9 +67,8 @@ void main() {
 
       // Phase 2 voice-first home: hero mic + one-language hint.
       expect(find.text('बोलने के लिए दबाएं'), findsOneWidget);
-      // Inline businessType chips (one language each).
-      expect(find.text('टाइल्स'), findsOneWidget);
-      expect(find.text('पेंटिंग'), findsOneWidget);
+      // Business identity (single language, from business-type metadata).
+      expect(find.text('टाइलिंग'), findsOneWidget);
       // Drafts section appears only when drafts exist (seeded demo drafts).
       expect(find.textContaining('ड्राफ्ट'), findsAtLeastNWidgets(1));
     });
@@ -80,8 +79,8 @@ void main() {
         const MaterialApp(home: SignInScreen()),
       );
       await tester.pump();
-      expect(find.text('Mobile number / मोबाइल नंबर *'), findsOneWidget);
-      expect(find.text('Send OTP / OTP भेजें'), findsOneWidget);
+      expect(find.text('मोबाइल नंबर *'), findsOneWidget);
+      expect(find.text('OTP भेजें'), findsOneWidget);
     });
   });
 }
