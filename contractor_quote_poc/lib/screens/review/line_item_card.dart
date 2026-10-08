@@ -7,12 +7,15 @@ import 'small_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LineItemCard — clean scan card (design.md §4 Review quote).
-// Tapping the card or Edit/Fix now opens the bottom-sheet form; the card
-// itself never shows inline text fields so totals stay trustworthy.
-// Attention items carry a full amber border (no reordering — order carries
-// meaning for move up/down).
+// Tapping the card or Fix now opens the bottom-sheet form; the card itself
+// never shows inline text fields so totals stay trustworthy.
+//
+// One primary action per card (Fix now, only when attention is needed).
+// Edit / Duplicate / Delete live behind the ⋮ overflow menu; move up/down
+// stay as compact arrows since order carries meaning. Warnings use amber
+// fills, never border boxes.
 // ─────────────────────────────────────────────────────────────────────────────
-class LineItemCard extends StatelessWidget {
+class LineItemCard extends StatefulWidget {
   final EditableItem item;
   final int index;
   final int amountPaise;
@@ -42,9 +45,34 @@ class LineItemCard extends StatelessWidget {
   });
 
   @override
+  State<LineItemCard> createState() => _LineItemCardState();
+}
+
+class _LineItemCardState extends State<LineItemCard> {
+  bool _issueExpanded = false;
+
+  String _issueMessage(BuildContext context) {
+    final note = widget.item.uncertaintyNote?.trim();
+    if (widget.item.isUnknown) {
+      return AppStrings.of(context, 'unknown_item').replaceAll(
+        '{note}',
+        note == null || note.isEmpty
+            ? AppStrings.of(context, 'check_work_details')
+            : note,
+      );
+    }
+    if (note == null || note.isEmpty) {
+      return AppStrings.of(context, 'check_before_pdf');
+    }
+    return AppStrings.of(context, 'please_check').replaceAll('{note}', note);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final item = widget.item;
+    final index = widget.index;
     final needsAttention = item.requiresReview && !item.acknowledged;
 
     final description = item.description.text.trim().isEmpty
@@ -56,22 +84,18 @@ class LineItemCard extends StatelessWidget {
     final unitText = item.unit.text.trim().isEmpty
         ? AppStrings.of(context, 'unit')
         : item.unit.text.trim();
-    final rateText =
-        item.rate.text.trim().isEmpty ? '—' : '₹${item.rate.text.trim()}';
+    final rateText = item.rate.text.trim().isEmpty
+        ? '—'
+        : '₹${item.rate.text.trim()}';
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: needsAttention
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0xFFF59E0B), width: 2),
-            )
-          : null,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: onEdit,
-        borderRadius: BorderRadius.circular(16),
+        onTap: widget.onEdit,
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -79,81 +103,189 @@ class LineItemCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      AppStrings.of(context, 'item_number')
-                          .replaceAll('{n}', '${index + 1}'),
-                      style: tt.bodyMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w700,
+                      AppStrings.of(
+                        context,
+                        'item_number',
+                      ).replaceAll('{n}', '${index + 1}'),
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   if (needsAttention)
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: const Color(0xFFB45309),
-                      semanticLabel:
-                          AppStrings.of(context, 'needs_attention'),
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFFB45309),
+                        size: 22,
+                      ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              // Large scannable item name (min 16sp via titleMedium).
-              Text(
-                description,
-                style: tt.titleMedium?.copyWith(fontSize: 18),
-              ),
-              const SizedBox(height: 4),
-              // Quantity × unit × rate line + read-only amount.
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    '$qtyText $unitText × $rateText',
-                    style: tt.bodyLarge,
+                  IconButton(
+                    onPressed: widget.onMoveUp,
+                    icon: const Icon(Icons.arrow_upward_rounded, size: 20),
+                    tooltip: AppStrings.of(
+                      context,
+                      'move_up',
+                    ).replaceAll('{n}', '${index + 1}'),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    onPressed: widget.onMoveDown,
+                    icon: const Icon(Icons.arrow_downward_rounded, size: 20),
+                    tooltip: AppStrings.of(
+                      context,
+                      'move_down',
+                    ).replaceAll('{n}', '${index + 1}'),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: AppStrings.of(context, 'more_actions'),
+                    icon: const Icon(Icons.more_vert_rounded),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'edit':
+                          widget.onEdit();
+                        case 'duplicate':
+                          widget.onDuplicate();
+                        case 'delete':
+                          widget.onDelete();
+                      }
+                    },
+                    itemBuilder: (menuContext) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.edit_outlined, size: 20),
+                            const SizedBox(width: 12),
+                            Text(AppStrings.of(menuContext, 'edit')),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'duplicate',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.copy_outlined, size: 20),
+                            const SizedBox(width: 12),
+                            Text(AppStrings.of(menuContext, 'duplicate')),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                              color: cs.error,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              AppStrings.of(menuContext, 'delete_item'),
+                              style: TextStyle(color: cs.error),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: AmountChip(
-                  label: AppStrings.of(context, 'amount'),
-                  value: formatRupeePaise(amountPaise),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  description,
+                  style: tt.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
+              ),
+              const SizedBox(height: 6),
+              // Quantity × rate line + read-only amount pill.
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$qtyText $unitText × $rateText',
+                      style: tt.bodyLarge,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AmountChip(
+                    label: AppStrings.of(context, 'amount'),
+                    value: formatRupeePaise(widget.amountPaise),
+                    attention: needsAttention,
+                  ),
+                ],
               ),
               if (needsAttention) ...[
                 const SizedBox(height: 10),
-                UncertaintyNotice(item: item),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
+                _IssueRow(
+                  message: _issueMessage(context),
+                  expanded: _issueExpanded,
+                  onToggle: () =>
+                      setState(() => _issueExpanded = !_issueExpanded),
+                ),
+                const SizedBox(height: 10),
+                // Single primary action, full width.
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: widget.onEdit,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    icon: const Icon(Icons.build_outlined, size: 18),
+                    label: Text(AppStrings.of(context, 'fix_now')),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Secondary ghost actions.
+                Row(
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.build_outlined, size: 18),
-                      label: Text(AppStrings.of(context, 'fix_now')),
-                    ),
-                    if (onAddToList != null)
-                      OutlinedButton.icon(
-                        onPressed: onAddToList,
-                        icon: const Icon(Icons.playlist_add_rounded, size: 18),
-                        label:
-                            Text(AppStrings.of(context, 'add_to_my_list')),
-                      ),
-                    OutlinedButton.icon(
-                      onPressed: onAcknowledge,
-                      icon: const Icon(
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: widget.onAcknowledge,
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                        icon: const Icon(
                           Icons.check_circle_outline_rounded,
-                          size: 18),
-                      label: Text(
-                        item.isUnknown
-                            ? AppStrings.of(context, 'i_checked_this')
-                            : AppStrings.of(context, 'mark_as_checked'),
+                          size: 18,
+                        ),
+                        label: Text(
+                          item.isUnknown
+                              ? AppStrings.of(context, 'i_checked_this')
+                              : AppStrings.of(context, 'mark_as_checked'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
+                    if (widget.onAddToList != null)
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: widget.onAddToList,
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                          ),
+                          icon: const Icon(
+                            Icons.playlist_add_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            AppStrings.of(context, 'add_to_my_list'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ] else if (item.requiresReview) ...[
@@ -166,62 +298,13 @@ class LineItemCard extends StatelessWidget {
                       color: cs.primary,
                     ),
                     const SizedBox(width: 6),
-                    Text(AppStrings.of(context, 'checked'),
-                        style: tt.bodySmall),
+                    Text(
+                      AppStrings.of(context, 'checked'),
+                      style: tt.bodySmall,
+                    ),
                   ],
                 ),
               ],
-              const SizedBox(height: 4),
-              // Compact text actions — tap anywhere on the card to edit.
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  TextButton.icon(
-                    onPressed: onEdit,
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: Text(AppStrings.of(context, 'edit')),
-                  ),
-                  TextButton.icon(
-                    onPressed: onDuplicate,
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.copy_outlined, size: 16),
-                    label: Text(AppStrings.of(context, 'duplicate')),
-                  ),
-                  IconButton(
-                    onPressed: onMoveUp,
-                    icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                    tooltip: AppStrings.of(context, 'move_up')
-                        .replaceAll('{n}', '${index + 1}'),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  IconButton(
-                    onPressed: onMoveDown,
-                    icon: const Icon(Icons.arrow_downward_rounded, size: 20),
-                    tooltip: AppStrings.of(context, 'move_down')
-                        .replaceAll('{n}', '${index + 1}'),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  TextButton.icon(
-                    // Compact labelled delete with confirmation dialog —
-                    // never gesture-only deletion.
-                    onPressed: onDelete,
-                    style: TextButton.styleFrom(
-                      foregroundColor: cs.error,
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                    label: Text(AppStrings.of(context, 'delete_item')),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -230,48 +313,68 @@ class LineItemCard extends StatelessWidget {
   }
 }
 
-/// Inline explanation of why an item needs attention.
-/// Light amber surface — never the only signal (paired with icon + text).
-class UncertaintyNotice extends StatelessWidget {
-  final EditableItem item;
+/// Single-line amber-fill issue row. Truncates with "more"; the whole row
+/// is tappable to expand (no tiny touch targets).
+class _IssueRow extends StatelessWidget {
+  final String message;
+  final bool expanded;
+  final VoidCallback onToggle;
 
-  const UncertaintyNotice({super.key, required this.item});
+  const _IssueRow({
+    required this.message,
+    required this.expanded,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final note = item.uncertaintyNote?.trim();
-    final message = item.isUnknown
-        ? AppStrings.of(context, 'unknown_item').replaceAll('{note}',
-            note == null || note.isEmpty
-                ? AppStrings.of(context, 'check_work_details')
-                : note)
-        : note == null || note.isEmpty
-        ? AppStrings.of(context, 'check_before_pdf')
-        : AppStrings.of(context, 'please_check')
-            .replaceAll('{note}', note);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8EB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF59E0B)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            size: 20,
-            color: Color(0xFFB45309),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(message, style: tt.bodySmall),
-          ),
-        ],
+    return InkWell(
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3C7),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                size: 20,
+                color: Color(0xFFB45309),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                child: Text(
+                  message,
+                  style: tt.bodySmall?.copyWith(color: const Color(0xFF92400E)),
+                  maxLines: expanded ? null : 1,
+                  overflow: expanded
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              AppStrings.of(context, expanded ? 'hide' : 'expand'),
+              style: tt.bodySmall?.copyWith(
+                color: const Color(0xFF92400E),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -52,7 +52,9 @@ void main() {
 
     expect(find.text('₹200'), findsWidgets);
 
-    await tester.tap(find.text('बदलें').first);
+    await tester.tap(find.byTooltip('अधिक क्रियाएं').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('बदलें'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(1), '5');
     await tester.tap(find.text('सेव करें'));

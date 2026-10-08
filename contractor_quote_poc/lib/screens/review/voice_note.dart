@@ -25,14 +25,18 @@ class VoiceNoteCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
-    return Card(
-      margin: EdgeInsets.zero,
+    // Footnote feel: soft gray fill, no border — never a primary element.
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
             onTap: onToggle,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
@@ -47,11 +51,29 @@ class VoiceNoteCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      AppStrings.of(context, 'spoken_note'),
-                      style: tt.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.of(context, 'spoken_note'),
+                          style: tt.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (!isExpanded) ...[
+                          const SizedBox(height: 2),
+                          // Single-line preview (no quotation marks — those
+                          // belong to the expanded body below).
+                          Text(
+                            transcript,
+                            style: tt.bodySmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   Container(
@@ -192,12 +214,7 @@ class ParsingWarningsBanner extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Expanded(
-                    child: Text(
-                      w,
-                      style: tt.bodySmall,
-                    ),
-                  ),
+                  Expanded(child: Text(w, style: tt.bodySmall)),
                 ],
               ),
             ),

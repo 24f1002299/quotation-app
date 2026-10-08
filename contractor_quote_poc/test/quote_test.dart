@@ -242,9 +242,12 @@ void main() {
 
       expect(find.text('काम 1'), findsOneWidget);
       expect(find.text('₹200'), findsOneWidget);
-      expect(find.text('दोहराएं'), findsNWidgets(2));
+      // Edit/Duplicate/Delete live behind each card's overflow menu.
+      expect(find.byTooltip('अधिक क्रियाएं'), findsNWidgets(2));
 
-      await tester.tap(find.text('बदलें').first);
+      await tester.tap(find.byTooltip('अधिक क्रियाएं').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('बदलें'));
       await tester.pumpAndSettle();
       expect(find.text('काम बदलें'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField).at(1), '4');
@@ -252,7 +255,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('₹550'), findsNWidgets(2));
 
-      await tester.tap(find.text('दोहराएं').first);
+      await tester.tap(find.byTooltip('अधिक क्रियाएं').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('दोहराएं'));
       await tester.pumpAndSettle();
       expect(find.text('काम 3'), findsOneWidget);
       expect(find.text('A'), findsNWidgets(2));
@@ -275,10 +280,12 @@ void main() {
       expect(find.text('C'), findsOneWidget);
       expect(find.text('₹975'), findsNWidgets(2));
 
-      await tester.tap(find.text('हटाएं').first);
+      await tester.tap(find.byTooltip('अधिक क्रियाएं').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('हटाएं'));
       await tester.pumpAndSettle();
       expect(find.text('"A" कोटेशन से हटाएं?'), findsOneWidget);
-      await tester.tap(find.text('हटाएं').last);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'हटाएं'));
       await tester.pumpAndSettle();
       expect(find.text('A'), findsOneWidget);
     },

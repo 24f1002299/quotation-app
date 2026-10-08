@@ -16,7 +16,15 @@ class SectionHeader extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return Row(
       children: [
-        Expanded(child: Text(label, style: tt.titleLarge)),
+        Expanded(
+          child: Text(
+            label,
+            style: tt.titleMedium?.copyWith(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
         ?trailing,
       ],
     );
@@ -45,23 +53,40 @@ class FieldLabel extends StatelessWidget {
 class AmountChip extends StatelessWidget {
   final String label;
   final String value;
-  const AmountChip({super.key, required this.label, required this.value});
+
+  /// Amber tint when the item needs attention, dark fill when valid.
+  final bool attention;
+
+  const AmountChip({
+    super.key,
+    required this.label,
+    required this.value,
+    this.attention = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final bg = attention ? const Color(0xFFFEF3C7) : cs.primary;
+    final fg = attention ? const Color(0xFF92400E) : cs.onPrimary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: tt.bodyMedium),
-          Text(value, style: tt.titleMedium?.copyWith(color: cs.primary)),
+          Text('$label: ', style: tt.bodyMedium?.copyWith(color: fg)),
+          Text(
+            value,
+            style: tt.titleMedium?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -72,8 +97,11 @@ class EmptyItemsHint extends StatelessWidget {
   final VoidCallback onAdd;
   final bool hasVoiceTranscript;
 
-  const EmptyItemsHint(
-      {super.key, required this.onAdd, this.hasVoiceTranscript = false});
+  const EmptyItemsHint({
+    super.key,
+    required this.onAdd,
+    this.hasVoiceTranscript = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -122,8 +150,10 @@ class EmptyItemsHint extends StatelessWidget {
 }
 
 /// Shared light input decoration — keeps all review fields consistent.
-InputDecoration reviewInputDecoration(BuildContext context,
-    {required String hint}) {
+InputDecoration reviewInputDecoration(
+  BuildContext context, {
+  required String hint,
+}) {
   final theme = Theme.of(context);
   final cs = theme.colorScheme;
   final hintColor = theme.textTheme.bodySmall?.color;

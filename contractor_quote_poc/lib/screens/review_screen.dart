@@ -24,6 +24,7 @@ import 'review/editable_item.dart';
 import 'review/item_sheet.dart';
 import 'review/line_item_card.dart';
 import 'review/small_widgets.dart';
+import 'review/suggestion_chips.dart';
 import 'review/voice_note.dart';
 import 'pdf_preview_screen.dart';
 import 'quote_flag_widgets.dart';
@@ -134,6 +135,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
   int? _gstPercent;
   DateTime? _quoteDate;
   bool _moreDetailsExpanded = false;
+
+  /// Nudge chips the user swiped away (screen-local; items still count
+  /// toward attention until acknowledged on their own card).
+  final Set<String> _dismissedChips = {};
 
   /// Day 15 identity: immutable local ID (idempotency anchor) + labels.
   /// Generated once in initState so the number stays stable while editing.
@@ -278,14 +283,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _syncFailureDetail = failed.isEmpty
             ? ''
             : (failed.first.lastError?.trim().isNotEmpty == true
-                ? failed.first.lastError!.trim()
-                : AppStrings.text(appLanguage.value, 'sync_retry_waiting')
-                    .replaceAll('{n}', '${failed.first.retryCount}'));
+                  ? failed.first.lastError!.trim()
+                  : AppStrings.text(
+                      appLanguage.value,
+                      'sync_retry_waiting',
+                    ).replaceAll('{n}', '${failed.first.retryCount}'));
       });
     } catch (_) {}
     try {
       if (widget.businessType != null) {
-        final local = await ServiceListVersionRepository.getVersion(widget.businessType!);
+        final local = await ServiceListVersionRepository.getVersion(
+          widget.businessType!,
+        );
         // Remote version is unknown offline; treat a version older than the
         // bundled seed (v1) or an item-count mismatch as stale signal when
         // the caller explicitly marks it. Default: not stale.
@@ -327,7 +336,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
     // when online. Work is never lost.
     try {
       if (widget.businessType != null) {
-        final v = await ServiceListVersionRepository.getVersion(widget.businessType!);
+        final v = await ServiceListVersionRepository.getVersion(
+          widget.businessType!,
+        );
         await ServiceListVersionRepository.updateVersion(v);
       }
     } catch (_) {}
@@ -445,6 +456,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
   int get _attentionCount =>
       _items.where((item) => item.requiresReview && !item.acknowledged).length;
 
+  /// Items that ever needed review — drives the progress card (and its
+  /// green success state once all are resolved).
+  int get _reviewTotal => _items.where((item) => item.requiresReview).length;
+
   // ── Mutations ──────────────────────────────────────────────────────────────
   Future<void> _deleteItem(int index) async {
     if (index < 0 || index >= _items.length) return;
@@ -487,9 +502,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   void _onFieldChanged(EditableItem item) {
-    if (item.requiresReview &&
-        !item.acknowledged &&
-        item.hasValidEssentials) {
+    if (item.requiresReview && !item.acknowledged && item.hasValidEssentials) {
       item.acknowledged = true;
     }
     if (mounted) setState(() {});
@@ -512,7 +525,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (index < 0 || index >= _items.length) return;
     final item = _items[index];
     if (!_canAddToMyList(item)) return;
-    final type = widget.businessType ??
+    final type =
+        widget.businessType ??
         (await ProfileRepository.getProfile()).businessType;
     final rateRupees = int.tryParse(item.rate.text.trim()) ?? 0;
     final saved = await ServiceItemRepository.upsert(
@@ -616,23 +630,25 @@ class _ReviewScreenState extends State<ReviewScreen> {
   /// Day 20: full flag list for the current screen state (line-item +
   /// quote-level). Blocking flags drive the PDF gate; warnings only advise.
   List<QuoteFlag> get _day20Flags => analyzeQuote(
-        buildQuote(),
-        hasSyncFailure: _hasSyncFailure,
-        syncDetail: _syncFailureDetail,
-        isServiceListStale: _isServiceListStale,
-        serviceListDetail: _serviceListStaleDetail,
-      );
+    buildQuote(),
+    hasSyncFailure: _hasSyncFailure,
+    syncDetail: _syncFailureDetail,
+    isServiceListStale: _isServiceListStale,
+    serviceListDetail: _serviceListStaleDetail,
+  );
 
   List<QuoteFlag> get _warningFlags {
     // Empty quote already blocks with "Add at least one line item" — don't
     // pile customer/rate warnings on top and push the empty-state hint
     // off-screen.
     if (_items.isEmpty) return const [];
-    return warningFlags(_day20Flags).where((f) {
-        // Sync/catalog already have dedicated banners above — avoid doubles.
-        return f.type != QuoteFlagType.failedSync &&
-            f.type != QuoteFlagType.staleServiceList;
-      }).toList(growable: false);
+    return warningFlags(_day20Flags)
+        .where((f) {
+          // Sync/catalog already have dedicated banners above — avoid doubles.
+          return f.type != QuoteFlagType.failedSync &&
+              f.type != QuoteFlagType.staleServiceList;
+        })
+        .toList(growable: false);
   }
 
   void _onWarningAction(QuoteFlag flag) {
@@ -734,21 +750,32 @@ class _ReviewScreenState extends State<ReviewScreen> {
         : Chip(
             label: Text(
               quoteBusinessLabel(
-                  widget.businessType, _customLabel, appLanguage.value),
+                widget.businessType,
+                _customLabel,
+                appLanguage.value,
+              ),
               style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
-            backgroundColor: cs.primary.withValues(alpha: 0.15),
-            side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
+            backgroundColor: cs.primary.withValues(alpha: 0.12),
+            side: BorderSide.none,
+            shape: const StadiumBorder(),
             visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
           );
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
+        shape: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
         title: Row(
           children: [
             Flexible(
-              child: Text(AppStrings.of(context, 'review_quote'),
-                  overflow: TextOverflow.ellipsis),
+              child: Text(
+                AppStrings.of(context, 'review_quote'),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             if (businessTypeBadge != null) ...[
               const SizedBox(width: 8),
@@ -799,8 +826,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     const SizedBox(height: 14),
                   ],
 
-                  if (_attentionCount > 0) ...[
-                    AttentionSummary(count: _attentionCount),
+                  if (_reviewTotal > 0) ...[
+                    AttentionSummary(
+                      count: _attentionCount,
+                      total: _reviewTotal,
+                    ),
                     const SizedBox(height: 14),
                   ],
 
@@ -819,13 +849,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     ),
                   ],
 
-                  // ── Day 20: non-blocking warnings (unusual rate, missing
-                  // customer…). Shown but never stop the PDF.
-                  if (_warningFlags.isNotEmpty) ...[
-                    QuoteWarningsSection(
+                  // ── Quick-confirm nudges: inline dismissable chip row.
+                  // Tapping a chip opens a bottom sheet; the main scroll
+                  // stays clean. Never blocks the PDF.
+                  if (_warningFlags.any(
+                    (w) => !_dismissedChips.contains(suggestionChipKey(w)),
+                  )) ...[
+                    SuggestionChips(
                       warnings: _warningFlags,
+                      dismissedKeys: _dismissedChips,
+                      onDismiss: (flag) => setState(
+                        () => _dismissedChips.add(suggestionChipKey(flag)),
+                      ),
                       onAction: _onWarningAction,
                     ),
+                    const SizedBox(height: 14),
                   ],
 
                   // ── Section: Line items ───────────────────────────────
@@ -866,8 +904,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                                 ? null
                                 : () => _moveItem(entry.key, 1),
                             onDelete: () => _deleteItem(entry.key),
-                            onAcknowledge: () =>
-                                _acknowledgeItem(entry.value),
+                            onAcknowledge: () => _acknowledgeItem(entry.value),
                             onAddToList: _canAddToMyList(entry.value)
                                 ? () => _addToMyList(entry.key)
                                 : null,
@@ -886,49 +923,60 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   const Divider(),
                   const SizedBox(height: 20),
 
-                  // ── Section: Customer details ─────────────────────────
+                  // ── Section: Customer details + More details, grouped ──
+                  // in a single rounded card (details collapsed by default).
                   SectionHeader(label: AppStrings.of(context, 'customer')),
                   const SizedBox(height: 12),
-                  CustomerSection(
-                    nameCtrl: _customerNameCtrl,
-                    phoneCtrl: _customerPhoneCtrl,
-                    siteCtrl: _siteCtrl,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // ── Section: More quote details (progressive disclosure) ──
-                  MoreDetailsSection(
-                    isExpanded: _moreDetailsExpanded,
-                    onToggle: () => setState(() => _moreDetailsExpanded = !_moreDetailsExpanded),
-                    quoteId: _quoteId,
-                    displayNumber: _serverDisplayNumber ?? _displayNumber,
-                    quoteDate: _quoteDate ?? DateTime.now(),
-                    onDateChanged: (d) => setState(() => _quoteDate = d),
-                    validityDays: _validityDays,
-                    validityOptions: _validityOptions,
-                    onValidityChanged: (v) => setState(() => _validityDays = v),
-                    gstPercent: _gstPercent,
-                    gstOptions: _gstOptions,
-                    onGstChanged: (g) => setState(() => _gstPercent = g),
-                    advancePercentCtrl: _advancePercentCtrl,
-                    advanceTextCtrl: _advanceTextCtrl,
-                    onAdvancePercentSelected: (p) {
-                      setState(() {
-                        if (p == null) {
-                          _advancePercentCtrl.clear();
-                        } else {
-                          _advancePercentCtrl.text = p.toString();
-                        }
-                      });
-                    },
-                    notesCtrl: _notesCtrl,
-                    termsCtrl: _termsCtrl,
-                    onResetTerms: () {
-                      setState(() {
-                        _termsCtrl.text = kDefaultQuoteTerms.join('\n');
-                      });
-                    },
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    margin: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        CustomerSection(
+                          nameCtrl: _customerNameCtrl,
+                          phoneCtrl: _customerPhoneCtrl,
+                          siteCtrl: _siteCtrl,
+                          embedded: true,
+                        ),
+                        const Divider(height: 1),
+                        MoreDetailsSection(
+                          isExpanded: _moreDetailsExpanded,
+                          onToggle: () => setState(
+                            () => _moreDetailsExpanded = !_moreDetailsExpanded,
+                          ),
+                          quoteId: _quoteId,
+                          displayNumber: _serverDisplayNumber ?? _displayNumber,
+                          quoteDate: _quoteDate ?? DateTime.now(),
+                          onDateChanged: (d) => setState(() => _quoteDate = d),
+                          validityDays: _validityDays,
+                          validityOptions: _validityOptions,
+                          onValidityChanged: (v) =>
+                              setState(() => _validityDays = v),
+                          gstPercent: _gstPercent,
+                          gstOptions: _gstOptions,
+                          onGstChanged: (g) => setState(() => _gstPercent = g),
+                          advancePercentCtrl: _advancePercentCtrl,
+                          advanceTextCtrl: _advanceTextCtrl,
+                          onAdvancePercentSelected: (p) {
+                            setState(() {
+                              if (p == null) {
+                                _advancePercentCtrl.clear();
+                              } else {
+                                _advancePercentCtrl.text = p.toString();
+                              }
+                            });
+                          },
+                          notesCtrl: _notesCtrl,
+                          termsCtrl: _termsCtrl,
+                          onResetTerms: () {
+                            setState(() {
+                              _termsCtrl.text = kDefaultQuoteTerms.join('\n');
+                            });
+                          },
+                          embedded: true,
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 32),
@@ -939,11 +987,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
             // ── Fixed bottom action bar ───────────────────────────────────
             ReviewBottomActions(
               grandTotalPaise: _grandTotalPaise,
-              blockingReason: blockingReason,
-              showBlockingReason: _items.isNotEmpty,
-              errorReportId: _errorReportId,
-              warningCount: _warningFlags.length,
-
               onGeneratePdf: () {
                 if (blockingReason != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -968,8 +1011,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ),
                 );
               },
-              onBack: () =>
-                  Navigator.popUntil(context, ModalRoute.withName('/')),
             ),
           ],
         ),
@@ -1000,8 +1041,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          AddItemSheet(businessType: widget.businessType, initialItem: _items[index]),
+      builder: (_) => AddItemSheet(
+        businessType: widget.businessType,
+        initialItem: _items[index],
+      ),
     ).then((item) async {
       if (item == null || !mounted) return;
       final oldItem = _items[index];
@@ -1018,8 +1061,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           businessType: widget.businessType?.name,
           original: originalSnapshot,
           edited: item.toLineItem(),
-          serviceItemId:
-              originalSnapshot.serviceItemId ?? item.serviceItemId,
+          serviceItemId: originalSnapshot.serviceItemId ?? item.serviceItemId,
           modelResult: originalSnapshot.description,
         );
       } catch (_) {}
@@ -1049,10 +1091,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 // (MoreDetailsSection lives in review/details_section.dart.)
 
- // Phase 4: _TotalsSummary and _BottomActions now live in
+// Phase 4: _TotalsSummary and _BottomActions now live in
 // widgets/totals_bar.dart as QuoteTotalsBar / ReviewBottomActions.
 
- // (ReviewBottomActions imported from widgets/totals_bar.dart.)
+// (ReviewBottomActions imported from widgets/totals_bar.dart.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Small shared widgets

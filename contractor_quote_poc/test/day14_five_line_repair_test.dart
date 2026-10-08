@@ -77,7 +77,9 @@ void main() {
     expect(find.text('अभी ठीक करें'), findsOneWidget);
 
     // ── Fix 1: Tile Labour qty 10 → 100. New total ₹11,400. ──
-    await tester.tap(find.text('बदलें').at(0));
+    await tester.tap(find.byTooltip('अधिक क्रियाएं').at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('बदलें'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(1), '100');
     // Sheet shows live read-only amount preview (Day 5 engine).
@@ -87,8 +89,10 @@ void main() {
     expect(find.text('₹11,400'), findsNWidgets(2));
 
     // ── Fix 2: Skirting rate 6 → 60. New total ₹14,100. ──
-    await tester.ensureVisible(find.text('बदलें').at(1));
-    await tester.tap(find.text('बदलें').at(1));
+    await tester.ensureVisible(find.byTooltip('अधिक क्रियाएं').at(1));
+    await tester.tap(find.byTooltip('अधिक क्रियाएं').at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('बदलें'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(3), '60');
     await tester.tap(find.text('सेव करें'));
@@ -96,8 +100,10 @@ void main() {
     expect(find.text('₹14,100'), findsNWidgets(2));
 
     // ── Fix 3: Waterproofing qty 20 → 200. New total ₹19,500. ──
-    await tester.ensureVisible(find.text('बदलें').at(2));
-    await tester.tap(find.text('बदलें').at(2));
+    await tester.ensureVisible(find.byTooltip('अधिक क्रियाएं').at(2));
+    await tester.tap(find.byTooltip('अधिक क्रियाएं').at(2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('बदलें'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(1), '200');
     await tester.tap(find.text('सेव करें'));
@@ -105,8 +111,10 @@ void main() {
     expect(find.text('₹19,500'), findsNWidgets(2));
 
     // ── Fix 4: Wall Putty rate 8 → 18. New total ₹22,500. ──
-    await tester.ensureVisible(find.text('बदलें').at(3));
-    await tester.tap(find.text('बदलें').at(3));
+    await tester.ensureVisible(find.byTooltip('अधिक क्रियाएं').at(3));
+    await tester.tap(find.byTooltip('अधिक क्रियाएं').at(3));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('बदलें'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(3), '18');
     await tester.tap(find.text('सेव करें'));

@@ -29,6 +29,10 @@ class MoreDetailsSection extends StatelessWidget {
   final TextEditingController termsCtrl;
   final VoidCallback onResetTerms;
 
+  /// Skip the Card wrapper so the review screen can group "More details"
+  /// with the customer fields inside a single rounded card.
+  final bool embedded;
+
   const MoreDetailsSection({
     super.key,
     required this.isExpanded,
@@ -49,6 +53,7 @@ class MoreDetailsSection extends StatelessWidget {
     required this.notesCtrl,
     required this.termsCtrl,
     required this.onResetTerms,
+    this.embedded = false,
   });
 
   @override
@@ -57,155 +62,207 @@ class MoreDetailsSection extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final dateFormat = DateFormat('dd MMM yyyy');
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Header tile with expand/collapse trigger
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.tune_rounded,
-                    size: 20,
-                    color: cs.primary,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          AppStrings.of(context, 'more_details'),
-                          style: tt.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$displayNumber • ${AppStrings.of(context, 'validity_days').replaceAll('{n}', '$validityDays')} • '
-                          '${gstPercent == null ? AppStrings.of(context, 'no_gst') : "GST $gstPercent%"}',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.65),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: onToggle,
-                    icon: Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      size: 20,
-                    ),
-                    label: Text(AppStrings.of(
-                        context, isExpanded ? 'hide' : 'expand')),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (isExpanded) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── 1. Quote Number & Offline ID ──────────────────────────
-                  Row(
+    final content = Column(
+      children: [
+        // Header tile with expand/collapse trigger
+        InkWell(
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(Icons.tune_rounded, size: 20, color: cs.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(AppStrings.of(context, 'quote_number'),
-                                style: tt.bodySmall),
-                            const SizedBox(height: 4),
-                            Text(
-                              displayNumber,
-                              style: tt.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: cs.primary,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        AppStrings.of(context, 'more_details'),
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: cs.primary.withValues(alpha: 0.2)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(AppStrings.of(context, 'offline_id'),
-                                style: tt.labelSmall),
-                            Text(
-                              shortId(quoteId),
-                              style: tt.bodySmall?.copyWith(
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 2),
+                      Text(
+                        '$displayNumber • ${AppStrings.of(context, 'validity_days').replaceAll('{n}', '$validityDays')} • '
+                        '${gstPercent == null ? AppStrings.of(context, 'no_gst') : "GST $gstPercent%"}',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.65),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                ),
+                TextButton.icon(
+                  onPressed: onToggle,
+                  icon: Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                  ),
+                  label: Text(
+                    AppStrings.of(context, isExpanded ? 'hide' : 'expand'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
 
-                  // ── 2. Quotation Date ─────────────────────────────────────
-                  FieldLabel(
-                    label: AppStrings.of(context, 'quote_date'),
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: quoteDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2035),
-                        );
-                        if (picked != null) onDateChanged(picked);
-                      },
-                      icon:
-                          const Icon(Icons.calendar_today_rounded, size: 18),
-                      label: Text(dateFormat.format(quoteDate)),
-                      style: OutlinedButton.styleFrom(
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+        if (isExpanded) ...[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Quote Number & Offline ID ──────────────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppStrings.of(context, 'quote_number'),
+                            style: tt.bodySmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            displayNumber,
+                            style: tt.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: cs.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: cs.primary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            AppStrings.of(context, 'offline_id'),
+                            style: tt.labelSmall,
+                          ),
+                          Text(
+                            shortId(quoteId),
+                            style: tt.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // ── 2. Quotation Date ─────────────────────────────────────
+                FieldLabel(
+                  label: AppStrings.of(context, 'quote_date'),
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: quoteDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2035),
+                      );
+                      if (picked != null) onDateChanged(picked);
+                    },
+                    icon: const Icon(Icons.calendar_today_rounded, size: 18),
+                    label: Text(dateFormat.format(quoteDate)),
+                    style: OutlinedButton.styleFrom(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-                  // ── 3. Validity ───────────────────────────────────────────
-                  FieldLabel(
-                    label: AppStrings.of(context, 'validity'),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: validityOptions.map((days) {
-                          final selected = days == validityDays;
+                // ── 3. Validity ───────────────────────────────────────────
+                FieldLabel(
+                  label: AppStrings.of(context, 'validity'),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: validityOptions.map((days) {
+                        final selected = days == validityDays;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(
+                              '$days ${AppStrings.of(context, 'days')}',
+                            ),
+                            selected: selected,
+                            onSelected: (_) => onValidityChanged(days),
+                            selectedColor: cs.primary,
+                            labelStyle: tt.bodyMedium?.copyWith(
+                              color: selected ? cs.onPrimary : null,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── 4. GST Toggle / Rate ───────────────────────────────────
+                FieldLabel(
+                  label: AppStrings.of(context, 'gst'),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(
+                              '${AppStrings.of(context, 'no_gst')} (0%)',
+                            ),
+                            selected: gstPercent == null,
+                            onSelected: (_) => onGstChanged(null),
+                            selectedColor: cs.primary,
+                            labelStyle: tt.bodyMedium?.copyWith(
+                              color: gstPercent == null ? cs.onPrimary : null,
+                              fontWeight: gstPercent == null
+                                  ? FontWeight.w700
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        ...gstOptions.map((rate) {
+                          final selected = gstPercent == rate;
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
-                              label: Text(
-                                  '$days ${AppStrings.of(context, 'days')}'),
+                              label: Text('$rate% GST'),
                               selected: selected,
-                              onSelected: (_) => onValidityChanged(days),
+                              onSelected: (_) => onGstChanged(rate),
                               selectedColor: cs.primary,
                               labelStyle: tt.bodyMedium?.copyWith(
                                 color: selected ? cs.onPrimary : null,
@@ -215,154 +272,105 @@ class MoreDetailsSection extends StatelessWidget {
                               ),
                             ),
                           );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 4. GST Toggle / Rate ───────────────────────────────────
-                  FieldLabel(
-                    label: AppStrings.of(context, 'gst'),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(
-                                  '${AppStrings.of(context, 'no_gst')} (0%)'),
-                              selected: gstPercent == null,
-                              onSelected: (_) => onGstChanged(null),
-                              selectedColor: cs.primary,
-                              labelStyle: tt.bodyMedium?.copyWith(
-                                color:
-                                    gstPercent == null ? cs.onPrimary : null,
-                                fontWeight: gstPercent == null
-                                    ? FontWeight.w700
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          ...gstOptions.map((rate) {
-                            final selected = gstPercent == rate;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text('$rate% GST'),
-                                selected: selected,
-                                onSelected: (_) => onGstChanged(rate),
-                                selectedColor: cs.primary,
-                                labelStyle: tt.bodyMedium?.copyWith(
-                                  color: selected ? cs.onPrimary : null,
-                                  fontWeight: selected
-                                      ? FontWeight.w700
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 5. Advance percentage & text ──────────────────────────
-                  FieldLabel(
-                    label: AppStrings.of(context, 'advance'),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              ChoiceChip(
-                                label:
-                                    Text(AppStrings.of(context, 'none')),
-                                selected:
-                                    advancePercentCtrl.text.trim().isEmpty,
-                                onSelected: (_) =>
-                                    onAdvancePercentSelected(null),
-                              ),
-                              const SizedBox(width: 8),
-                              for (final p in [10, 20, 30, 50]) ...[
-                                ChoiceChip(
-                                  label: Text('$p%'),
-                                  selected:
-                                      advancePercentCtrl.text.trim() == '$p',
-                                  onSelected: (_) =>
-                                      onAdvancePercentSelected(p),
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: advanceTextCtrl,
-                          style: tt.bodyLarge,
-                          decoration: reviewInputDecoration(
-                            context,
-                            hint: AppStrings.of(context, 'advance_hint'),
-                          ),
-                        ),
+                        }),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-                  // ── 6. Notes ──────────────────────────────────────────────
-                  FieldLabel(
-                    label: AppStrings.of(context, 'notes'),
-                    child: TextField(
-                      controller: notesCtrl,
-                      style: tt.bodyLarge,
-                      decoration: reviewInputDecoration(
-                        context,
-                        hint: AppStrings.of(context, 'notes_hint'),
-                      ),
-                      maxLines: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── 7. Editable Terms & Conditions ────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // ── 5. Advance percentage & text ──────────────────────────
+                FieldLabel(
+                  label: AppStrings.of(context, 'advance'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          AppStrings.of(context, 'terms_title'),
-                          style: tt.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            ChoiceChip(
+                              label: Text(AppStrings.of(context, 'none')),
+                              selected: advancePercentCtrl.text.trim().isEmpty,
+                              onSelected: (_) => onAdvancePercentSelected(null),
+                            ),
+                            const SizedBox(width: 8),
+                            for (final p in [10, 20, 30, 50]) ...[
+                              ChoiceChip(
+                                label: Text('$p%'),
+                                selected:
+                                    advancePercentCtrl.text.trim() == '$p',
+                                onSelected: (_) => onAdvancePercentSelected(p),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ],
                         ),
                       ),
-                      TextButton(
-                        onPressed: onResetTerms,
-                        child: Text(AppStrings.of(context, 'reset_defaults')),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: advanceTextCtrl,
+                        style: tt.bodyLarge,
+                        decoration: reviewInputDecoration(
+                          context,
+                          hint: AppStrings.of(context, 'advance_hint'),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: termsCtrl,
-                    style: tt.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+
+                // ── 6. Notes ──────────────────────────────────────────────
+                FieldLabel(
+                  label: AppStrings.of(context, 'notes'),
+                  child: TextField(
+                    controller: notesCtrl,
+                    style: tt.bodyLarge,
                     decoration: reviewInputDecoration(
                       context,
-                      hint: AppStrings.of(context, 'terms_hint'),
+                      hint: AppStrings.of(context, 'notes_hint'),
                     ),
-                    maxLines: 4,
+                    maxLines: 2,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── 7. Editable Terms & Conditions ────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        AppStrings.of(context, 'terms_title'),
+                        style: tt.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: onResetTerms,
+                      child: Text(AppStrings.of(context, 'reset_defaults')),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: termsCtrl,
+                  style: tt.bodyMedium,
+                  decoration: reviewInputDecoration(
+                    context,
+                    hint: AppStrings.of(context, 'terms_hint'),
+                  ),
+                  maxLines: 4,
+                ),
+              ],
             ),
-          ],
+          ),
         ],
-      ),
+      ],
     );
+    if (embedded) return content;
+    return Card(clipBehavior: Clip.antiAlias, child: content);
   }
 }
