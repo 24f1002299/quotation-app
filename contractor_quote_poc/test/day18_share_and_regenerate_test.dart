@@ -130,8 +130,14 @@ void main() {
       expect(find.text('बदलें'), findsOneWidget);
       // Meta line with quote number + total.
       expect(find.textContaining('Quote'), findsAtLeastNWidgets(1));
-      // Local-only note + opt-in backup toggle.
-      expect(find.textContaining('फोन में सेव'), findsOneWidget);
+      // Offline notice is a transient pill, not a persistent bar: the
+      // fixed bottom row is gone, but both nav actions stay visible
+      // alongside the opt-in backup toggle.
+      expect(find.textContaining('फोन में सेव'), findsNothing);
+      expect(
+        find.widgetWithIcon(TextButton, Icons.history_rounded),
+        findsOneWidget,
+      );
       expect(find.byType(Switch), findsOneWidget);
     });
   });

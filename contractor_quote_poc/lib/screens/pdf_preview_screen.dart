@@ -136,6 +136,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
   Future<void> _saveQuoteAndPdf(Uint8List bytes) async {
     try {
+      // Announce only on first generation: opening from history (or
+      // regenerating after an edit) already has a saved file on disk.
+      final preExisting =
+          _existingQuote ?? await QuoteRepository.getQuoteById(_quoteId);
+      final isFirstGeneration =
+          (preExisting?.pdfPath ?? _savedPdfPath) == null;
+
       // Day 18: stable path — regeneration replaces the same app-owned file.
       final savedPath = await PdfService.savePdfReplacingPrevious(
         bytes: bytes,
@@ -145,8 +152,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
       final now = DateTime.now();
       final id = _quoteId;
-      final existing = _existingQuote ??
-          await QuoteRepository.getQuoteById(id);
+      final existing = preExisting;
 
       final saved = SavedQuote(
         id: id,
@@ -217,19 +223,43 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         pdfPath: savedPath,
       );
 
-      if (mounted && !_saveAnnounced) {
+      if (mounted && !_saveAnnounced && isFirstGeneration) {
         _saveAnnounced = true;
+        // Transient dark pill — floats above the bottom action bar (which
+        // lives in Scaffold.bottomNavigationBar, above which floating
+        // snackbars automatically sit), so it never covers any buttons.
+        // No action inside: View history already exists on the screen.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              AppStrings.read(context, 'offline_saved'),
+            content: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.save_outlined,
+                  size: 18,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    AppStrings.read(context, 'offline_saved'),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
+            backgroundColor: const Color(0xFF1E1E1E),
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: AppStrings.read(context, 'view_history'),
-              onPressed: () => Navigator.pushNamed(context, '/history'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
             ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 48),
+            duration: const Duration(milliseconds: 3500),
           ),
         );
       }
@@ -620,6 +650,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         ),
       ),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Expanded(
@@ -818,8 +849,14 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                 ),
               ),
             ),
-            // ── Sticky bottom bar: one cohesive sheet ──
-            Container(
+          ],
+        ),
+      ),
+      // ── Sticky bottom bar: one cohesive sheet ──
+      // Lives in bottomNavigationBar so the transient "saved offline" pill
+      // snackbar floats above it and never covers these actions.
+      bottomNavigationBar: SafeArea(
+        child: Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 boxShadow: [
@@ -888,6 +925,15 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                         ),
                       ),
                       const Spacer(),
+                      Tooltip(
+                        message: AppStrings.of(context, 'pdf_backup'),
+                        child: Switch(
+                          value: _backupOptIn,
+                          onChanged: _toggleBackup,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
                       TextButton.icon(
                         onPressed: () =>
                             Navigator.pushNamed(context, '/history'),
@@ -942,40 +988,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                       shape: const StadiumBorder(),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.save_outlined,
-                        size: 14,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          AppStrings.of(context, 'saved_replace_note'),
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Text(AppStrings.of(context, 'pdf_backup'),
-                          style: const TextStyle(fontSize: 12)),
-                      Switch(
-                        value: _backupOptIn,
-                        onChanged: _toggleBackup,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
   }
 }
