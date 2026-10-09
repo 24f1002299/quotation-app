@@ -259,6 +259,13 @@ const Map<String, String> stringsEn = {
       'Send this PDF via WhatsApp, Gmail or Drive. We cannot confirm delivery — mark shared only after sending.',
   'fix_highlighted_item': 'Work is saved — go back, fix the item, return.',
   'saved_replace_note': 'Saved on phone. Editing replaces same file.',
+  'quote_ready_headline': 'Your quote is ready!',
+  'tap_to_preview_full': 'Tap to preview full PDF',
+  'action_print': 'Print',
+  'action_copy': 'Copy',
+  'action_save': 'Save',
+  'copied_to_clipboard': 'Quote details copied',
+  'flagged_disclosure': '{n} items were flagged — view details',
 
   // Sign-in.
   'invalid_phone': 'Enter 10-digit number',

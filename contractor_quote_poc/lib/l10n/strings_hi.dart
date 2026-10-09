@@ -255,6 +255,13 @@ const Map<String, String> stringsHi = {
       'यह PDF WhatsApp, Gmail या Drive से भेजें। भेजने के बाद ही भेजा हुआ दर्ज करें।',
   'fix_highlighted_item': 'काम सेव है — वापस जाकर ठीक करें।',
   'saved_replace_note': 'फोन में सेव। बदलने पर वही फाइल बदलेगी।',
+  'quote_ready_headline': 'आपका कोटेशन तैयार है!',
+  'tap_to_preview_full': 'पूरा PDF देखने के लिए टैप करें',
+  'action_print': 'प्रिंट',
+  'action_copy': 'कॉपी',
+  'action_save': 'सेव',
+  'copied_to_clipboard': 'कोटेशन विवरण कॉपी हुआ',
+  'flagged_disclosure': '{n} आइटम में चेतावनी थी — विवरण देखें',
 
   // Sign-in.
   'invalid_phone': '10 अंक का नंबर लिखें',
