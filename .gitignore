@@ -50,3 +50,5 @@ supabase/snippets/
 .DS_Store
 Thumbs.db
 *.log
+
+30-day-implementation-plan.md

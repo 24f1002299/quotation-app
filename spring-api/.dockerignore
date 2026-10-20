@@ -1,0 +1,9 @@
+target/
+.env
+.idea/
+*.iml
+.vscode/
+.git/
+docs/
+load-test/
+*.ps1

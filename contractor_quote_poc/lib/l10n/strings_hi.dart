@@ -90,6 +90,7 @@ const Map<String, String> stringsHi = {
 
   'sign_in': 'साइन इन',
   'sign_out': 'साइन आउट',
+  'sign_out_confirm': 'इस फोन से साइन आउट करें? दोबारा साइन इन के लिए OTP सत्यापन होगा।',
   'privacy_notice': 'प्राइवेसी सूचना',
   'delete_my_data': 'मेरा डेटा हटाएं',
   'pdf_backup': 'PDF बैकअप',

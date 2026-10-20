@@ -1,0 +1,24 @@
+# application-prod.yml — production overrides for Render deployment
+
+spring:
+  main:
+    lazy-initialization: true
+
+quotapp:
+  auth:
+    dev-bypass-enabled: false
+
+  datasource:
+    hikari:
+      # Tighter pool for free-tier single instance
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 5000
+      idle-timeout: 180000
+      max-lifetime: 900000
+
+logging:
+  level:
+    com.quotapp: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN

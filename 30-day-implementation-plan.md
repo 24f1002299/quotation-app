@@ -40,19 +40,19 @@ Do **not** add a generic microservice layer, event bus, clean-architecture cerem
 
 **Goal:** Establish the smallest product boundary and success measures.
 
-**Tasks:** Turn the brief into one user journey and a one-page scope statement. Write acceptance criteria for setup, capture, review, PDF, sharing, saved quotes, and failure states. Record non-goals: invoices, payments, multi-site, helper logins, subscriptions, dealer tooling, referral flow, and WhatsApp bot. Define the target: first share in under 60 seconds and 90% of quoted line items editable without typing a sentence.
+**Tasks:** Turn the brief into one user journey and a one-page scope statement covering **universal MSME trades**. Write acceptance criteria for language selection, setup, trade selection, capture, review, PDF, sharing, saved quotes, and failure states. Record non-goals: invoices, payments, multi-site, helper logins, subscriptions, dealer tooling, referral flow, and WhatsApp bot. Define the target: first share in under 60 seconds and 90% of quoted line items editable without typing a sentence. Document the language-first UX contract: language chosen on the Welcome screen is the single source of truth for all app UI strings; there is no language toggle in Settings.
 
-**Verify:** A contractor, designer, and developer can each explain the same six-screen flow and agree what is excluded.
+**Verify:** A contractor, designer, and developer can each explain the same six-screen flow, agree what is excluded, and confirm the language-first rule.
 
-**Commit:** `docs: define tiling and painting quotation mvp`
+**Commit:** `docs: define universal msme quotation mvp`
 
 ### Day 2 — Set product conventions and wireframes
 
-**Goal:** Make the core flow understandable to low-English, voice-first users.
+**Goal:** Make the core flow understandable to low-English, voice-first MSME users across all trades.
 
-**Tasks:** Create low-fidelity wireframes for onboarding, home, record/transcript, review, PDF preview, and quote history. Choose Hindi-first labels with simple English fallback and large touch targets. Specify destructive-action confirmation, loading, empty, no-network, and extraction-failed states.
+**Tasks:** Create low-fidelity wireframes for: (1) **Welcome screen with language selection** (English / हिंदी / मराठी — chosen before anything else), (2) onboarding with trade selection from a list of MSME categories, (3) home, (4) record/transcript, (5) review, (6) PDF preview, and (7) quote history. All UI strings must be shown in three language variants on the wireframes. Use large touch targets. Specify destructive-action confirmation, loading, empty, no-network, and extraction-failed states. Language selection on the Welcome screen must be persistent — reopening the app must not re-show the language picker.
 
-**Verify:** Five sample flows can be completed from the wireframes without an explanatory paragraph; all primary actions are reachable with one thumb.
+**Verify:** Five sample flows can be completed from the wireframes without an explanatory paragraph; all primary actions are reachable with one thumb; a Hindi-only reader and an English-only reader can both complete the full flow.
 
 **Commit:** `docs: add mvp flow and low fidelity wireframes`
 
@@ -146,15 +146,15 @@ Do **not** add a generic microservice layer, event bus, clean-architecture cerem
 
 **Commit:** `feat: add catalog constrained line item extraction`
 
-### Day 12 — Create profile and rate memory
+### Day 12 — Create profile, trade selection, and rate memory
 
-**Goal:** Reduce future quotes to quantities wherever possible.
+**Goal:** Reduce future quotes to quantities wherever possible, for any MSME trade.
 
-**Tasks:** Build a short onboarding form for name, business name, phone, address/city, trade, optional GSTIN, logo, and quote defaults. Provide a simple editable rate list seeded by the catalog, without bulk spreadsheets. Persist it through a repository with local cache, the sync outbox, and the Spring API/Supabase database. Store logos using user-scoped Supabase Storage paths and signed URLs only.
+**Tasks:** Build a short onboarding form for name, business name, phone, address/city, **trade category (selectable from all supported MSME trades)**, optional GSTIN, logo, and quote defaults. The selected trade drives which catalog is loaded for voice extraction. Allow users to change their trade from Settings at any time — rate memory is scoped per trade. Provide a simple editable rate list seeded by the chosen trade's catalog, without bulk spreadsheets. Persist it through a repository with local cache, the sync outbox, and the Spring API/Supabase database. Store logos using user-scoped Supabase Storage paths and signed URLs only. **Do not store a language preference here** — language is already persisted from the Welcome screen selection and must not be re-exposed as a settings field.
 
-**Verify:** A user can set a tiling rate, reinstall/sign back in, and see that rate applied to an extracted item.
+**Verify:** A user can select any supported trade, set a rate for an item in that trade's catalog, reinstall/sign back in, and see that rate applied to an extracted item in the correct language.
 
-**Commit:** `feat: add contractor profile and saved rates`
+**Commit:** `feat: add contractor profile trade selection and saved rates`
 
 ### Day 13 — Assemble capture-to-extraction flow
 
@@ -238,11 +238,11 @@ Do **not** add a generic microservice layer, event bus, clean-architecture cerem
 
 ### Day 21 — Capture correction feedback privately
 
-**Goal:** Learn which words and values the system gets wrong.
+**Goal:** Learn which words and values the system gets wrong, across all trades and languages.
 
-**Tasks:** When users alter an extracted line, record minimal feedback: trade, catalog item/model result, final item, changed field type, and hashed quote ID. Do not collect raw audio by default. Add a user-visible consent setting for diagnostic transcript storage, off by default.
+**Tasks:** When users alter an extracted line, record minimal feedback: **trade, app language, catalog item/model result**, final item, changed field type, and hashed quote ID. The language field is critical for understanding which language-specific synonyms are mishandled. Do not collect raw audio by default. Add a user-visible consent setting for diagnostic transcript storage, off by default.
 
-**Verify:** Editing an item creates one correctly scoped feedback record; deleting a quote removes or anonymizes associated feedback according to the documented policy.
+**Verify:** Editing an item creates one correctly scoped feedback record with trade and language fields; deleting a quote removes or anonymizes associated feedback according to the documented policy.
 
 **Commit:** `feat: record privacy conscious extraction corrections`
 
@@ -363,4 +363,4 @@ The day-30 release is a closed pilot, not a claim that usage has already reached
 
 ## Deferred until the MVP proves repeat use
 
-Invoices and payment reminders, advance/balance tracking, GST/e-invoice integrations, multiple sites, helper logins, subscriptions, dealer referrals, WhatsApp bot/Business API, extra trades, catalog admin tooling, payment collection, lending, and model fine-tuning. Each needs a separate problem statement, data/privacy review, and measured pilot demand.
+Invoices and payment reminders, advance/balance tracking, GST/e-invoice integrations, multiple sites, helper logins, subscriptions, dealer referrals, WhatsApp bot/Business API, catalog admin tooling, payment collection, lending, model fine-tuning, and **in-app language switching after first setup** (language is locked to the Welcome screen choice for MVP; a full language-change flow with re-render and data migration is a post-MVP feature). Each deferred item needs a separate problem statement, data/privacy review, and measured pilot demand.

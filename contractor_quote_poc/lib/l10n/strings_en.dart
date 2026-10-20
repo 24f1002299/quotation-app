@@ -94,6 +94,7 @@ const Map<String, String> stringsEn = {
   // Settings rows (single language at a time — no bilingual slashes).
   'sign_in': 'Sign in',
   'sign_out': 'Sign out',
+  'sign_out_confirm': 'Sign out of this phone? You will need OTP verification to sign back in.',
   'privacy_notice': 'Privacy notice',
   'delete_my_data': 'Delete my data',
   'pdf_backup': 'PDF backup',

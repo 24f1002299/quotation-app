@@ -46,23 +46,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    final profile = await ProfileRepository.getProfile();
-    final services =
-        await ServiceItemRepository.getActiveForBusinessType(profile.businessType);
-    final signedIn = await AuthRepository.isSignedIn();
-    final lang = await AppPreferences.getLanguage();
-    final backup = await PdfBackupSettings.isOptedIn();
-    final diag = await DiagnosticConsent.isOptedIn();
-    if (!mounted) return;
-    setState(() {
-      _profile = profile;
-      _services = services;
-      _signedIn = signedIn;
-      _language = (lang == 'en' || lang == 'mr') ? lang : 'hi';
-      _backupOptIn = backup;
-      _diagnosticOptIn = diag;
-      _loading = false;
-    });
+    try {
+      final profile = await ProfileRepository.getProfile();
+      // Global count across all business types — the row label is
+      // "My services", not scoped to the current type.
+      final services = await ServiceItemRepository.getActive();
+      final signedIn = await AuthRepository.isSignedIn();
+      final lang = await AppPreferences.getLanguage();
+      final backup = await PdfBackupSettings.isOptedIn();
+      final diag = await DiagnosticConsent.isOptedIn();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _services = services;
+        _signedIn = signedIn;
+        _language = (lang == 'en' || lang == 'mr') ? lang : 'hi';
+        _backupOptIn = backup;
+        _diagnosticOptIn = diag;
+        _loading = false;
+      });
+    } catch (_) {
+      // Corrupt prefs or a mid-deletion race must not wedge the screen
+      // on the spinner forever; show whatever state we have.
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
   }
 
   int get _ratedCount => _services.where((s) => s.ratePaise > 0).length;
@@ -131,7 +139,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _backupOptIn = false;
+      _diagnosticOptIn = false;
       _profile = BusinessProfile.empty();
+      _services = [];
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -260,6 +270,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: '',
                 onTap: () async {
                   if (_signedIn) {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(t('sign_out')),
+                        content: Text(t('sign_out_confirm')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(t('cancel')),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(t('sign_out')),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true || !mounted) return;
                     await AuthRepository.signOut();
                   } else {
                     await Navigator.pushNamed(context, '/sign-in');
@@ -320,7 +348,26 @@ class _Group extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
         border: Border.all(color: kSurfaceMuted),
       ),
-      child: Column(children: children),
+      // Clip so ink splashes follow the card's rounded corners; rows
+      // themselves carry no borderRadius (middle rows stay square).
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+        child: Column(
+          children: [
+            for (int i = 0; i < children.length; i++) ...[
+              children[i],
+              if (i < children.length - 1)
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  color: kSurfaceMuted,
+                  indent: 16,
+                  endIndent: 16,
+                ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -341,7 +388,6 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(
@@ -365,12 +411,14 @@ class _Row extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: kInkMuted,
-              size: 20,
-            ),
+            if (value.isNotEmpty) const SizedBox(width: 6),
+            // Dialog-opening destructive rows get no chevron (no navigation).
+            if (!destructive)
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: kInkMuted,
+                size: 20,
+              ),
           ],
         ),
       ),
@@ -395,9 +443,14 @@ class _SwitchRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: const TextStyle(fontSize: 15)),
+            child: Text(label, style: const TextStyle(fontSize: 15, color: kInk)),
           ),
-          Switch(value: value, onChanged: onChanged, activeThumbColor: kForest),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: kForest,
+            activeTrackColor: kForest.withValues(alpha: 0.3),
+          ),
         ],
       ),
     );
