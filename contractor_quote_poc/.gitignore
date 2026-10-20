@@ -5,6 +5,10 @@ lib/config/supabase_config.dart   # only if you put real values here (use --dart
 # Spring Boot env file
 ../spring-api/.env
 
+# Flutter dart-define env files — contain real keys, never commit
+env.prod.json
+env.dev.json
+
 *.class
 *.log
 *.pyc
